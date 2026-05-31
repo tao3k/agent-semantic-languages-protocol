@@ -2422,6 +2422,10 @@ edges, dependency nodes, findings, and owner/deps/test next actions.
 =py-harness search callsite <query>= emits parser-owned =PythonCall= facts so
 agents can move from a symbol or API owner to the modules that invoke it without
 re-running broad text search.
+=py-harness search public-external-types <package>= emits parser-owned public
+function, class, decorator, base-class, and annotated-assignment surfaces that
+expose dependency types; direct package/alias references are confirmed and
+named import matches are marked possible.
 =py-harness search text <query> owner tests= searches parser-visible owner
 paths, namespaces, public exports, symbols, and source text, then keeps matched
 owners plus importing tests in one packet.  =py-harness search ingest= detects
