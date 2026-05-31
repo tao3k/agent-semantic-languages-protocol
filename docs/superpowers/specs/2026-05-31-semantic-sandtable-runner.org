@@ -188,6 +188,36 @@ next Python optimization should be a semantic-search-specific fast path or
 cache boundary, starting with =search workspace= because that view is only a
 router and does not need full owner graph construction.
 
+* Python Alignment Follow-Up
+
+The next Python slice fixed the dominant parser cost without adding cache files
+or a daemon.  The Python AST collector now caches parser-style source lines per
+file and reuses them for repeated source segment lookups.  This preserves
+parser-owned source evidence while avoiding repeated full-file splitting for
+every name, attribute, call, and assignment expression.
+
+The compact renderer also now applies pipe-packet caps only to =text= and
+=ingest= lines.  JSON packets retain the complete owner, hit, and edge lists.
+For =search text=, compact hit selection keeps parser-visible source evidence
+before export-only evidence, so compression does not hide the source line an
+agent needs for disambiguation.
+
+Observed after the Python follow-up:
+
+#+begin_src text
+[sandtable] scenarios=5 pass=5 warn=0 fail=0 skip=0
+python.search-code-flow status=pass
+#+end_src
+
+Python moved under the shared budgets:
+
+#+begin_src text
+workspace lines=5 elapsed_ms≈600-700
+prime lines=13 elapsed_ms≈700
+text-owner-tests lines=18 elapsed_ms≈900
+ingest lines=14 elapsed_ms≈700
+#+end_src
+
 The same run exposed one policy tooling issue: the local Codex hook sometimes
 misclassified non-Rust file edits and JSON checks as Rust search violations.
 That is a separate hook matching problem and should be handled in the Rust
