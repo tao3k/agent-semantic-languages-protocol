@@ -94,7 +94,7 @@ Original observation:
 |next prime:search-prime
 #+end_src
 
-Follow-up implementation result:
+First follow-up implementation result:
 
 #+begin_src text
 [search-owner] q=tests/unit/semantic_search_schema.test.ts role=test public=false edge=0 find=0
@@ -106,6 +106,19 @@ Follow-up implementation result:
 Result: =search owner= now keeps existing test/schema paths in the protocol
 without pretending they are parser-visible owners.  The =path-only= owner and
 =parserOwner=false= field give agents an explicit branch into =search ingest=.
+
+Second follow-up implementation result:
+
+#+begin_src text
+[search-owner] q=tests/unit/semantic_search_schema.test.ts role=test public=false edge=0 find=0
+|owner tests/unit/semantic_search_schema.test.ts role=test public=false source=parser-visible-module parserOwner=false layer=test lines=662 valid=true syntaxDiagnostics=0 semanticDiagnostics=0 imports=7 next=owner:tests/unit/semantic_search_schema.test.ts,"text:tests/unit/semantic_search_schema.test.ts(owner=tests/unit/semantic_search_schema.test.ts)",tests:tests/unit/semantic_search_schema.test.ts
+|note kind=owner-not-found message="module is parser-visible but not a reasoning owner; owner graph edges are unavailable"
+|next owner:tests/unit/semantic_search_schema.test.ts,text:tests/unit/semantic_search_schema.test.ts(owner=tests/unit/semantic_search_schema.test.ts),tests:tests/unit/semantic_search_schema.test.ts
+#+end_src
+
+Result: =search owner= now distinguishes parser-visible modules from path-only
+files.  Test modules selected by the project stay inside the semantic protocol;
+only files outside the parser module set need =search ingest=.
 
 ** External Candidate Ingest
 
@@ -160,8 +173,8 @@ Second follow-up implementation result:
 [search-text] q=semantic-search-packet own=6 hit=11 view=hits
 |owner src/cli/protocol.ts role="root,entrypoint" ...
 |owner src/cli/semantic-search/build.ts role="root,entrypoint" ...
-|owner tests/unit/semantic_search_schema.test.ts role=unknown public=false
-|hit src/cli/semantic-search/build.ts:580:41 owner=src/cli/semantic-search/build.ts kind=text score=2 reason=source-text source=parser-visible-source
+|owner tests/unit/semantic_search_schema.test.ts role=test public=false source=parser-visible-module parserOwner=false layer=test ...
+|hit src/cli/semantic-search/build.ts:556:41 owner=src/cli/semantic-search/build.ts kind=text score=2 reason=source-text source=parser-visible-source
 |hit tests/unit/semantic_search_schema.test.ts:167:35 owner=tests/unit/semantic_search_schema.test.ts kind=text score=2 reason=source-text source=parser-visible-source
 |next owner:src/cli/protocol.ts,owner:src/cli/semantic-language.ts,owner:src/cli/semantic-search/build.ts,owner:src/cli/semantic-search/types.ts,owner:tests/unit/cli.test.ts
 #+end_src
@@ -207,10 +220,12 @@ split: implementation/test gates pass, while agent-facing advice remains visible
 3. =search prime= gives a useful bounded package map and identifies the
    semantic-search implementation owners before broad search.
 
-4. =search owner <test-file>= now returns an explicit path-only owner when the
-   path exists but is not parser-visible.  This is weaker than full parser owner
-   evidence by design, and stronger than a raw miss because the packet carries
-   =source=path-only=, =parserOwner=false=, and =next=ingest:<path>=.
+4. =search owner <test-file>= now returns an explicit parser-visible module
+   owner when the file is selected by the project.  This is weaker than full
+   reasoning-owner graph evidence by design, and stronger than path-only because
+   the packet carries =source=parser-visible-module=, =parserOwner=false=,
+   role/layer metadata, validity, line count, diagnostics, and semantic
+   next-actions.
 
 5. =search text= now indexes parser-visible TypeScript source text, including
    test files selected by the project, while docs/schema JSON and other
@@ -230,6 +245,7 @@ capabilities instead of relying on packet notes:
    - ingestRequiredForNonSourceText
 
 2. Current TypeScript provider behavior:
+   - parser-visible modules outside the reasoning graph resolve as module owners
    - existing non-parser paths resolve as path-only owners
    - parser-visible source text is searchable through search text
    - non-parser text misses emit explicit next=ingest guidance

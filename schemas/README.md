@@ -135,9 +135,13 @@ ts-harness search text OrderStatus --json .
 rg -n "OrderStatus" src tests | ts-harness search ingest --json .
 ```
 
-For TypeScript, `search owner` resolves parser-visible owners first. Existing
-project paths outside the parser owner set are still represented as path-only
-owners with `fields.source=path-only`, `fields.parserOwner=false`, and
+For TypeScript, `search owner` resolves reasoning owners first, then
+parser-visible modules, then existing project paths. Parser-visible modules
+outside the reasoning owner graph are represented with
+`fields.source=parser-visible-module`, `fields.parserOwner=false`, role/layer
+metadata, line counts, validity, and diagnostic counts. Existing paths outside
+the parser module set are still represented as path-only owners with
+`fields.source=path-only`, `fields.parserOwner=false`, and
 `nextActions=[{kind:"ingest", target:<path>}]`. `search text` indexes
 parser-visible source text, owner paths, and exports; docs, schema files, and
 other non-parser text should be expanded with `rg` or `fd` and normalized

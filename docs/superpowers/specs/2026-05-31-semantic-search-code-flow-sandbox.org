@@ -105,12 +105,30 @@ node dist/src/cli/main.js search text parserOwner .
 Observed:
 
 #+begin_src text
-[search-text] q=parserOwner own=2 hit=4 view=hits
-|owner src/cli/semantic-search/build.ts role="root,entrypoint" ...
-|owner tests/unit/cli.test.ts role=unknown public=false
-|hit src/cli/semantic-search/build.ts:312:7 owner=src/cli/semantic-search/build.ts kind=text score=2 reason=source-text source=parser-visible-source
-|hit tests/unit/cli.test.ts:234:41 owner=tests/unit/cli.test.ts kind=text score=2 reason=source-text source=parser-visible-source
-|next owner:src/cli/semantic-search/build.ts,owner:tests/unit/cli.test.ts
+[search-text] q=parserOwner own=3 hit=5 view=hits
+|owner src/cli/semantic-search/facts.ts role="root,entrypoint" ...
+|owner src/cli/semantic-search/owner-fallback.ts role="root,entrypoint" ...
+|owner tests/unit/cli.test.ts role=test public=false source=parser-visible-module parserOwner=false layer=test lines=706 ...
+|hit src/cli/semantic-search/facts.ts:103:7 owner=src/cli/semantic-search/facts.ts kind=text score=2 reason=source-text source=parser-visible-source
+|hit src/cli/semantic-search/owner-fallback.ts:52:7 owner=src/cli/semantic-search/owner-fallback.ts kind=text score=2 reason=source-text source=parser-visible-source
+|next owner:src/cli/semantic-search/facts.ts,owner:src/cli/semantic-search/owner-fallback.ts,owner:tests/unit/cli.test.ts
+#+end_src
+
+The next navigation used to downgrade test files to =path-only= and suggest
+=ingest=.  The follow-up fix added a middle fallback: parser-visible modules
+that are not reasoning owners.
+
+#+begin_src shell
+node dist/src/cli/main.js search owner tests/unit/cli.test.ts .
+#+end_src
+
+Observed:
+
+#+begin_src text
+[search-owner] q=tests/unit/cli.test.ts role=test public=false edge=0 find=0
+|owner tests/unit/cli.test.ts role=test public=false source=parser-visible-module parserOwner=false layer=test lines=706 valid=true syntaxDiagnostics=0 semanticDiagnostics=0 imports=8 next=owner:tests/unit/cli.test.ts,"text:tests/unit/cli.test.ts(owner=tests/unit/cli.test.ts)",tests:tests/unit/cli.test.ts
+|note kind=owner-not-found message="module is parser-visible but not a reasoning owner; owner graph edges are unavailable"
+|next owner:tests/unit/cli.test.ts,text:tests/unit/cli.test.ts(owner=tests/unit/cli.test.ts),tests:tests/unit/cli.test.ts
 #+end_src
 
 #+begin_src shell
@@ -135,8 +153,8 @@ Observed:
 [search-text] q=semantic-search-packet own=6 hit=11 view=hits
 |owner src/cli/protocol.ts role="root,entrypoint" ...
 |owner src/cli/semantic-search/build.ts role="root,entrypoint" ...
-|owner tests/unit/semantic_search_schema.test.ts role=unknown public=false
-|hit src/cli/semantic-search/build.ts:580:41 owner=src/cli/semantic-search/build.ts kind=text score=2 reason=source-text source=parser-visible-source
+|owner tests/unit/semantic_search_schema.test.ts role=test public=false source=parser-visible-module parserOwner=false layer=test ...
+|hit src/cli/semantic-search/build.ts:556:41 owner=src/cli/semantic-search/build.ts kind=text score=2 reason=source-text source=parser-visible-source
 |hit tests/unit/semantic_search_schema.test.ts:167:35 owner=tests/unit/semantic_search_schema.test.ts kind=text score=2 reason=source-text source=parser-visible-source
 #+end_src
 
@@ -149,8 +167,9 @@ Observed:
 3. ts-harness search text <implementation-term> .
 4. ts-harness search owner <top-owner> .
 5. ts-harness search tests <top-owner> .
-6. self-apply policy gates must stay green; split owners instead of waiving size findings
-7. rg/fd only for non-parser text, always piped into ts-harness search ingest .
+6. parser-visible modules should stay inside search owner; only path-only files go to ingest
+7. self-apply policy gates must stay green; split owners instead of waiving size findings
+8. rg/fd only for non-parser text, always piped into ts-harness search ingest .
 #+end_src
 
 * Closeout
@@ -160,8 +179,9 @@ Observed:
 scenario=typescript-search-code-flow
 issue=text-search-for-ts-code-required-external-rg
 fix=parser-visible-source-text-hits
+followup=parser-visible-module-owner-fallback
 modularity_fix=split-source-text-owner
-token_rounds=one-fewer-for-source-identifiers
+token_rounds=one-fewer-for-source-identifiers,and-no-ingest-round-for-parser-visible-tests
 schema_change=none
 remaining_external_surfaces=docs,schema-json,generated-artifacts,non-parser-text
 #+end_src

@@ -97,9 +97,11 @@ Every read-only exploration goes through =<lang-harness> search=.  Common views:
 <lang-harness> search text <query>
 #+end_src
 
-=search owner= resolves parser-visible owners first.  If the query is an
-existing project path that is not a parser owner, providers may return a
-path-only owner with =source=path-only=, =parserOwner=false=, and
+=search owner= resolves semantic owners first, then parser-visible modules,
+then existing project paths.  A parser-visible module that is not a reasoning
+owner should return =source=parser-visible-module=, =parserOwner=false=, and
+module facts such as role, layer, line count, validity, and diagnostics.  A path
+outside the parser module set may return =source=path-only= and
 =next=ingest:<path>= so agents can keep the path in the protocol instead of
 falling back to raw shell output.
 
