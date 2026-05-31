@@ -1,5 +1,7 @@
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use semantic_agent_hook::{
     classify_hook, parse_profiles, DecisionKind, ProfileRegistry, ReasonKind,
@@ -8,6 +10,16 @@ use serde_json::json;
 
 fn generated_rust_profile_path() -> &'static str {
     env!("SEMANTIC_AGENT_HOOK_RUST_PROFILE_REGISTRY")
+}
+
+fn temp_project_root(name: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("semantic-agent-hook-{name}-{unique}"));
+    std::fs::create_dir_all(&root).expect("create temp project root");
+    root
 }
 
 fn rust_harness_profile_registry() -> ProfileRegistry {
@@ -170,4 +182,33 @@ fn cli_hook_can_emit_raw_decision_for_schema_tests() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("hook JSON");
     assert_eq!(value["decision"], "deny");
     assert_eq!(value["reasonKind"], "direct-source-read");
+}
+
+#[test]
+fn cli_install_writes_root_owned_codex_hook_config() {
+    let root = temp_project_root("install");
+    let output = Command::new(env!("CARGO_BIN_EXE_semantic-agent-hook"))
+        .args([
+            "install",
+            "--client",
+            "codex",
+            "--profiles",
+            ".codex/agent-hook-profiles.json",
+            root.to_str().expect("utf8 temp root"),
+        ])
+        .output()
+        .expect("run semantic-agent-hook install");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("install stdout");
+    assert!(stdout.contains("[agent-install] client=codex"));
+    assert!(stdout.contains("profiles=.codex/agent-hook-profiles.json"));
+    let config =
+        std::fs::read_to_string(root.join(".codex/config.toml")).expect("installed config");
+    assert!(config.contains("# BEGIN semantic-agent-hook"));
+    assert!(config.contains("semantic-agent-hook hook --client codex pre-tool"));
+    assert!(config.contains("--profiles \"$repo_root/.codex/agent-hook-profiles.json\""));
+    assert!(!config.contains("ts-harness agent hook --client codex"));
+    assert!(!config.contains("rs-harness agent hook --client codex"));
+    std::fs::remove_dir_all(root).expect("cleanup temp project root");
 }
