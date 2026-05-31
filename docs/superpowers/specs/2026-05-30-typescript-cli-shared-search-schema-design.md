@@ -37,8 +37,10 @@ language-server-style provider registry. It standardizes `languageId`,
 `search/dependency`, `search/deps`, structured `methodDescriptors`, and the
 packet schemas implemented by each provider. The registry's `methods` list is
 the callable truth; the shared packet schema's cross-language view enum is not
-a capability advertisement. Search descriptors also carry CLI input semantics
-such as `requiresQuery`, `acceptsStdin`, and `supportsPackageScope`.
+a capability advertisement. Search descriptors also carry the v1 CLI input
+grammar: one optional/required query positional, stdin participation, package
+scope support, output modes, and emitted schema ids. Additional public controls
+must be added to the registry schema before agents depend on them.
 The TypeScript provider treats this registry as the single source of CLI search
 view metadata: `methodDescriptors` and `methods` must be the same set, search
 descriptors use `view` equal to the `search/<view>` suffix, and the public

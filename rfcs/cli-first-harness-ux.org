@@ -246,12 +246,13 @@ methodDescriptors = method + command + view + outputSchemaIds + output modes
 =methods= is the callable truth.  The shared packet schema can contain a
 cross-language =view= enum, but that enum does not advertise provider
 capability.  Agents should only call methods present in the registry and use
-=methodDescriptors= to discover whether a method is a =search= view, which
-schema it emits, whether it requires a query, whether it consumes stdin, and
-whether compact/JSON output is supported.  A =search/*= descriptor must carry
-its =view=, emitted schema ids, and CLI input semantics; a =check/*=
-descriptor must not pretend to be a search view; an =agent/*= descriptor can
-advertise registry-shaped JSON output.
+=methodDescriptors= to discover the command grammar: whether a method is a
+=search= view, which schema it emits, whether it requires one query positional,
+whether it consumes stdin, whether =--package= is accepted, and whether
+compact/JSON output is supported.  A =search/*= descriptor must carry its
+=view=, emitted schema ids, and CLI input semantics; a =check/*= descriptor must
+not pretend to be a search view; an =agent/*= descriptor can advertise
+registry-shaped JSON output.
 
 Registry invariants are deliberately strict:
 
@@ -277,6 +278,25 @@ input semantics such as =requiresQuery=, =acceptsStdin=, and
 instead of maintaining a second hard-coded view registry.  Each provider's
 tests should compare =methods= and =methodDescriptors= as sets and reject
 duplicate descriptor methods.
+
+Descriptor grammar is intentionally small in v1:
+
+#+begin_src text
+command              search | check | agent
+view                 search method suffix only
+requiresQuery         exactly one query positional before PROJECT_ROOT
+acceptsStdin          stdin is part of the method input
+supportsPackageScope  --package <package-id> is accepted
+supportsJson          --json is accepted
+supportsCompact       compact text is accepted/default
+outputSchemaIds       JSON schemas emitted by the method
+#+end_src
+
+If a provider needs additional public controls, they must be added to the
+descriptor schema first.  Provider-private flags may exist for local debugging,
+but they are not semantic-language protocol until they are registry-described.
+This keeps agent clients from learning accidental flags or inferring CLI shape
+from the shared packet =view= enum.
 
 Search packet identity fields:
 

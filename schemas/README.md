@@ -41,15 +41,18 @@ is the stable method space for a concrete implementation.
 
 `methods` is the authoritative callable set for a provider. The shared search
 packet schema may list additional cross-language views, but an agent should
-only call methods present in the provider registry. `methodDescriptors` adds
-machine-readable command/view/schema metadata for each method.
+only call methods present in the provider registry. `methodDescriptors` is the
+machine-readable command grammar for each method.
 Search descriptors must include a `view` and emitted `outputSchemaIds`; check
 descriptors intentionally do not advertise a search view; agent descriptors can
 point at registry output schemas such as
 `agent.semantic-protocols.semantic-language-registry`.
 For search methods, `requiresQuery`, `acceptsStdin`, and `supportsPackageScope`
-are provider-owned CLI semantics and should be consumed by command parsers
-instead of being duplicated in separate hard-coded view lists.
+define the v1 public input shape: one optional/required query positional, stdin
+participation, and `--package <package-id>`. Additional public controls must be
+added to the registry schema before agents depend on them. Provider-private
+debug flags are not semantic-language protocol methods until they are
+registry-described.
 
 Registry invariants mirror Language Server Protocol naming discipline without
 copying LSP transport. `languageId` identifies the source language,
