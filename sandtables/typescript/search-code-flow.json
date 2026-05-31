@@ -1,0 +1,128 @@
+{
+  "id": "typescript.search-code-flow",
+  "language": "typescript",
+  "title": "TypeScript semantic search source-text and ingest pipe flow",
+  "workdir": {
+    "relative": "languages/typescript-lang-project-harness"
+  },
+  "budgets": {
+    "maxCommands": 5,
+    "maxTotalLinesWarn": 90
+  },
+  "steps": [
+    {
+      "id": "workspace",
+      "command": [
+        "node",
+        "dist/src/cli/main.js",
+        "search",
+        "workspace",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-workspace]",
+          "|next prime:."
+        ],
+        "maxStdoutLinesWarn": 6,
+        "maxElapsedMsWarn": 1000
+      }
+    },
+    {
+      "id": "prime",
+      "command": [
+        "node",
+        "dist/src/cli/main.js",
+        "search",
+        "prime",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-prime]",
+          "|owner"
+        ],
+        "maxStdoutLinesWarn": 16,
+        "maxElapsedMsWarn": 1200
+      }
+    },
+    {
+      "id": "text-owner-tests-pipe",
+      "command": [
+        "node",
+        "dist/src/cli/main.js",
+        "search",
+        "text",
+        "parserOwner",
+        "owner",
+        "tests",
+        "."
+      ],
+      "capture": {
+        "tsOwner": "\\|next owner:([^,\\s]+)"
+      },
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-text]",
+          "pipes=owner,tests",
+          "source=parser-visible-source",
+          "|next owner:"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1200
+      }
+    },
+    {
+      "id": "owner-from-pipe",
+      "command": [
+        "node",
+        "dist/src/cli/main.js",
+        "search",
+        "owner",
+        "{tsOwner}",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-owner]",
+          "|owner"
+        ],
+        "maxStdoutLinesWarn": 12,
+        "maxElapsedMsWarn": 1000
+      }
+    },
+    {
+      "id": "rg-to-ingest",
+      "stdinCommand": [
+        "rg",
+        "-n",
+        "sourceText|parserOwner|semantic-search-packet",
+        "src",
+        "tests",
+        "docs",
+        "README.md"
+      ],
+      "stdinCommandAllowNonZero": true,
+      "command": [
+        "node",
+        "dist/src/cli/main.js",
+        "search",
+        "ingest",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-ingest]",
+          "|owner"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1200
+      }
+    }
+  ]
+}

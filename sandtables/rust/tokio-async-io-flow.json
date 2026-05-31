@@ -1,0 +1,143 @@
+{
+  "id": "rust.tokio-async-io-flow",
+  "language": "rust",
+  "title": "Tokio async IO prime/text/owner/tests/ingest flow",
+  "workdir": {
+    "env": "SANDTABLE_RUST_TOKIO_ROOT",
+    "candidates": [
+      "~/.cargo/registry/src/*/tokio-[0-9]*"
+    ]
+  },
+  "budgets": {
+    "maxCommands": 5,
+    "maxTotalLinesWarn": 70
+  },
+  "steps": [
+    {
+      "id": "prime",
+      "command": [
+        "rs-harness",
+        "search",
+        "prime",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-prime]",
+          "|seed"
+        ],
+        "maxStdoutLinesWarn": 10,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "text-async-read",
+      "command": [
+        "rs-harness",
+        "search",
+        "text",
+        "AsyncRead",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "capture": {
+        "asyncOwner": "\\|seed owner:([^,\\s]+)"
+      },
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-text]",
+          "|seed owner:"
+        ],
+        "maxStdoutLinesWarn": 8,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "owner-async-items",
+      "command": [
+        "rs-harness",
+        "search",
+        "owner",
+        "{asyncOwner}",
+        "items",
+        "--trace",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-owner]",
+          "|seed"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1800
+      }
+    },
+    {
+      "id": "tests-async-owner",
+      "command": [
+        "rs-harness",
+        "search",
+        "tests",
+        "{asyncOwner}",
+        "--view",
+        "seeds",
+        "--seeds",
+        "4",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-tests]"
+        ],
+        "maxStdoutLinesWarn": 10,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "rg-to-ingest",
+      "stdinCommand": [
+        "rg",
+        "-n",
+        "AsyncRead|AsyncWrite",
+        "src",
+        "tests"
+      ],
+      "stdinCommandAllowNonZero": true,
+      "command": [
+        "rs-harness",
+        "search",
+        "ingest",
+        "items",
+        "tests",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-ingest]"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 2000
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "id": "rust.ignore-walkdir-flow",
+  "language": "rust",
+  "title": "ignore WalkBuilder public crate flow",
+  "workdir": {
+    "env": "SANDTABLE_RUST_IGNORE_ROOT",
+    "candidates": [
+      "~/.cargo/registry/src/*/ignore-[0-9]*"
+    ]
+  },
+  "budgets": {
+    "maxCommands": 4,
+    "maxTotalLinesWarn": 48
+  },
+  "steps": [
+    {
+      "id": "prime",
+      "command": [
+        "rs-harness",
+        "search",
+        "prime",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-prime]",
+          "|seed"
+        ],
+        "maxStdoutLinesWarn": 10,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "text-walkbuilder",
+      "command": [
+        "rs-harness",
+        "search",
+        "text",
+        "WalkBuilder",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "capture": {
+        "walkOwner": "\\|seed owner:([^,\\s]+)"
+      },
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-text]",
+          "|seed owner:"
+        ],
+        "maxStdoutLinesWarn": 8,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "owner-walk-items",
+      "command": [
+        "rs-harness",
+        "search",
+        "owner",
+        "{walkOwner}",
+        "items",
+        "--trace",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-owner]",
+          "|seed"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1800
+      }
+    },
+    {
+      "id": "dependency-walkdir",
+      "command": [
+        "rs-harness",
+        "search",
+        "dependency",
+        "walkdir",
+        "items",
+        "public-api",
+        "docs",
+        "tests",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-dependency]"
+        ],
+        "maxStdoutLinesWarn": 16,
+        "maxElapsedMsWarn": 1600
+      }
+    }
+  ]
+}

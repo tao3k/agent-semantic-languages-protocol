@@ -1,0 +1,194 @@
+#+TITLE: Semantic Sandtable Runner
+#+DATE: 2026-05-31
+#+STATUS: implemented
+
+* Purpose
+
+The protocol repository owns the cross-language sandtable runner.  Each
+language harness still owns its native parser, CLI implementation, language
+schemas, and language-specific fixtures.
+
+The runner exists to replay realistic agent search flows against real harness
+binaries:
+
+#+begin_src text
+prime -> text/owner/deps -> pipe -> tests -> ingest -> bounded edit packet
+#+end_src
+
+It is not a replacement for language test suites.  It is the shared drill layer
+that catches token budget regressions, pipe drift, line protocol breaks, and
+poor subagent handoff packets across languages.
+
+* Command
+
+From the protocol repository root:
+
+#+begin_src shell
+python3 -m tools.semantic_sandtable --list
+python3 -m tools.semantic_sandtable
+python3 -m tools.semantic_sandtable sandtables/typescript/search-code-flow.json
+python3 -m tools.semantic_sandtable --json sandtables/rust/tokio-async-io-flow.json
+#+end_src
+
+The runner only depends on the Python standard library.
+
+* Scenario Contract
+
+Scenarios are JSON files under =sandtables/<language>/=.  They describe:
+
+- the real harness binary command to execute;
+- a workdir chosen from a repo-relative path, an environment variable, or local
+  fixture candidates such as cargo registry paths;
+- optional =stdinCommand= to exercise pipe flow without shell syntax;
+- regex capture of prior output, so owner/test follow-up commands can consume
+  discovered seeds instead of hardcoding source paths;
+- expected compact line protocol markers;
+- warning budgets for lines, bytes, time, and command count.
+
+The shared descriptor contract is:
+
+#+begin_src text
+schemas/semantic-sandtable-scenario.v1.schema.json
+#+end_src
+
+Example surfaces:
+
+#+begin_src json
+{
+  "id": "typescript.search-code-flow",
+  "language": "typescript",
+  "workdir": {"relative": "languages/typescript-lang-project-harness"},
+  "steps": [
+    {
+      "id": "text-owner-tests-pipe",
+      "command": ["ts-harness", "search", "text", "parserOwner", "owner", "tests", "."],
+      "capture": {"tsOwner": "\\|next owner:([^,\\s]+)"},
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": ["[search-text]", "pipes=owner,tests"],
+        "maxStdoutLinesWarn": 18
+      }
+    },
+    {
+      "id": "owner-from-pipe",
+      "command": ["ts-harness", "search", "owner", "{tsOwner}", "."]
+    }
+  ]
+}
+#+end_src
+
+* Initial Scenarios
+
+Rust:
+
+- =rust.tokio-async-io-flow= uses a Tokio public crate fixture and exercises
+  prime, source text, owner items, tests, and =rg -> search ingest=.
+- =rust.ignore-walkdir-flow= exercises dependency evidence around =walkdir=.
+- =rust.bytes-buffer-flow= exercises buffer API navigation around =BytesMut=.
+
+TypeScript:
+
+- =typescript.search-code-flow= replays parser-visible source-text search,
+  =text -> owner -> tests= pipe semantics, and external expansion through
+  =rg -> search ingest=.
+
+Python:
+
+- =python.search-code-flow= applies the same drill to the Python harness and is
+  intentionally budgeted to reveal over-large pipe packets.
+
+* Findings To Track
+
+The first runner version should produce warnings rather than hard failures for
+packet size and elapsed-time budget misses.  Warnings are sandtable findings:
+they identify where a language harness needs compression or better default
+views.
+
+Use =--fail-on-warn= when turning a discovered budget into a regression gate.
+
+* Initial Run Findings
+
+The first local run completed with no hard failures:
+
+#+begin_src text
+[sandtable] scenarios=5 pass=3 warn=2 fail=0 skip=0
+#+end_src
+
+Rust public crate flows passed within budget for =tokio=, =ignore=, and
+=bytes=.  The dynamic seed capture avoided hardcoded owner paths and exercised
+the intended flow:
+
+#+begin_src text
+text -> capture seed owner -> owner items -> tests
+#+end_src
+
+TypeScript warnings:
+
+- =search prime= emitted 49 lines and should expose a tighter default view for
+  agent first-hop orientation.
+- =rg -> search ingest= emitted 25 lines; grouped owners are useful, but the
+  default packet can still be compressed for subagent handoff.
+- elapsed time crossed the initial budget on every step in one warm run.
+
+Python warnings:
+
+- =search workspace= emitted 37 lines where the router packet should be closer
+  to a short package index.
+- =search prime= emitted 41 lines and took several seconds per run.
+- =text -> owner -> tests= emitted 53 lines and 12 KB.  This is useful evidence
+  but too large for the default pipe packet.
+- every Python search step exceeded the initial elapsed-time budget, making the
+  Python harness the next performance optimization target.
+
+* Compression Follow-Up
+
+The next run compressed the default compact search surface:
+
+- Python and TypeScript compact renderers no longer expand edge lines for
+  =workspace= and =prime=.  JSON packets still retain structured edges.
+- Python and TypeScript default search caps were tightened for first-hop owner
+  and text packets.
+- TypeScript compact renderers no longer expand finding details for
+  =workspace= and =prime=.  Search keeps finding counts in the header; detailed
+  policy evidence belongs to =check=.
+- The TypeScript sandtable invokes the local built CLI with
+  =node dist/src/cli/main.js= so protocol-repository drills are independent of
+  a global =ts-harness= install.
+
+Observed after compression:
+
+#+begin_src text
+[sandtable] scenarios=5 pass=4 warn=1 fail=0 skip=0
+typescript.search-code-flow status=pass
+python.search-code-flow status=warn
+#+end_src
+
+TypeScript moved from warning to pass:
+
+#+begin_src text
+workspace lines=4
+prime lines=13
+text-owner-tests lines=10
+ingest lines=15
+#+end_src
+
+Python output improved but still needs a real performance lane:
+
+#+begin_src text
+workspace lines=5
+prime lines=13
+text-owner-tests lines=29
+ingest lines=20
+elapsed_ms≈4000-5000 per CLI call
+#+end_src
+
+A quick threaded parse experiment was rejected.  It did not reduce the
+end-to-end CLI budget reliably and introduced run-to-run timing noise.  The
+next Python optimization should be a semantic-search-specific fast path or
+cache boundary, starting with =search workspace= because that view is only a
+router and does not need full owner graph construction.
+
+The same run exposed one policy tooling issue: the local Codex hook sometimes
+misclassified non-Rust file edits and JSON checks as Rust search violations.
+That is a separate hook matching problem and should be handled in the Rust
+harness hook policy, not in the sandtable runner.

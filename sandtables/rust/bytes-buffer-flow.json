@@ -1,0 +1,112 @@
+{
+  "id": "rust.bytes-buffer-flow",
+  "language": "rust",
+  "title": "bytes BytesMut buffer flow",
+  "workdir": {
+    "env": "SANDTABLE_RUST_BYTES_ROOT",
+    "candidates": [
+      "~/.cargo/registry/src/*/bytes-[0-9]*"
+    ]
+  },
+  "budgets": {
+    "maxCommands": 4,
+    "maxTotalLinesWarn": 48
+  },
+  "steps": [
+    {
+      "id": "prime",
+      "command": [
+        "rs-harness",
+        "search",
+        "prime",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-prime]",
+          "|seed"
+        ],
+        "maxStdoutLinesWarn": 10,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "text-bytes-mut",
+      "command": [
+        "rs-harness",
+        "search",
+        "text",
+        "BytesMut",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "capture": {
+        "bytesOwner": "\\|seed owner:([^,\\s]+)"
+      },
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-text]",
+          "|seed owner:"
+        ],
+        "maxStdoutLinesWarn": 8,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "owner-bytes-items",
+      "command": [
+        "rs-harness",
+        "search",
+        "owner",
+        "{bytesOwner}",
+        "items",
+        "--trace",
+        "--view",
+        "seeds",
+        "--seeds",
+        "8",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-owner]",
+          "|seed"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1800
+      }
+    },
+    {
+      "id": "tests-bytes-owner",
+      "command": [
+        "rs-harness",
+        "search",
+        "tests",
+        "{bytesOwner}",
+        "--view",
+        "seeds",
+        "--seeds",
+        "4",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-tests]"
+        ],
+        "maxStdoutLinesWarn": 10,
+        "maxElapsedMsWarn": 1500
+      }
+    }
+  ]
+}

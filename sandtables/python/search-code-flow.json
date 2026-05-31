@@ -1,0 +1,121 @@
+{
+  "id": "python.search-code-flow",
+  "language": "python",
+  "title": "Python semantic search source-text and tests pipe flow",
+  "workdir": {
+    "relative": "languages/python-lang-project-harness"
+  },
+  "budgets": {
+    "maxCommands": 5,
+    "maxTotalLinesWarn": 80
+  },
+  "steps": [
+    {
+      "id": "workspace",
+      "command": [
+        ".venv/bin/py-harness",
+        "search",
+        "workspace",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-workspace]"
+        ],
+        "maxStdoutLinesWarn": 6,
+        "maxElapsedMsWarn": 1200
+      }
+    },
+    {
+      "id": "prime",
+      "command": [
+        ".venv/bin/py-harness",
+        "search",
+        "prime",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-prime]",
+          "|owner"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "text-owner-tests-pipe",
+      "command": [
+        ".venv/bin/py-harness",
+        "search",
+        "text",
+        "PythonSemanticSearchOptions",
+        "owner",
+        "tests",
+        "."
+      ],
+      "capture": {
+        "pyOwner": "\\|owner ([^\\s]+)"
+      },
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-text]",
+          "pipes=owner,tests",
+          "source=parser-visible-source",
+          "|edge"
+        ],
+        "maxStdoutLinesWarn": 24,
+        "maxStdoutBytesWarn": 12000,
+        "maxElapsedMsWarn": 2500
+      }
+    },
+    {
+      "id": "owner-from-pipe",
+      "command": [
+        ".venv/bin/py-harness",
+        "search",
+        "owner",
+        "{pyOwner}",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-owner]",
+          "|owner"
+        ],
+        "maxStdoutLinesWarn": 8,
+        "maxElapsedMsWarn": 1500
+      }
+    },
+    {
+      "id": "rg-to-ingest",
+      "stdinCommand": [
+        "rg",
+        "-n",
+        "PythonSemanticSearchOptions|parser-visible-source|search ingest",
+        "src",
+        "tests",
+        "README.md"
+      ],
+      "stdinCommandAllowNonZero": true,
+      "command": [
+        ".venv/bin/py-harness",
+        "search",
+        "ingest",
+        "."
+      ],
+      "expect": {
+        "lineProtocol": true,
+        "stdoutContains": [
+          "[search-ingest]"
+        ],
+        "maxStdoutLinesWarn": 18,
+        "maxElapsedMsWarn": 1500
+      }
+    }
+  ]
+}

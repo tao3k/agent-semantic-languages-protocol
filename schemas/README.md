@@ -9,6 +9,12 @@ descriptors, and packet schemas.
 output across semantic language providers. Compact text stays the default
 prompt surface; JSON is the validation, cache, and artifact shape.
 
+`semantic-sandtable-scenario.v1.schema.json` is the shared scenario descriptor
+for replaying bounded search flows against real harness binaries. It owns the
+portable drill shape: workdir selection, argv commands, stdin pipe commands,
+regex capture handoff, line-protocol expectations, and warning budgets for
+token-size and latency findings.
+
 The TypeScript provider registers as:
 
 ```json
