@@ -121,6 +121,13 @@ Shared `nodes` may also name common search-axis kinds such as `tsconfig`,
 `extension`, `build_tool`, and `test_surface` when a language provider exposes
 those axes from native project facts.
 
+Structured path fields use the shared `projectPath` definition. A project path
+is either `.` for the workspace root or a canonical project-root-relative path,
+not a display locator. It must not include rank prefixes such as `0:`, URI
+schemes, absolute paths, `..` escapes, line ranges, or command prefixes such as
+`owner:`. Put line/column data in `location`, graph identity in typed node ids
+such as `O:src/lib.rs`, and ranking metadata in separate fields.
+
 Dependency API searches should distinguish the current workspace resolution
 from an explicitly requested external version. Providers can use fields such as
 `requestedVersion`, `versionScope`, `currentWorkspaceVersion`, and `apiQuery`;

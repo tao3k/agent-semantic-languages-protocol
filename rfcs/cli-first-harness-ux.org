@@ -757,6 +757,20 @@ Rules:
 - no Unicode arrows, no box-drawing, no DOT/Mermaid/Graphviz
 #+end_src
 
+Path values are canonical project-root-relative paths, not display locators.
+The workspace root is rendered as =.=.  Other path values must not include rank
+prefixes, node slots, URI schemes, line ranges, column numbers, or command
+prefixes.  In particular, values such as
+=0:src/components/WorkflowExecution.tsx=, =owner:src/lib.rs=, and
+=src/lib.rs:42-90= are not paths.  Put rank/score in separate fields
+(for example =rank=0= or =score=2), put line/column data in =locations=, and
+use command fragments only inside =next= values.
+
+Edge endpoints are graph node ids, not path values.  Owner node ids use the
+typed locator =O:<projectPath>=; they must not use numeric prefixes such as
+=0:<projectPath>=.  If the provider wants to render ordering, it should add
+=rank=N= instead of changing the owner/path identity.
+
 Line shape:
 
 #+begin_src text
@@ -765,6 +779,7 @@ Line shape:
 |edge KIND:id -kind[:label]-> KIND:id  ← ASCII edge, always " -kind-> "
 |owner path k=v next=...             ← owner with inline next actions
 |item name kind=... k=v next=...     ← intra-file item with inline next
+|hit path=<path> line=N column=N ... ← hit location uses fields, not path:line
 |find RULE xN at=KIND:id            ← finding attached to node
 |next kind:arg,kind:arg(scope=x)     ← global next actions (rare, only when
                                        no owner/item context exists)
@@ -773,6 +788,10 @@ Line shape:
 
 =|item= lines only appear when the request includes the =items= pipe or an
 advertised provider method returns item facts by default.
+=|hit= and =|api= lines must render the path as =path=<projectPath>= and
+line/column as separate fields.  They must not use =src/lib.rs:42:7= or
+=src/lib.rs:42-90= as the positional value because agents will copy that token
+as a file path.
 =|next= is an inline field on owner/item/package/cargo lines, not a separate
 line type.  A standalone =|next= line is only used when no owner/item
 context exists to attach to.
@@ -1285,14 +1304,14 @@ public API signatures — a critical search for dependency replacement tasks:
 #+begin_example
 [search-pattern] pattern=public-external-type q=smallvec pkg=. dep=1 own=2 api=4
 |dep smallvec import=smallvec pkg=smallvec version=1 kind=normal opt=false source=manifest manager=cargo
-|api compiler/rustc_middle/src/ty/context.rs line=177 dep=smallvec kind=struct name=TyCtxt public=true doc=true reason=dependency-owner next=docs:TyCtxt
-|api compiler/rustc_middle/src/mir/mod.rs line=42 dep=smallvec kind=struct name=Body public=true doc=true reason=dependency-owner next=docs:Body
+|api path=compiler/rustc_middle/src/ty/context.rs line=177 dep=smallvec kind=struct name=TyCtxt public=true doc=true reason=dependency-owner next=docs:TyCtxt
+|api path=compiler/rustc_middle/src/mir/mod.rs line=42 dep=smallvec kind=struct name=Body public=true doc=true reason=dependency-owner next=docs:Body
 #+end_example
 
 #+begin_example
 [search-pattern] pattern=public-anyhow-result pkg=. hit=2 source=native-parser
-|api src/api.rs:44 kind=fn name=create_order next=owner:src/api.rs source=native-parser signature=fn(req:CreateOrder)->anyhow::Result<Order> params=req:CreateOrder async=false unsafe=false receiver=- return=anyhow::Result<Order> error=anyhow::Result impl=- trait=-
-|api src/cli.rs:31 kind=fn name=run next=owner:src/cli.rs source=native-parser signature=fn()->anyhow::Result<()> params=- async=false unsafe=false receiver=- return=anyhow::Result<()> error=anyhow::Result impl=- trait=-
+|api path=src/api.rs line=44 kind=fn name=create_order next=owner:src/api.rs source=native-parser signature=fn(req:CreateOrder)->anyhow::Result<Order> params=req:CreateOrder async=false unsafe=false receiver=- return=anyhow::Result<Order> error=anyhow::Result impl=- trait=-
+|api path=src/cli.rs line=31 kind=fn name=run next=owner:src/cli.rs source=native-parser signature=fn()->anyhow::Result<()> params=- async=false unsafe=false receiver=- return=anyhow::Result<()> error=anyhow::Result impl=- trait=-
 #+end_example
 
 =public-anyhow-result= is the =anyhow::Result= specialization of
@@ -1388,7 +1407,7 @@ Output format (API facts, not docs prose):
 
 #+begin_example
 [search-docs] q=fallible pkg=. docs=1 source=native-parser
-|api src/lib.rs:11 kind=fn name=fallible next=owner:src/lib.rs source=native-parser docs=local-parser signature=fn(input:String)->anyhow::Result<Thing> params=input:String async=true unsafe=true receiver=- return=anyhow::Result<Thing> error=anyhow::Result impl=- trait=-
+|api path=src/lib.rs line=11 kind=fn name=fallible next=owner:src/lib.rs source=native-parser docs=local-parser signature=fn(input:String)->anyhow::Result<Thing> params=input:String async=true unsafe=true receiver=- return=anyhow::Result<Thing> error=anyhow::Result impl=- trait=-
 #+end_example
 
 =search deps ignore@0.4.23::WalkBuilder::require_git= remains the local usage
@@ -2145,25 +2164,25 @@ The agent sees:
 
 #+begin_example
 [search-dependency] q=react dep=1 manifest=1 own=2 hit=3 edge=2 view=graph
-|hit package.json:7:5 owner=. kind=dependency score=10 reason=manifest-package-exact packageRoot=react source=dependencies versionRange=^19.0.0
-|hit src/ui/order-view.ts:1 owner=src/ui/order-view.ts kind=dependency reason=package-root-exact packageRoot=react moduleSpecifier=react
+|hit path=package.json line=7 column=5 owner=. kind=dependency score=10 reason=manifest-package-exact packageRoot=react source=dependencies versionRange=^19.0.0
+|hit path=src/ui/order-view.ts line=1 owner=src/ui/order-view.ts kind=dependency reason=package-root-exact packageRoot=react moduleSpecifier=react
 
 [search-text] q=OrderStatus own=3 hit=3 view=hits
-|hit src/domain/order.ts owner=src/domain/order.ts kind=export score=3 reason=export-name symbol=OrderStatus
-|hit src/api/orders.ts owner=src/api/orders.ts kind=path score=2 reason=path
+|hit path=src/domain/order.ts owner=src/domain/order.ts kind=export score=3 reason=export-name symbol=OrderStatus
+|hit path=src/api/orders.ts owner=src/api/orders.ts kind=path score=2 reason=path
 |next owner:src/domain/order.ts,owner:src/api/orders.ts
 
 [search-callsite] q=OrderStatus def=1 own=2 hit=2 view=hits
-|hit src/api/orders.ts:1 owner=src/api/orders.ts kind=callsite reason=import-owner symbol=OrderStatus
-|hit tests/unit/domain/order.test.ts:1 owner=tests/unit/domain/order.test.ts kind=callsite reason=import-owner symbol=OrderStatus
+|hit path=src/api/orders.ts line=1 owner=src/api/orders.ts kind=callsite reason=import-owner symbol=OrderStatus
+|hit path=tests/unit/domain/order.test.ts line=1 owner=tests/unit/domain/order.test.ts kind=callsite reason=import-owner symbol=OrderStatus
 
 [search-api] q=OrderStatus api=OrderStatus own=1 hit=2 source=native-parser view=hits
-|api src/domain/order.ts:1 owner=src/domain/order.ts kind=api reason=exported-api symbol=OrderStatus source=native-parser apiKind=type
-|api src/domain/order.ts:8 owner=src/domain/order.ts kind=api reason=public-data-api symbol=OrderStatusRecord source=native-parser apiKind=interface fields=status:OrderStatus
+|api path=src/domain/order.ts line=1 owner=src/domain/order.ts kind=api reason=exported-api symbol=OrderStatus source=native-parser apiKind=type
+|api path=src/domain/order.ts line=8 owner=src/domain/order.ts kind=api reason=public-data-api symbol=OrderStatusRecord source=native-parser apiKind=interface fields=status:OrderStatus
 
 [search-ingest] src=rg-n in=4 own=4 hit=4
-|hit src/api/orders.ts:44 owner=src/api/orders.ts kind=text reason=rg-n
-|hit src/ui/order-view.ts:19 owner=src/ui/order-view.ts kind=text reason=rg-n
+|hit path=src/api/orders.ts line=44 owner=src/api/orders.ts kind=text reason=rg-n
+|hit path=src/ui/order-view.ts line=19 owner=src/ui/order-view.ts kind=text reason=rg-n
 #+end_example
 
 The agent immediately knows the owner-grouped blast radius.  Raw lexical output

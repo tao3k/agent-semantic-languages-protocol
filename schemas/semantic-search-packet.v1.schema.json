@@ -203,13 +203,18 @@
         "$ref": "#/$defs/scalar"
       }
     },
+    "projectPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:\\.|(?!/)(?![A-Za-z]:)(?![0-9]+:)(?!\\.\\.?($|/))(?!.*(^|/)\\.\\.?($|/))(?!.*//)[^\\s:\\\\]+(?:/[^\\s:\\\\]+)*)$"
+    },
     "location": {
       "type": "object",
       "additionalProperties": false,
       "required": ["path"],
       "properties": {
         "path": {
-          "type": "string"
+          "$ref": "#/$defs/projectPath"
         },
         "line": {
           "type": "integer",
@@ -310,7 +315,7 @@
           ]
         },
         "path": {
-          "type": "string"
+          "$ref": "#/$defs/projectPath"
         },
         "fields": {
           "$ref": "#/$defs/fields"
@@ -351,7 +356,7 @@
       "required": ["path", "role", "public", "fields"],
       "properties": {
         "path": {
-          "type": "string"
+          "$ref": "#/$defs/projectPath"
         },
         "namespace": {
           "type": "string"
@@ -391,7 +396,7 @@
           "type": "string"
         },
         "ownerPath": {
-          "type": "string"
+          "$ref": "#/$defs/projectPath"
         },
         "location": {
           "$ref": "#/$defs/location"
@@ -410,7 +415,7 @@
           "type": "string"
         },
         "ownerPath": {
-          "type": "string"
+          "$ref": "#/$defs/projectPath"
         },
         "symbol": {
           "type": "string"
@@ -475,7 +480,7 @@
           "type": "string"
         },
         "ownerPath": {
-          "type": "string"
+          "$ref": "#/$defs/projectPath"
         },
         "fields": {
           "$ref": "#/$defs/fields"
