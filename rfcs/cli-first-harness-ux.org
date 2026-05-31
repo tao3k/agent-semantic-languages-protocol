@@ -346,10 +346,10 @@ registry.
 
 The protocol repository may keep language-specific schema templates under root
 =schemas/=, for example
-=schemas/typescript-semantic-capabilities-template.v1.schema.json=.  Those
-templates document the expected active schema shape and vocabulary, but the
-provider's own repository still carries the active schema it advertises and
-validates in CI.
+=schemas/typescript-semantic-capabilities-template.v1.schema.json= and
+=schemas/python-semantic-capabilities-template.v1.schema.json=.  Those templates
+document the expected active schema shape and vocabulary, but the provider's own
+repository still carries the active schema it advertises and validates in CI.
 
 For example, a TypeScript provider can advertise
 =languageId=typescript namespace=typescript name=parser-visible-source-text-search=
@@ -2400,6 +2400,32 @@ named import text is marked possible until the parser exposes import binding
 attribution.  For equal relevance scores, TypeScript search ranks
 recently modified project files before older files and then falls back to path
 order, so active repair context rises without adding a new protocol field.
+
+* Existing Python harness readiness
+
+The Python harness now exposes the same CLI-first protocol lane:
+
+- A CLI binary: =py-harness= → =python_lang_project_harness:run_cli_from_env=
+- Stable protocol commands: =search=, =check=, and =agent doctor=
+- A provider registry emitted by =py-harness agent doctor --json=
+- Python-local capability schema:
+  =schemas/python-semantic-capabilities.v1.schema.json=
+- Package-local common schema copies:
+  =schemas/semantic-language-registry.v1.schema.json= and
+  =schemas/semantic-search-packet.v1.schema.json=
+
+The first Python search slice is intentionally smaller than the Rust and
+TypeScript surfaces but follows the same contract.  =py-harness search
+workspace= emits package-root routing facts and =next= prime targets.
+=py-harness search prime= emits parser-owned reasoning-tree owners, import
+edges, dependency nodes, findings, and owner/deps/test next actions.
+=py-harness search text <query> owner tests= searches parser-visible owner
+paths, namespaces, public exports, symbols, and source text, then keeps matched
+owners plus importing tests in one packet.  =py-harness search ingest= detects
+=rg -n=, vimgrep, plain path-list, and NUL path-list stdin and maps hits back to
+parser-visible owners when possible.  Dependency queries use =pyproject.toml=
+metadata and local import usage, with =versionScope= rendered as =current=,
+=external=, or =unknown=.
 
 * The correct division of labor
 

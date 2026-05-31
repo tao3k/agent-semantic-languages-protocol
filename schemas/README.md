@@ -124,8 +124,9 @@ at the same relative paths, for example
 inside the language harness repository, for example the TypeScript provider's
 `schemas/typescript-semantic-capabilities.v1.schema.json`. The protocol
 repository may keep language-specific templates, such as
-`schemas/typescript-semantic-capabilities-template.v1.schema.json`, to document
-the expected active schema shape without making the common registry schema own a
+`schemas/typescript-semantic-capabilities-template.v1.schema.json` and
+`schemas/python-semantic-capabilities-template.v1.schema.json`, to document the
+expected active schema shape without making the common registry schema own a
 global capability enum. The TypeScript harness unit suite reads its
 package-local common schema copies, validates every implemented
 `ts-harness search ... --json` view against the shared envelope, checks
@@ -135,6 +136,10 @@ common package-local copies with this repository's source schemas when the
 package is checked out as a submodule, and compares the TypeScript-local
 capability vocabulary with the protocol repository template when that template
 is available.
+The Python harness follows the same ownership split: `py-harness agent doctor
+--json` advertises the common registry and search packet schemas plus the
+Python-local `schemas/python-semantic-capabilities.v1.schema.json`, while this
+repository only keeps the template vocabulary.
 The Rust harness exposes the same registry contract through
 `rs-harness agent doctor --json`.
 
@@ -194,3 +199,19 @@ provider exposes named import binding attribution.
 The Rust slice emits the same envelope from `rs-harness search ... --json`,
 including Cargo, owner, dependency, symbol, callsite, import, cfg, pattern,
 docs, api, public-external-types, tests, and ingest views.
+
+The current Python slice emits conforming packets from:
+
+```shell
+py-harness search workspace --json .
+py-harness search prime --json .
+py-harness search owner src/python_lang_project_harness/_cli.py --json .
+py-harness search dependency pytest --json .
+py-harness search deps pytest::fixture --json .
+py-harness search api PythonHarnessReport --json .
+py-harness search symbol PythonHarnessReport --json .
+py-harness search import python_lang_project_harness --json .
+py-harness search tests src/python_lang_project_harness/_cli.py --json .
+py-harness search text PythonHarnessReport --json .
+rg -n "PythonHarnessReport" src tests | py-harness search ingest --json .
+```
