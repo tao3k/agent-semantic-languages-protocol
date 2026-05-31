@@ -927,6 +927,21 @@ nearest item resolve (when line exists) → role detect →
 rank/dedup → compact packet render
 #+end_src
 
+** Recency-biased ranking
+
+When a search view has multiple same-class candidates after semantic rank,
+provider score, and deduplication, project-internal path recency is the next
+tie-breaker.  Newer last-modified paths sort before older paths because agents
+usually edit the files they are currently reasoning about.  This applies to
+owner-grouped hits, ingest candidates, dependency usage owners, and equal-rank
+prime owners.
+
+Recency is only a ranking signal.  It must not replace semantic relevance,
+public/API/root owner priority, exact-match scoring, or version-scope rules.
+Providers only stat paths that resolve inside the selected project or package
+root; missing or non-project mtimes fall back to deterministic path/name order.
+Default compact output does not expose mtime fields.
+
 The header line shows the detected source for trust calibration:
 
 #+begin_src text
@@ -2101,6 +2116,7 @@ ts-harness search workspace .
 ts-harness search prime .
 ts-harness search dependency react .
 ts-harness search deps react/jsx-runtime@19.0.0::jsx .
+ts-harness search api OrderStatus .
 ts-harness search symbol OrderStatus .
 ts-harness search callsite OrderStatus .
 ts-harness search import ./order .
@@ -2125,6 +2141,10 @@ The agent sees:
 [search-callsite] q=OrderStatus def=1 own=2 hit=2 view=hits
 |hit src/api/orders.ts:1 owner=src/api/orders.ts kind=callsite reason=import-owner symbol=OrderStatus
 |hit tests/unit/domain/order.test.ts:1 owner=tests/unit/domain/order.test.ts kind=callsite reason=import-owner symbol=OrderStatus
+
+[search-api] q=OrderStatus api=OrderStatus own=1 hit=2 source=native-parser view=hits
+|api src/domain/order.ts:1 owner=src/domain/order.ts kind=api reason=exported-api symbol=OrderStatus source=native-parser apiKind=type
+|api src/domain/order.ts:8 owner=src/domain/order.ts kind=api reason=public-data-api symbol=OrderStatusRecord source=native-parser apiKind=interface fields=status:OrderStatus
 
 [search-ingest] src=rg-n in=4 own=4 hit=4
 |hit src/api/orders.ts:44 owner=src/api/orders.ts kind=text reason=rg-n
@@ -2356,7 +2376,13 @@ The TypeScript harness already has:
 The TypeScript slice is the reference implementation for the semantic-language
 registry contract.  The CLI advertises =ts-harness= only, rejects old direct
 renderer flags as protocol commands, and validates search JSON against the
-shared schema.
+shared schema.  Its API search slice is intentionally parser-owned:
+=ts-harness search api <query>= emits current-workspace exported/public API
+facts only, while dependency-prefixed queries such as
+=react@18.0.0::jsx= return an explicit missing-provider note until an external
+docs/API source exists.  For equal relevance scores, TypeScript search ranks
+recently modified project files before older files and then falls back to path
+order, so active repair context rises without adding a new protocol field.
 
 * The correct division of labor
 

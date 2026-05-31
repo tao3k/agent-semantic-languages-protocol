@@ -152,6 +152,7 @@ ts-harness search prime --json .
 ts-harness search owner src/index.ts --json .
 ts-harness search dependency react --json .
 ts-harness search deps react/jsx-runtime@19.0.0::jsx --json .
+ts-harness search api OrderStatus --json .
 ts-harness search symbol OrderStatus --json .
 ts-harness search callsite OrderStatus --json .
 ts-harness search import ./order --json .
@@ -177,6 +178,10 @@ through `search ingest`. The TypeScript registry advertises this directly:
 `search/text` carries TypeScript-scoped
 `parser-visible-source-text-search` and TypeScript-scoped ingest surfaces for
 non-parser text, docs text, schema JSON, and generated artifacts.
+`search/api` projects TypeScript parser-owned exported/public API facts from the
+current workspace. Dependency-prefixed or external-version API queries require a
+separate docs/API source and must not present current workspace parser facts as
+dependency-version documentation.
 
 The Rust slice emits the same envelope from `rs-harness search ... --json`,
 including Cargo, owner, dependency, symbol, callsite, import, cfg, pattern,

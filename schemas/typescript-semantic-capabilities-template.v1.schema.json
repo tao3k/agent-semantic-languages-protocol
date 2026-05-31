@@ -55,6 +55,9 @@
             "dependency-local-usage-search",
             "dependency-version-scope",
             "dependency-api-token-usage-search",
+            "exported-api-shape-search",
+            "public-function-api-shape-search",
+            "public-data-api-shape-search",
             "symbol-export-search",
             "owner-callsite-search",
             "import-edge-search",
@@ -84,6 +87,7 @@
             "non-parser-path",
             "non-parser-text",
             "docs-text",
+            "external-api-docs",
             "schema-json",
             "generated-artifact"
           ]
