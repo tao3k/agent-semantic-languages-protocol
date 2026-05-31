@@ -1,0 +1,534 @@
+#+TITLE: RFC: Structural Quality Harness & Config Policy — config as engineered decision, not escape hatch
+#+AUTHOR: agent-semantic-protocols
+#+DATE: 2026-01-18
+#+RFC: 004
+#+DEPENDS: rfcs/cargo-execution-lanes.org (001), rfcs/evidence-layer-architecture.org (002), rfcs/code-intelligence-lane.org (003)
+#+SEE_ALSO: rfcs/cli-first-harness-ux.org (005) — the CLI-first agent UX that enforces
+#+  the config-as-decision model through hooks and validate-config.
+
+* One-sentence summary
+
+Harness should treat project structure as parser facts first, evaluate
+structural quality through configurable policy, and make every config
+decision a /typed engineering choice/ with evidence, rationale, and machine
+validation — not a natural-language allowlist written by an LLM to make
+tests pass.
+
+* The five-layer structural quality model
+
+#+begin_example
+1. Parser facts layer
+   Files, Cargo manifest, module tree, namespace, owner, target, dependency facts
+
+2. Structure policy layer
+   File roles, namespace quality, entrypoint, facade, test layout, workspace policy
+
+3. Config policy layer
+   Which rules are blocking, which are advisory, which paths are in/out,
+   which owners need verification
+
+4. Agent config-advice layer
+   Agent proposes config deltas based on facts, but every delta must carry
+   evidence + rationale
+
+5. Execution lane layer
+   cargo check / cargo test / build.rs / verification — separate execution
+   and validation
+#+end_example
+
+* Layer 1: Parser facts (what exists already)
+
+The harness already builds parser facts for: Cargo manifest dependencies,
+source/test/bench/example targets, Rust module tree, owner namespace,
+import summary, local owner dependencies, child edges, shadow/orphan state.
+
+=RustHarnessConfig= already exposes structured fields: ignored dirs,
+blocking severities, disabled rules, rule severity overrides, source/test
+scope, scope explanation, advice allow explanation, verification policy.
+
+What's needed next: NOT more config fields, but a /config decision model/
+that makes every config choice explainable, verifiable, and safe from
+LLM-generated allowlist abuse.
+
+* Layer 2: Structure policy — file roles, not file sizes
+
+Every Rust file has a /structural role/.  The quality bar depends on the
+role, not on line count.
+
+** File role taxonomy
+
+| Role               | Path Pattern           | Quality Bar                                  |
+|--------------------+------------------------+----------------------------------------------|
+| crate facade       | =src/lib.rs=           | =mod=, =use=, =pub use=, boundary macros     |
+|                    |                        | only; no business implementation             |
+| module interface   | =mod.rs=               | child module declarations, re-exports only   |
+| binary adapter     | =src/main.rs=,         | imports + =fn main=; CLI/logic in owned      |
+|                    | =src/bin/*.rs=         | modules                                      |
+| build adapter      | =build.rs=             | Cargo hook only; complex logic in build      |
+|                    |                        | dependency or owned module                   |
+| source owner       | =src/domain.rs=,       | business implementation: clear namespace,    |
+|                    | =src/domain/*.rs=      | doc, API shape, test ownership               |
+| test suite         | =tests/unit/**,        | test bodies; thin root aggregates only       |
+|                    | =tests/integration/**  |                                              |
+| package target     | =examples/**,          | compilable surface; documented purpose       |
+|                    | =benches/**            |                                              |
+
+These are already partially enforced by existing rules:
+- =RUST-MOD-R004=: =lib.rs= should stay a crate facade [201_rule_catalog.md]
+- =RUST-MOD-R001=: =mod.rs= should stay interface-only
+- =RUST-MOD-R005=: =src/main.rs= and =src/bin= entrypoints should stay thin
+- =RUST-MOD-R006=: root =build.rs= should stay thin
+
+** Proposed structure policy rules (=rust.structure= pack)
+
+| Rule ID               | Title                                                    |
+|-----------------------+----------------------------------------------------------|
+| =RUST-STRUCT-FACADE=  | =lib.rs= may only contain =mod=, =use=, =pub use=, and   |
+|                       | parser-proven boundary macros; no business implementation |
+| =RUST-STRUCT-MOD-IFACE=| =mod.rs= may only organize child modules and re-exports; |
+|                       | no implementation bodies                                  |
+| =RUST-STRUCT-BIN-ADAPT=| =main.rs= /=bin= files are thin adapters only; CLI       |
+|                       | parsing and execution logic must live in owner modules    |
+| =RUST-STRUCT-BUILD-ADAPT| =build.rs= is a thin Cargo hook; complex logic must   |
+|                       | live in build-dependency or owned module                  |
+| =RUST-STRUCT-OWNER=   | owner module must have clear namespace, owner doc,        |
+|                       | API shape, and test ownership                             |
+
+* Layer 3: Scope config — typed decisions, not path allowlists
+
+** Current state (strong foundation)
+
+=RustHarnessConfig= already:
+- Discovers Cargo-backed source/test/target coverage automatically — agent
+  cannot shrink the scan surface by passing a smaller config
+- Requires =with_source_path(path, explanation)= for custom paths
+  (=RUST-PROJ-R013=)
+- Requires =with_source_path_excluded(path, explanation)= or
+  =with_tests_excluded(explanation)= for scope reduction (=RUST-PROJ-R014=)
+
+** Proposed upgrade: typed scope decisions
+
+Instead of:
+
+#+begin_src rust
+.with_source_path("src/generated", "temporary generated code")
+#+end_src
+
+Move toward:
+
+#+begin_src rust
+.with_scope_decision(
+    RustScopeDecision::include_source(
+        "generated",
+        RustScopeReason::GeneratedSource {
+            producer: "build.rs",
+            checked_by: "snapshot tests",
+        },
+    ),
+)
+.with_scope_decision(
+    RustScopeDecision::exclude_test(
+        "tests",
+        RustScopeReason::ExternalHarness {
+            command: "cargo nextest run",
+            owner: "workspace CI",
+        },
+    ),
+)
+#+end_src
+
+The difference: the agent writes a typed engineering decision, not a
+free-text explanation that may be vague or misleading.
+
+* Layer 4: Namespace quality — from path names to owner graph
+
+Three sub-layers:
+
+** 4.1 Path namespace
+
+| Pattern                   | Judgment    | Existing Rule |
+|---------------------------+-------------+---------------|
+| =src/order/order.rs=      | repeated    | =AGENT-R003=  |
+| =src/common/mod.rs=       | generic     | =AGENT-R006=  |
+| =src/utils/time.rs=       | hidden      | =AGENT-R007=  |
+| =src/domain/customer.rs=  | clear owner | —             |
+
+** 4.2 Import namespace
+
+| Pattern                   | Judgment            | Existing Rule |
+|---------------------------+---------------------+---------------|
+| =use super::*;=           | owner visibility    | =RUST-MOD-R010=|
+| =use super::super::foo;=  | deep relative       | =RUST-MOD-R003=|
+
+Path clarity policy consumes native Rust =use= tree facts from the parser;
+repair should use stable =crate::...= owner/facade imports [101_harness_boundary.md].
+
+** 4.3 Owner dependency namespace (proposed expansion)
+
+| Rule ID            | Title                                                    |
+|--------------------+----------------------------------------------------------|
+| =RUST-OWNER-R001=  | owner branch depends on another owner's leaf             |
+|                    | implementation module                                    |
+| =RUST-OWNER-R002=  | owner dependency cycle crosses domain branches           |
+| =RUST-OWNER-R003=  | high fan-out coordinator lacks intent doc and explicit   |
+|                    | role                                                     |
+| =RUST-OWNER-R004=  | public facade re-exports leaf implementation symbols     |
+|                    | without owner grouping                                   |
+| =RUST-OWNER-R005=  | package-level dependency edge crosses crate boundary     |
+|                    | without profile signal                                   |
+
+Existing =AGENT-R009=, =AGENT-R010=, =AGENT-R011= are the foundation for
+this expansion.
+
+* Layer 5: Workspace/package policy (=rust.workspace_policy= pack)
+
+Modern Rust projects are workspaces.  Harness must understand:
+
+#+begin_src text
+workspace members
+package roots
+[lib] / [[bin]] / [[test]] / [[bench]] / [[example]]
+build.rs
+features
+dev-dependencies / build-dependencies
+workspace.dependencies / workspace.lints
+profiles
+#+end_src
+
+The project runner already evaluates each package as its own member scope
+when the root is a workspace [202_runner_modes.md].
+
+Proposed rules:
+
+| Rule ID            | Title                                                    |
+|--------------------+----------------------------------------------------------|
+| =RUST-WORK-R001=   | workspace members must be evaluated as package scopes,   |
+|                    | not one flat =src= tree                                  |
+| =RUST-WORK-R002=   | workspace-level dependency/lint/profile policy should be |
+|                    | explicit for multi-crate repos                           |
+| =RUST-WORK-R003=   | package-local dev/build dependencies must match declared |
+|                    | execution lanes                                          |
+| =RUST-WORK-R004=   | bench/profile/performance verification config must have  |
+|                    | real Cargo target surface                                |
+| =RUST-WORK-R005=   | package default-members / excluded members must have     |
+|                    | harness scope explanation                                |
+| =RUST-WORK-R006=   | generated source package paths must declare producer and |
+|                    | owner                                                    |
+
+* Config policy: the four-layer overlay model
+
+Config should not be an arbitrary free-form map.  It should be four ordered
+layers:
+
+| Layer | Name              | Scope                  | Example                          |
+|-------+-------------------+------------------------+----------------------------------|
+| 0     | default harness   | universal              | =src=, =tests=, Warning+Error    |
+|       |                   |                        | blocking                         |
+| 1     | project profile   | project-wide           | library / cli / service / ffi    |
+| 2     | package-local     | one crate              | source/test/bench/build gate     |
+| 3     | owner-local       | one owner path         | responsibilities, verification   |
+|       |                   |                        | tasks, rationale, receipt/waiver |
+
+** Project profiles (Layer 1)
+
+Profiles are /engineering intent/, not toggle collections:
+
+| Profile              | Priority                                             |
+|----------------------+------------------------------------------------------|
+| =Library=            | public API docs, typed error boundary, facade quality|
+| =Cli=                | thin main/bin adapter, config parsing, user output   |
+| =Service=            | async, network, persistence, timeout/retry,          |
+|                      | verification receipts                                |
+| =Workspace=          | member scoping, cross-crate dependency policy        |
+| =Ffi=                | unsafe boundary, =repr=, panic crossing, ownership   |
+| =NoStd=              | alloc-free, minimal dependency, embedded targets     |
+| =GeneratedCode=      | source scope explanation, generated owner,           |
+|                      | test/format exception                                |
+| =PerformanceCritical=| benchmark target, performance receipt, baseline      |
+|                      | artifact                                             |
+
+API sketch:
+
+#+begin_src rust
+pub enum RustHarnessProjectProfile {
+    Library,
+    Cli,
+    Service,
+    Workspace,
+    Ffi,
+    NoStd,
+    GeneratedCode,
+    PerformanceCritical,
+}
+
+pub fn rust_harness_profile(profile: RustHarnessProjectProfile) -> RustHarnessConfig {
+    match profile {
+        RustHarnessProjectProfile::Library =>
+            default_rust_harness_config()
+                .with_rule_pack_severity(RustRulePack::AgentPolicy, RustDiagnosticSeverity::Info)
+                .with_required_public_api_docs(),
+        RustHarnessProjectProfile::Cli =>
+            default_rust_harness_config()
+                .with_entrypoint_adapter_policy()
+                .with_cli_arg_boundary_policy(),
+        RustHarnessProjectProfile::Service =>
+            default_rust_harness_config()
+                .with_network_boundary_policy()
+                .with_verification_responsibility_task_kinds(
+                    RustOwnerResponsibility::LatencySensitive,
+                    [RustVerificationTaskKind::Performance],
+                ),
+        // ...
+    }
+}
+#+end_src
+
+* Config decision model: typed, not free-text
+
+Every config choice should be a typed decision, not a string:
+
+#+begin_src rust
+pub struct RustHarnessConfigDecision {
+    pub id: String,
+    pub kind: RustHarnessConfigDecisionKind,
+    pub owner_path: Option<PathBuf>,
+    pub rule_ids: Vec<String>,
+    pub evidence: Vec<RustHarnessConfigEvidence>,
+    pub rationale: String,
+    pub expires: Option<String>,
+}
+#+end_src
+
+Agent uses:
+
+#+begin_src rust
+.with_config_decision(
+    RustHarnessConfigDecision::lower_rule_severity(
+        "generated-code-docs",
+        ["AGENT-R001", "AGENT-R002"],
+        RustDiagnosticSeverity::Info,
+    )
+    .for_owner("src/generated")
+    .with_evidence("Cargo build.rs generates this module")
+    .with_rationale("generated bindings are documented at schema boundary")
+)
+#+end_src
+
+Harness can then validate:
+
+#+begin_src text
+- rationale is non-empty?
+- evidence points to real path/fact?
+- rule ids exist?
+- owner path is in reasoning tree?
+- scope is owner-local, not global?
+#+end_src
+
+* Config policy rules (=rust.config_policy= pack)
+
+Rules that govern the config itself:
+
+| Rule ID              | Title                                                  |
+|----------------------+--------------------------------------------------------|
+| =RUST-CONFIG-R001=   | global disabled rule pack requires org-level rationale |
+| =RUST-CONFIG-R002=   | rule severity downgrade must be owner-local or         |
+|                      | package-local unless explicitly justified              |
+| =RUST-CONFIG-R003=   | config excludes Cargo-backed source/test/target        |
+|                      | coverage without structured evidence                   |
+| =RUST-CONFIG-R004=   | generated-code profile must declare producer and       |
+|                      | boundary owner                                         |
+| =RUST-CONFIG-R005=   | verification task suppression must include             |
+|                      | responsibility rationale                               |
+| =RUST-CONFIG-R006=   | advice =allow= cannot be used without explanation      |
+|                      | (existing =RUST-PROJ-R015=)                             |
+| =RUST-CONFIG-R007=   | config decision references unknown owner path or stale |
+|                      | fingerprint                                            |
+| =RUST-CONFIG-R008=   | config has broad disable but active compact findings   |
+|                      | still point to structural debt                         |
+
+Existing =RUST-PROJ-R013=, =RUST-PROJ-R014=, and =RUST-PROJ-R015= are the
+seed for this pack.
+
+* Agent config flow: advisor, not author
+
+The LLM must not own final config authority.  The flow is:
+
+#+begin_example
+1. Harness renders facts
+   - agent snapshot
+   - findings
+   - profile index
+   - package/workspace index
+
+2. LLM proposes config delta
+   - typed builder/API format only
+   - every delta has evidence path + rule id + rationale
+
+3. Harness validates config delta
+   - custom scope has explanation?
+   - removed Cargo-backed scope has explanation?
+   - advice allow has explanation?
+   - verification override has rationale?
+   - rule disable is narrow enough?
+   - package profile matches facts?
+
+4. Cargo test / build gate enforces
+   - invalid config produces compact finding
+#+end_example
+
+The LLM's role:
+
+#+begin_example
+observe facts → propose config → explain rationale → rerun harness
+#+end_example
+
+NOT:
+
+#+begin_example
+disable noisy rule → pass
+#+end_example
+
+* Config advice renderer (proposed)
+
+A new renderer, sidecar only, not default diagnostic:
+
+#+begin_src rust
+render_rust_harness_config_advice(&report, &profile_index)
+#+end_src
+
+Output shape:
+
+#+begin_example
+[config-advice]
+scope:
+ - add source path `crates/runtime/src` only if this package owns generated
+   runtime sources
+   required: with_source_path(path, explanation)
+
+reduction:
+ - tests exists but config excludes test parsing
+   required: with_tests_excluded(explanation) or restore include_tests=true
+
+rules:
+ - AGENT-R001 repeated in generated owner
+   option: owner-local doc policy suppression with generated-code rationale
+   reject: disabling rust.agent_policy pack globally
+
+verification:
+ - src/api.rs has PublicApi + LatencySensitive signals
+   required: profile hint or explicit no-task rationale
+#+end_example
+
+This is for the LLM's config-tuning pass — not for default =cargo test=
+output.
+
+* High-quality config: the six properties
+
+A good harness config is:
+
+| Property            | Meaning                                                |
+|---------------------+--------------------------------------------------------|
+| =minimal=           | only necessary owner/path/rule; no global disables     |
+| =evidence-backed=   | each decision points to parser fact, Cargo fact,       |
+|                     | owner path, rule id                                    |
+| =rationale-bearing= | each scope reduction, advice allow, verification       |
+|                     | override has a reason                                  |
+| =lane-aware=        | check / test / build / verification policies don't mix |
+| =owner-local=       | decisions bind to owner path, not whole workspace      |
+| =expirable=         | waivers and temporary downgrades have fingerprint,     |
+|                     | owner, reason, and expiry/review date                  |
+
+* New rule pack summary
+
+| Pack ID                  | Purpose                                        |
+|--------------------------+------------------------------------------------|
+| =rust.structure=         | file roles, facade, entrypoint, owner shape    |
+| =rust.namespace=         | path, module, import, and owner graph quality  |
+| =rust.workspace_policy=  | Cargo workspace/package/target/dependency/     |
+|                          | lint/profile structure                         |
+| =rust.config_policy=     | config decision quality: explanation, evidence,|
+|                          | scope, expiry, owner-local                     |
+| =rust.execution_lane=    | check/test/build/verification contract         |
+|                          | separation and coverage (from RFC 001)         |
+| =rust.modernization=     | edition, resolver, workspace lints, feature    |
+|                          | matrix, bench profile, tooling surface         |
+
+* Final architecture
+
+#+begin_example
+Rust Project Structural Harness
+├── Parser facts
+│   ├── Cargo/workspace/package facts
+│   ├── source/test/package target facts
+│   ├── Rust module tree facts
+│   ├── owner namespace facts
+│   ├── import/dependency facts
+│   └── public API / algorithm / data shape facts
+│
+├── Policy packs
+│   ├── rust.syntax
+│   ├── rust.project_policy
+│   ├── rust.modularity
+│   ├── rust.agent_policy
+│   ├── rust.structure
+│   ├── rust.namespace
+│   ├── rust.workspace_policy
+│   ├── rust.config_policy
+│   └── rust.execution_lane
+│
+├── Config profiles
+│   ├── Library
+│   ├── Cli
+│   ├── Service
+│   ├── Workspace
+│   ├── Ffi
+│   ├── NoStd
+│   ├── GeneratedCode
+│   └── PerformanceCritical
+│
+├── Agent surfaces
+│   ├── compact findings
+│   ├── agent snapshot
+│   ├── config advice
+│   ├── profile index
+│   └── verification plan
+│
+└── Flowhub integration
+    ├── spec
+    ├── plan
+    ├── config delta
+    ├── execution lanes
+    ├── receipts
+    └── closeout
+#+end_example
+
+* The bottom line
+
+Config is not an escape hatch.  Config is the /codified expression of
+project structure intent/.
+
+The agent/LLM can help write config — but the harness must demand:
+
+#+begin_example
+Why did you add this path?
+Why did you exclude this scope?
+Why did you downgrade this rule?
+Why is this owner PublicApi / LatencySensitive?
+Why was this verification task suppressed?
+Which parser / Cargo / reasoning-tree fact does this decision correspond to?
+#+end_example
+
+When these questions are machine-checkable, LLM-written config transforms
+from "a patch to make tests pass" into "part of a high-quality modern
+engineering structure."
+
+* References
+
+- [[file:../languages/rust-lang-project-harness/docs/01_core/101_harness_boundary.md][Harness Boundary]] — file role contracts, parser boundary, self-apply policy
+- [[file:../languages/rust-lang-project-harness/docs/03_features/201_rule_catalog.md][Rule Catalog]] — existing structural rules
+- [[file:../languages/rust-lang-project-harness/docs/03_features/202_runner_modes.md][Runner Modes]] — config model, cargo-test embedding, scope policy
+- [[file:../languages/rust-lang-project-harness/docs/03_features/204_verification_policy.md][Verification Policy]] — configurable verification surface
+- [[file:../languages/rust-lang-project-harness/src/model.rs][model.rs]] — =RustHarnessConfig=, =RustRulePack=, builder API
+- [[file:../languages/rust-lang-project-harness/src/rules/project_policy/source_scope.rs][source_scope.rs]] — =RUST-PROJ-R013=, =RUST-PROJ-R014=
+- [[file:../languages/rust-lang-project-harness/src/rules/project_policy/verification_integration.rs][verification_integration.rs]] — =RUST-PROJ-R015=
+- [[file:../languages/rust-lang-project-harness/src/rules/project_policy/build_gate.rs][build_gate.rs]] — =RUST-PROJ-R012=

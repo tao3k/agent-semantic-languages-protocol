@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-semantic-protocols.local/schemas/semantic-language-registry.v1.schema.json",
+  "title": "Semantic Language Registry",
+  "description": "Language-server-style provider registry for semantic language protocol implementations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "registryId",
+    "registryVersion",
+    "protocolId",
+    "protocolVersion",
+    "languages"
+  ],
+  "properties": {
+    "registryId": {
+      "const": "agent.semantic-protocols.semantic-language-registry"
+    },
+    "registryVersion": {
+      "const": "1"
+    },
+    "protocolId": {
+      "const": "agent.semantic-protocols.semantic-language"
+    },
+    "protocolVersion": {
+      "const": "1"
+    },
+    "projectRoot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/languageRegistration"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "method": {
+      "type": "string",
+      "pattern": "^(search|check|agent)/[a-z][a-z0-9_-]*$"
+    },
+    "command": {
+      "enum": ["search", "check", "agent"]
+    },
+    "outputSchemaId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]*$"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)+$"
+    },
+    "schemaRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaId", "schemaVersion", "path"],
+      "properties": {
+        "schemaId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "schemaVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "languageRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "languageId",
+        "providerId",
+        "binary",
+        "namespace",
+        "methods",
+        "methodDescriptors",
+        "schemas"
+      ],
+      "properties": {
+        "languageId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "providerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "binary": {
+          "$ref": "#/$defs/identifier"
+        },
+        "namespace": {
+          "$ref": "#/$defs/namespace"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "methods": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/method"
+          }
+        },
+        "methodDescriptors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/methodDescriptor"
+          }
+        },
+        "schemas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/schemaRegistration"
+          }
+        }
+      }
+    },
+    "methodDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "command", "supportsJson", "supportsCompact"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "pattern": "^search/"
+              }
+            },
+            "required": ["method"]
+          },
+          "then": {
+            "required": [
+              "view",
+              "outputSchemaIds",
+              "requiresQuery",
+              "acceptsStdin",
+              "supportsPackageScope"
+            ],
+            "properties": {
+              "command": {
+                "const": "search"
+              },
+              "outputSchemaIds": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "pattern": "^check/"
+              }
+            },
+            "required": ["method"]
+          },
+          "then": {
+            "properties": {
+              "command": {
+                "const": "check"
+              }
+            },
+            "not": {
+              "required": ["view"]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "pattern": "^agent/"
+              }
+            },
+            "required": ["method"]
+          },
+          "then": {
+            "required": ["outputSchemaIds"],
+            "properties": {
+              "command": {
+                "const": "agent"
+              },
+              "outputSchemaIds": {
+                "minItems": 1
+              }
+            },
+            "not": {
+              "required": ["view"]
+            }
+          }
+        }
+      ],
+      "properties": {
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "command": {
+          "$ref": "#/$defs/command"
+        },
+        "view": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "outputSchemaIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/outputSchemaId"
+          }
+        },
+        "requiresQuery": {
+          "type": "boolean"
+        },
+        "acceptsStdin": {
+          "type": "boolean"
+        },
+        "supportsPackageScope": {
+          "type": "boolean"
+        },
+        "supportsJson": {
+          "type": "boolean"
+        },
+        "supportsCompact": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

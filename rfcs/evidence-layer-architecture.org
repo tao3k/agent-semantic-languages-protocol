@@ -1,0 +1,517 @@
+#+TITLE: RFC: Evidence-Layer Architecture — from lint collection to agent engineering system
+#+AUTHOR: agent-semantic-protocols
+#+DATE: 2026-01-18
+#+RFC: 002
+#+DEPENDS: rfcs/cargo-execution-lanes.org (RFC 001 — Cargo Execution Lanes)
+
+* One-Sentence Design Principle
+
+Rust harness should not become a bigger lint collection.  It should become an
+agent engineering system organized by evidence layer: /syntax facts first,
+semantic facts second, performance optimization only when
+owner/responsibility/evidence match, and org-level SDD + plan flowhub to
+turn those facts into executable engineering plans./
+
+* The Evidence Layer Stack
+
+Agents repair Rust code.  The core problem isn't knowing /what/ Rust looks
+like — LLMs already know Rust syntax.  The problem is knowing /where/ to
+edit, /why/ this edit matters, and /whether/ the edit actually improved the
+project.
+
+Five evidence layers, each weaker than the one above:
+
+| Layer          | Evidence Type                | What It Tells the Agent                     |
+|----------------+------------------------------+----------------------------------------------|
+| syntax facts   | parser-owned AST shape       | "this shape exists, at this location"        |
+| semantic facts | compiler/semantic output     | "this shape compiles (or doesn't), under     |
+|                |                              |  these features/cfgs/targets"                |
+| project policy | harness rule evaluation      | "this shape violates the project's stated    |
+|                |                              |  structural contract"                        |
+| verification   | external skill receipts      | "this claim (perf, security, stress) has     |
+|                |                              |  measured evidence"                          |
+| flowhub plan   | spec → scope → plan →        | "these facts, in this order, produce this    |
+|                | implement → verify → close   |  auditable change"                           |
+
+The harness already owns layers 1-4.  Layer 5 (flowhub) is the new proposal.
+
+* Why "Not a Bigger Lint Collection"
+
+** Problem: lint-first thinking leads to noise
+
+If every Rust best practice becomes a finding, agents drown in advice.
+The Rust ecosystem already has:
+
+- =rustc= for compilation errors and warnings
+- =clippy= with 800+ lints across correctness, suspicious, style,
+  complexity, perf, pedantic, restriction, cargo categories [Clippy Docs]
+- =rustfmt= for formatting
+- The Rust API Guidelines checklist for public API conventions [API Guidelines]
+- The Rust Performance Book for profiling-driven optimization [Perf Book]
+
+Harness should not duplicate these.  It should /consume their output as
+facts/ and add what they cannot: project-structure reasoning, owner
+boundaries, verification evidence gating.
+
+** Principle: facts before findings
+
+Every new harness rule must answer three questions:
+
+1. What /parser fact/ does it consume? (Not raw text search.)
+2. What /project decision/ does it enforce? (Not universal Rust style.)
+3. What /agent edit/ does it direct? (Compact fix line, not prose advice.)
+
+Rules that can't answer all three should stay as internal facts — available
+to the reasoning tree, snapshot, and future policy, but not rendered as
+default findings.
+
+* Layer 1: Syntax Facts (expand first)
+
+The harness's parser boundary is its strongest asset.  Policy packs consume
+parser-owned facts; they do not call =syn::parse_file= or duplicate source
+scans [101_harness_boundary.md].  The reasoning tree already exposes module
+role, owner namespace, import summary, local owner dependencies, child edges,
+and shadow/orphan state [agent_snapshot.rs].
+
+Proposed new syntax fact families — /facts, not rules/:
+
+** Allocation syntax facts (=RustAllocationSyntaxFact=)
+
+#+begin_src rust
+// Facts to collect (no default findings):
+format! calls
+to_string / to_owned / clone calls
+collect::<Vec<_>> / collect::<String>
+Vec::new + repeated push
+HashMap::new + repeated insert
+String::new + repeated push_str
+Box::new / Arc::new / Rc::new
+async closure/future boxing
+#+end_src
+
+** Loop shape facts (=RustLoopShapeFact=)
+
+#+begin_src rust
+indexed loop over Vec/slice
+nested loops
+loop contains allocation
+loop contains clone/to_owned
+loop contains hash lookup
+loop contains await
+loop contains lock acquisition
+#+end_src
+
+** Async concurrency facts (=RustAsyncConcurrencyFact=)
+
+#+begin_src rust
+Mutex/RwLock guard live across await-shaped region
+join! / try_join! / select! fanout
+tokio::spawn boundary
+channel send/recv loops
+unbounded channel construction
+#+end_src
+
+** Unsafe boundary facts (=RustUnsafeBoundaryFact=)
+
+#+begin_src rust
+unsafe fn
+unsafe block
+extern "C"
+raw pointer deref
+transmute
+get_unchecked
+FFI import/export
+#+end_src
+
+** Public API semantic shape facts (=RustPublicApiSemanticShapeFact=)
+
+#+begin_src rust
+public Result<anyhow::Error>
+public Box<dyn Error>
+public generic bounds on type definitions
+public trait object surfaces
+public async fn in trait / dyn boundary
+public primitive newtype alias
+public enum state string field
+#+end_src
+
+These facts don't generate findings by default.  They become:
+- Searchable in the reasoning tree (=agent needs to find all unsafe blocks=)
+- Aggregatable by owner (=owner=src/api.rs has 3 allocation-risk shapes=)
+- Fingerprint-able for verification (=latency-sensitive + loop_alloc ⇒
+  performance receipt required=)
+
+* Layer 2: Semantic Facts (consume compiler output, don't replace it)
+
+=cargo check= checks local packages and dependencies for errors, performing
+basic compilation without final codegen — faster than =cargo build=, but
+some diagnostics only appear at codegen stage [Cargo Book: cargo check].
+
+Harness should NOT reimplement the type checker.  Instead:
+
+** Consume rustc/cargo output as structured facts
+
+#+begin_src text
+RustCompilerDiagnosticFact  — from cargo check --message-format=json
+RustTargetCoverageFact      — which targets are checked
+RustFeatureCoverageFact     — which features are covered
+RustCfgCoverageFact         — which #[cfg] branches are compiled
+RustWorkspaceMemberCheckFact— workspace member check status
+#+end_src
+
+** Check that the project declares correct semantic lanes
+
+#+begin_src text
+RUST-SEM-R001: project declares cargo-check lane but omits --all-targets
+               while harness scope includes tests/benches/examples
+RUST-SEM-R002: workspace check lane omits --workspace or default-members
+               rationale
+RUST-SEM-R003: feature-sensitive crate lacks declared feature matrix for
+               check/test
+RUST-SEM-R004: cargo-check lane is used as verification receipt; use
+               verification policy instead
+#+end_src
+
+** Check that the project has an explicit lint contract
+
+Clippy has correctness, suspicious, style, complexity, perf, pedantic,
+restriction, and cargo categories.  The =restriction= category should not be
+enabled wholesale — lints should be chosen per-project [Clippy Docs].
+
+Harness should check:
+
+#+begin_src text
+- workspace has explicit lint policy (not just default allow)
+- unwrap/expect/todo/print/debug/unsafe policy is per-owner, not global
+- clippy restriction lints have selective enable + rationale
+- CI/check lane runs the project's declared clippy contract
+#+end_src
+
+Proposed packs:
+
+| Pack ID                | Purpose                              |
+|------------------------+--------------------------------------|
+| =rust.semantic=        | semantic facts from compiler output  |
+| =rust.lint_contract=   | lint policy declaration checks       |
+| =rust.execution_lane=  | lane coverage and contract checks    |
+
+* Layer 3: Public API Policy (map API Guidelines to advisory rules)
+
+The Rust API Guidelines checklist covers naming, conversion, getter,
+iterator method, common traits, =From=, =AsRef=, =AsMut=, and more
+[API Guidelines Checklist].  Harness already has =AGENT-R012= through
+=AGENT-R028= for public API shape advice [201_rule_catalog.md].
+
+Proposed additional advisory rules (=Info= or config-enabled =Warning=):
+
+| Rule ID            | Title                                                      |
+|--------------------+------------------------------------------------------------|
+| =RUST-API-R001=    | public conversion method should use =as_=/=to_=/=into_=    |
+|                    | convention                                                 |
+| =RUST-API-R002=    | public collection-like type should expose =iter=/          |
+|                    | =iter_mut=/=into_iter= consistently                        |
+| =RUST-API-R003=    | public domain value type lacks common trait impls where    |
+|                    | structurally safe (=Debug=, =Clone=, =PartialEq=, etc.)    |
+| =RUST-API-R004=    | public getter uses =get_= prefix without fallible/lookup   |
+|                    | semantics                                                  |
+| =RUST-API-R005=    | public builder/config type lacks =Default= or clear        |
+|                    | constructor contract                                       |
+| =RUST-API-R006=    | public error enum lacks =Display= /=source= shape          |
+
+These should stay =Info= by default — API quality matters for agents, but
+should not default to harder blocking than syntax/project/modularity policy.
+
+* Layer 4: Performance Optimization (owner-gated, evidence-required)
+
+Performance optimization must not be project-wide.  The Rust Performance
+Book is explicit: optimization requires profiling to identify what code
+executes frequently enough to be worth optimizing [Perf Book: Profiling].
+Heap allocation guidance (SmallVec, with_capacity, Cow, clone_from) also
+assumes profiling/benchmark evidence [Perf Book: Heap Allocations].  Bounds
+check optimization uses iteration, slice patterns, and assertions first;
+=get_unchecked= is a last resort [Perf Book: Bounds Checks].
+
+** The harness should not say "replace Vec with SmallVec"
+
+Instead, it should say:
+
+#+begin_example
+[RUST-PERF-R001] Info: latency-sensitive owner has allocation-risk syntax
+                 without performance receipt
+@ src/search/index.rs:142:20
+fix: add criterion/divan/iai-callgrind receipt or refactor with measured baseline
+Help: this owner has loop_alloc:3 clone_in_loop:2 and is marked LatencySensitive
+Contract: optimization must be backed by benchmark receipt or explicit waiver
+#+end_example
+
+** Performance candidate index (owner-gated)
+
+Only owners with =LatencySensitive= or =PerformanceCritical= responsibility
+enter the performance lane:
+
+#+begin_example
+[perf-candidate] src/search/index.rs
+  owner=search/index
+  responsibilities=LatencySensitive,PublicApi
+  syntax=loop_alloc:3 clone_in_loop:2 hash_lookup_loop:1
+  required=criterion baseline, allocation_profile
+  state=pending_evidence
+#+end_example
+
+** Proposed performance rules (owner-gated, Info by default)
+
+| Rule ID            | Title                                                      |
+|--------------------+------------------------------------------------------------|
+| =RUST-PERF-R001=   | latency-sensitive owner has allocation-risk syntax without |
+|                    | performance receipt                                        |
+| =RUST-PERF-R002=   | throughput-sensitive loop uses index access pattern;       |
+|                    | require benchmark or iterator refactor receipt             |
+| =RUST-PERF-R003=   | hot-path profile hint exists but no benchmark target or    |
+|                    | performance artifact baseline                              |
+| =RUST-PERF-R004=   | performance receipt missing allocation/profile artifact    |
+|                    | required by task contract                                  |
+
+This aligns with the existing verification policy: harness does not execute
+bench/stress/security/regression — it plans tasks, renders compact owner
+reminders, and accepts receipts/waivers [204_verification_policy.md:1-5].
+
+* Layer 5: SDD + Plan Flowhub (engineering execution layer)
+
+Harness provides facts.  Flowhub turns facts into executable engineering
+plans.  This is the layer where agent edits become auditable, reproducible,
+and verifiable — not "fill in the missing code," but "execute a change
+against owner boundaries with evidence at every step."
+
+** Standard flow: Spec → Scope → Plan → Implement → Check → Test → Verify → Close
+
+#+begin_example
+1. Spec
+   Input: requirements, non-functional goals, compatibility constraints
+   Output: spec.md / change.yaml
+
+2. Scope
+   Invoke: --agent-snapshot
+   Output: owner scope, affected branches, dependency edges, risk owners
+
+3. Plan
+   Invoke: harness compact findings + verification profile index
+   Output: plan.yaml
+      - edit owners
+      - search roots
+      - cargo lanes
+      - verification tasks
+      - expected receipts
+
+4. Implement
+   Agent edits ONLY the plan's declared owners
+   No filename-based full-repo search-and-edit
+
+5. Check
+   cargo check lane
+   cargo clippy lane
+   build gate lane
+
+6. Test
+   cargo test lane
+   advice-as-fail gate exposes compact repair text
+
+7. Verify
+   performance / security / stress / regression skills
+   Write receipts / waivers / report artifacts
+
+8. Close
+   Flowhub compares spec + plan + receipts
+   Decides: accept | need-repair | split-scope
+#+end_example
+
+** Harness role in flowhub
+
+Provide project facts, policy facts, owner facts, verification obligations,
+compact repair contracts.
+
+** Flowhub role
+
+Orchestrate those facts into agent-executable plans.
+
+** Proposed new renderers (sidecar only — never default diagnostic)
+
+#+begin_src rust
+render_rust_project_flow_scope(...)          // owner scope + affected edges
+render_rust_project_repair_index(...)        // owner→rule→search roots mapping
+render_rust_project_execution_lane_contract(...) // lane config for this change
+render_rust_project_flow_closeout(...)       // findings + receipts + waivers
+#+end_src
+
+** Flow artifact format (repo-local)
+
+#+begin_src yaml
+change_id: rust-harness-perf-policy-m1
+spec:
+  intent: "add parser-native performance candidate facts"
+  non_goals:
+    - "do not emit default blocking performance rules"
+    - "do not suggest SmallVec without benchmark evidence"
+
+scope:
+  owners:
+    - src/parser/native_syntax.rs
+    - src/model.rs
+    - src/rules/agent_policy/algorithm_shape.rs
+    - src/verification/performance.rs
+
+harness:
+  required_outputs:
+    - render_rust_project_harness
+    - render_rust_project_harness_agent_snapshot
+    - render_rust_verification_plan
+  cargo_lanes:
+    check:
+      command: "cargo check --all-targets"
+      blocks: ["error", "warning"]
+      advice_fails: false
+    test:
+      command: "cargo test"
+      blocks: ["error", "warning", "info"]
+      advice_fails: true
+    build_gate:
+      blocks: ["error", "warning"]
+      advice_fails: false
+
+verification:
+  tasks:
+    - kind: regression
+      owner: src/parser/native_syntax.rs
+      receipt: insta snapshots updated
+    - kind: performance
+      owner: src/verification/performance.rs
+      receipt: optional, only if runtime path changed
+#+end_src
+
+** Flow scope and closeout (agent-facing compact)
+
+Before every change:
+
+#+begin_example
+[flow-scope]
+owners=src/parser/native_syntax.rs,src/model.rs,src/verification/performance.rs
+rules=RUST-PERF-R001,RUST-PERF-R002
+cargo_lanes=check:Warning+Error test:Warning+Error+Info build:Warning+Error
+verification_tasks=regression:src/parser/native_syntax.rs performance:src/verification/performance.rs
+#+end_example
+
+After every change:
+
+#+begin_example
+[flow-closeout]
+compact_findings=[ok] rust
+cargo_check=passed
+cargo_test=passed
+verification_receipts=regression:passed performance:waived
+waivers=performance:no-runtime-change
+#+end_example
+
+* M1–M6 Roadmap
+
+** M1: Stabilize execution lane contract (RFC 001)
+
+- Fix =RustRulePack::ProjectPolicy::rule_ids()= to include =RUST-PROJ-R015=
+  [model.rs:114 vs pack.rs:36].
+- Add =Cargo Execution Lanes= doc under =docs/01_core/=.
+- Keep cargo-test source gate advice-as-fail; keep build gate blocking-only.
+- Add config-enabled cargo-check contract policy (=RUST-CHECK-R001= through
+  =RUST-CHECK-R004=).
+
+** M2: Expand syntax fact layer
+
+Add facts, not rules:
+
+- Allocation syntax facts
+- Loop shape facts
+- Async concurrency facts
+- Unsafe boundary facts
+- Public API semantic shape facts
+
+Wire them into the reasoning tree and agent snapshot.  No default findings —
+facts are searchable, aggregatable, fingerprint-able.
+
+** M3: Add semantic / lint-contract / execution-lane packs
+
+- =rust.semantic=: consume =cargo check --message-format=json=, clippy JSON,
+  cargo metadata as structured facts.
+- =rust.lint_contract=: check that workspace has explicit lint policy,
+  clippy restriction lints have rationale, CI runs declared clippy contract.
+- =rust.execution_lane=: =RUST-SEM-R001= through =RUST-SEM-R004=.
+
+** M4: Performance candidate index
+
+- Only for owner-gated latency/performance responsibilities.
+- Emit candidates, not demands: "this owner has allocation-risk shapes; add
+  evidence or waiver."
+- =RUST-PERF-R001= through =RUST-PERF-R004= (Info by default).
+
+** M5: SDD flowhub adapter
+
+- Add =render_rust_project_flow_scope()=, =render_rust_project_repair_index()=,
+  =render_rust_project_execution_lane_contract()=,
+  =render_rust_project_flow_closeout()=.
+- All sidecar — never default diagnostic.
+- Flow artifact format (YAML) as repo-local contract.
+
+** M6: Organization-level policy baselines
+
+Profile library:
+
+| Profile                         | Use Case                             |
+|---------------------------------+--------------------------------------|
+| library crate                   | public API, semver, doc quality      |
+| service crate                   | latency, availability, error budgets |
+| CLI crate                       | arg parsing, exit codes, thin main   |
+| embedded / no_std               | alloc-free, unsafe audit, size       |
+| latency-sensitive service       | perf receipts, allocation profiling  |
+| security-sensitive tool         | unsafe audit, FFI audit, authz       |
+
+Each profile decides:
+
+- Which rule packs are blocking
+- Which =Info= rules fail in =cargo test=
+- Which cargo lanes must exist
+- Which verification receipts must be persisted
+- Which performance baselines belong to =source_baseline=
+
+* The Bottom Line
+
+Rust harness's correct evolution is not "make the agent guess better."  It's
+"make the agent's every step backed by parser facts, semantic facts, owner
+scope, cargo lane, and verification receipt."
+
+| Layer          | Responsibility                                            |
+|----------------+-----------------------------------------------------------|
+| syntax         | discover structural shapes                                |
+| semantic       | confirm engineering meaning                               |
+| verification   | require evidence                                          |
+| flowhub        | orchestrate facts into auditable, reproducible plans      |
+
+When an agent edits Rust code in this system, it's not "filling in missing
+code."  It's executing a plan inside an auditable, reproducible,
+continuously-optimizable engineering system.
+
+* References
+
+- [[https://nnethercote.github.io/perf-book/profiling.html][Rust Performance Book — Profiling]]
+- [[https://nnethercote.github.io/perf-book/heap-allocations.html][Rust Performance Book — Heap Allocations]]
+- [[https://nnethercote.github.io/perf-book/bounds-checks.html][Rust Performance Book — Bounds Checks]]
+- [[https://doc.rust-lang.org/nightly/cargo/commands/cargo-check.html][Cargo Book — cargo check]]
+- [[https://doc.rust-lang.org/stable/clippy][Clippy Documentation]]
+- [[https://doc.rust-lang.org/clippy/lints.html][Clippy Lints]]
+- [[https://rust-lang.github.io/api-guidelines/checklist.html][Rust API Guidelines — Checklist]]
+- [[https://rust-lang.github.io/api-guidelines/naming.html][Rust API Guidelines — Naming]]
+- [[https://doc.rust-lang.org/cargo/guide/tests.html][Cargo Book — Tests]]
+- [[https://doc.rust-lang.org/cargo/commands/cargo-test.html][Cargo Book — cargo test]]
+- [[https://arxiv.org/abs/2604.05278][Spec Kit Agents: Context-Grounded Agentic Workflows (arXiv)]]
+- [[file:../languages/rust-lang-project-harness/docs/01_core/101_harness_boundary.md][Harness Boundary]]
+- [[file:../languages/rust-lang-project-harness/docs/03_features/201_rule_catalog.md][Rule Catalog]]
+- [[file:../languages/rust-lang-project-harness/docs/03_features/202_runner_modes.md][Runner Modes]]
+- [[file:../languages/rust-lang-project-harness/docs/03_features/204_verification_policy.md][Verification Policy]]
+- [[file:../languages/rust-lang-project-harness/src/agent_snapshot.rs][agent_snapshot.rs — snapshot renderer]]
+- [[file:../languages/rust-lang-project-harness/src/model.rs][model.rs — RustRulePack::rule_ids()]]
+- [[file:../languages/rust-lang-project-harness/src/rules/project_policy/pack.rs][pack.rs — RUST_PROJ_R015]]

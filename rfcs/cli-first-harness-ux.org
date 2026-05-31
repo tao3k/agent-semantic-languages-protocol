@@ -1,0 +1,2309 @@
+#+TITLE: RFC: CLI-First Harness UX — stable commands, local daemon, no MCP
+#+AUTHOR: agent-semantic-protocols
+#+DATE: 2026-01-18
+#+RFC: 005
+#+DEPENDS: rfcs/code-intelligence-lane.org (003), rfcs/structural-quality-config-policy.org (004)
+
+* One-sentence summary
+
+The harness CLI is the public protocol.  A local daemon is a private
+acceleration cache.  MCP is explicitly excluded from the architecture.
+
+* Design principle
+
+#+begin_example
+Agent client
+  ↓ reads SKILL.org
+hooks
+  ↓ call fixed commands
+ts-harness CLI
+  ↓ optional acceleration
+ts-harness local daemon / cache
+  ↓
+TypeScript parser facts / reasoning tree / compact diagnostics
+#+end_example
+
+Agent clients call stable CLI commands.  The server is a CLI implementation
+detail — invisible to the agent, replaceable without contract changes.
+
+* Why not MCP
+
+MCP has three structural problems for harness:
+
+1. /Protocol layer is too dynamic./  Tool discovery, schema negotiation, and
+   runtime capability advertisement make the agent's dependency surface
+   unpredictable.  Harness diagnostics should be deterministic — same
+   project, same output.
+
+2. /Failure modes are unstable./  When an MCP server crashes, restarts,
+   version-mismatches, or times out, the agent receives transport-level
+   errors that it cannot repair.  A CLI with stable exit codes has exactly 5
+   failure states, all documented.
+
+3. /It turns harness into a conversational-tool-ecosystem dependency./  The
+   harness's value is /deterministic structural facts/ — parser-owned,
+   project-scoped, policy-evaluated.  Embedding that behind a dynamic tool
+   discovery layer adds indirection without adding precision.
+
+The right direction is the opposite: shrink the surface, make it deterministic,
+and keep parser-owned facts as the source of authority.
+
+* What NOT to build: the anti-patterns
+
+The CLI must not implement intent parsing, subagent planning, or task
+routing.  These are LLM responsibilities.  Specifically, these commands
+should never exist:
+
+#+begin_src shell
+# DO NOT BUILD:
+rs-harness graph subagent-plan --intent "change dependency reqwest features"
+rs-harness graph next --from synthesis
+rs-harness explore nl "find ..."
+rs-harness search ast --intent "find clone in loop"
+#+end_src
+
+Also: do NOT split exploration into =graph=, =cargo=, =explore= as separate
+top-level commands.  To the agent client, everything is search — just
+different views.
+
+* CLI is the protocol: one search surface
+
+Language-neutral examples use =<lang-harness>=.  The TypeScript implementation
+ships this as =ts-harness=; Rust/Cargo-specific lanes use =rs-harness=.
+
+The agent sees three top-level commands:
+
+#+begin_src shell
+<lang-harness> search <view> ...   # all exploration / location / evidence
+<lang-harness> check ...           # policy / style / changed / full
+<lang-harness> agent ...           # agent-client install and diagnostics
+#+end_src
+
+** =search= — the unified exploration surface
+
+Every read-only exploration goes through =<lang-harness> search=.  Common views:
+
+#+begin_src shell
+<lang-harness> search prime
+
+<lang-harness> search owner <path-or-owner>
+<lang-harness> search dependency <crate-or-import-or-package>
+
+<lang-harness> search symbol <name>
+<lang-harness> search callsite <name>
+<lang-harness> search import <root>
+<lang-harness> search pattern <recipe>
+<lang-harness> search tests <owner-or-path>
+<lang-harness> search text <query>
+#+end_src
+
+Rust adds Cargo-native views under the same search namespace:
+
+#+begin_src shell
+rs-harness search workspace
+rs-harness search targets
+rs-harness search deps
+rs-harness search deps <dep[/subpath][@version][::api]>
+rs-harness search deps <dep[/subpath][@version][::api]> public-api
+#+end_src
+
+=search dependency= is a high-level composite view: native package/dependency
+facts + source usage + owner graph in one compact output.  For Rust,
+=search deps= is the practical dependency-version API usage view: manifest
+version/feature/target facts and local API usage owners for the version range
+declared by the current workspace.  If a query asks for =dep@version= that does
+not match the workspace declaration, the packet must mark it as
+=versionScope=external= and avoid presenting current owner usage as evidence
+for that external version.  Current workspace versions are already reported by
+native manifest facts such as =|dep ... version=...=; external queries can add
+a =|note ... currentWorkspaceVersion=...= hint when the current workspace has a
+different declaration.  For current workspace versions,
+=::api= narrows owner hits to dependency owners that also mention the API token.
+=search prime= is the low-token entry point with graph structure.
+
+** Multi-pipe: deterministic packet composition
+
+A =search= command can chain multiple pipe stages in one invocation:
+
+#+begin_src shell
+<lang-harness> search <source> <pipe1> <pipe2> ...
+rg -n "<query>" <roots> | <lang-harness> search ingest <pipe1> <pipe2> ...
+#+end_src
+
+Source stages (produce the initial packet):
+
+#+begin_src text
+prime                 project reasoning-tree
+dependency <dep>      dependency fact + source usage + owner graph
+features <feature>    feature -> optional-dep -> target cfg chain
+deps <dep>            native manifest dependency facts
+symbol <symbol>       symbol definition + callsites
+callsite <symbol>     all usage sites
+pattern <recipe>      structural recipe search
+ingest                stdin auto-sniff (rg -n / fd / git diff)
+#+end_src
+
+Pipe stages (enrich the packet, all optional):
+
+#+begin_src text
+owners      resolve to owner graph nodes
+items       resolve to intra-file items (--item-slice)
+tests       find owned tests/benches/examples
+examples    find owned examples
+benches     find owned benches
+docs        attach API docs facts (kind, signature, feature, async, ...)
+public-api  mark whether dependency types leak into public API
+cfg         attach cfg / target facts
+features    expand feature graph
+dependents  who depends on this owner/dep
+#+end_src
+
+Each pipe is a deterministic transform.  The CLI renders only the final
+packet.  The agent client selects the pipe combination based on the task; the CLI
+never infers intent.
+
+Examples:
+
+#+begin_src shell
+# Dependency change with docs and test coverage:
+rs-harness search dependency ignore items docs tests --package file-search
+
+# Feature/cfg change across owners and docs:
+rs-harness search features io-uring cfg owners tests docs --package tokio
+
+# Public API leakage check:
+rs-harness search dependency bytes public-api docs tests --package tokio
+
+# External candidate stream with grouping:
+rg -n "require_git|git_ignore|parents" agent-rs/file-search | rs-harness search ingest items tests
+#+end_src
+
+Debug with =--trace= (compact stage list, not full intermediate packets):
+
+#+begin_src text
+[search-trace] source=dependency query=ignore pipes=items,docs,tests
+|stage dependency cargo=1 owners=1
+|stage items owners=1 items=4
+|stage docs docs=1
+|stage tests tests=1
+#+end_src
+
+Internal model:
+
+#+begin_src rust
+struct SearchPacket {
+    header: SearchHeader,
+    packages: Vec<PackageFact>,
+    cargo: Vec<CargoFact>,
+    owners: Vec<OwnerFact>,
+    items: Vec<ItemFact>,
+    docs: Vec<DocsFact>,
+    tests: Vec<TestFact>,
+    edges: Vec<EdgeFact>,
+    next: Vec<NextAction>,
+}
+
+trait SearchPipe {
+    fn apply(&self, ctx: &SearchContext, packet: SearchPacket) -> SearchPacket;
+}
+#+end_src
+
+** Wire contract: semantic language registry + shared =semantic-search= JSON Schema
+
+Every provider first advertises through the semantic language registry, then
+maps native search packets to the shared =semantic-search= wire contract when
+=--json= is requested.  The registry and packet schemas live at:
+
+#+begin_src text
+schemas/semantic-language-registry.v1.schema.json
+schemas/semantic-search-packet.v1.schema.json
+#+end_src
+
+Registry identity fields:
+
+#+begin_src text
+registryId      = agent.semantic-protocols.semantic-language-registry
+registryVersion = 1
+protocolId      = agent.semantic-protocols.semantic-language
+protocolVersion = 1
+languageId      = rust | typescript | julia | python | ...
+providerId      = rs-harness | ts-harness | jl-harness | ...
+binary          = rs-harness | ts-harness | jl-harness | ...
+namespace       = agent.semantic-protocols.languages.<languageId>.<providerId>
+methods         = search/prime | search/dependency | check/full | agent/doctor | ...
+methodDescriptors = method + command + view + outputSchemaIds + output modes
+#+end_src
+
+=methods= is the callable truth.  The shared packet schema can contain a
+cross-language =view= enum, but that enum does not advertise provider
+capability.  Agents should only call methods present in the registry and use
+=methodDescriptors= to discover whether a method is a =search= view, which
+schema it emits, whether it requires a query, whether it consumes stdin, and
+whether compact/JSON output is supported.  A =search/*= descriptor must carry
+its =view=, emitted schema ids, and CLI input semantics; a =check/*=
+descriptor must not pretend to be a search view; an =agent/*= descriptor can
+advertise registry-shaped JSON output.
+
+Registry invariants are deliberately strict:
+
+#+begin_src text
+languageId   stable lowercase source language id, not a file extension list
+providerId   stable provider implementation id, e.g. ts-harness
+binary       exact executable name the agent should invoke
+namespace    agent.semantic-protocols.languages.<languageId>.<providerId>
+methods      complete callable set
+descriptors  exactly one descriptor for every method, no extras, no duplicates
+#+end_src
+
+Providers must not advertise compatibility aliases in the registry.  If a
+package keeps an old binary name for local migration, that alias stays outside
+the semantic-language contract.  For TypeScript, the only advertised provider
+and binary is =ts-harness=.
+
+The descriptor command must match the method prefix.  For =search/<view>=,
+=view= must be the method suffix, =outputSchemaIds= must include
+=agent.semantic-protocols.semantic-search-packet=, and the descriptor owns CLI
+input semantics such as =requiresQuery=, =acceptsStdin=, and
+=supportsPackageScope=.  CLI parsers should consume this provider metadata
+instead of maintaining a second hard-coded view registry.  Each provider's
+tests should compare =methods= and =methodDescriptors= as sets and reject
+duplicate descriptor methods.
+
+Search packet identity fields:
+
+#+begin_src text
+schemaId        = agent.semantic-protocols.semantic-search-packet
+schemaVersion   = 1
+protocolId      = agent.semantic-protocols.semantic-language
+protocolVersion = 1
+languageId      = rust | typescript | julia | python | ...
+providerId      = rs-harness | ts-harness | jl-harness | ...
+binary          = rs-harness | ts-harness | jl-harness | ...
+namespace       = agent.semantic-protocols.languages.<languageId>.<providerId>
+method          = search/workspace | search/prime | search/dependency | search/deps | ...
+view            = workspace | prime | owner | dependency | deps | symbol |
+                  callsite | import | cfg | patterns | pattern | docs |
+                  api | public-external-types | tests | text | ingest
+#+end_src
+
+The schema owns the stable packet envelope: =header=, =packages=, =nodes=,
+=edges=, =owners=, =items=, =hits=, =findings=, =nextActions=, =notes=, and
+optional =inputDetection=.  Language-specific facts must go under typed
+=fields= maps instead of changing the envelope.  Search views are consumers of
+native parser facts, not substitutes for them: TypeScript package dependency
+facts come from the TypeScript JSON AST for =package.json=, source usage comes
+from TypeScript import-resolution facts, Rust dependency facts come from Cargo
+metadata/TOML parsing, Julia facts come from JuliaSyntax and project metadata,
+and Python facts come from =ast= plus project metadata.  This lets TypeScript,
+Rust, Julia, Python, and later harnesses preserve compiler-native facts while
+giving agent clients one JSON shape to validate and cache.
+
+Compact text remains the default prompt surface.  JSON is the cross-language
+artifact and test contract.
+
+This mirrors the useful part of Language Server Protocol naming discipline:
+=protocolId= identifies the semantic-language protocol, =namespace= identifies
+the concrete provider method space, =languageId= identifies the source
+language, =providerId= identifies the implementation, and =binary= names the
+executable.  Agent clients should route by registry identity and method, not by
+hard-coded platform-specific argument structs.
+
+* The two-phase search model: deep prime → multi-pipe
+
+Phase 1 starts with =<lang-harness> search workspace= only when the selected
+root is a multi-package workspace.  That command is a router/index: it lists
+packages, workspace-internal edges, external dependency axes, findings, and
+next package candidates.  It must not deep-search source files.
+
+Phase 1 then uses =<lang-harness> search prime= for the selected package or for
+single-package projects.  Prime is still a purpose-built, deep but bounded graph
+packet designed to give the LLM a package-level search map.  Multi-pipe is Phase
+3+, used by subagents after the parent has selected package and axis.
+
+#+begin_src text
+Phase 1a: <lang-harness> search workspace   (workspace router, if applicable)
+Phase 1b: <lang-harness> search prime       (package-level deep map)
+Phase 2:  agent parent reasons about axes   (LLM task, not CLI)
+Phase 3:  focused searches                  (dependency/symbol/owner/ingest)
+Phase 4:  parent synthesis → edit plan      (LLM task, not CLI)
+Phase 5:  <lang-harness> check --changed    (validation)
+#+end_src
+
+** What workspace covers (and what it does not)
+
+Workspace outputs package routing facts and cross-package axes.  It never
+outputs raw hits, source lines, docs prose, or full per-owner graphs:
+
+#+begin_src text
+workspace/package scale
+workspace package list (ranked/capped)
+workspace-internal package edges
+external dependency axes across packages
+finding groups by package
+next hints (package/dependency axes, not hits)
+#+end_src
+
+Workspace output format:
+
+#+begin_example
+[search-workspace] mode=workspace-index package=@repo/root packages=12 shown=12 edge=18 external=7 find=3
+|package . name=@repo/root role=workspace-root packages=12 patterns=packages/* dependencies=7 next=prime:.
+|package packages/core name=@repo/core role=workspace-package pattern=packages/* type=module config=packages/core/tsconfig.json diagnostics=0 next=prime:packages/core
+|package apps/web name=@repo/web role=workspace-package pattern=apps/* type=module config=apps/web/tsconfig.json diagnostics=0 next=prime:apps/web
+|edge P:. -workspace-> P:packages/core importKind=type-import via=package-name package=@repo/core from=src/index.ts
+|next prime:packages/core,prime:apps/web
+#+end_example
+
+** What prime covers (and what it does not)
+
+Prime outputs package-level structure, signals, and next candidates.  It never outputs
+raw hits, source lines, or docs prose:
+
+#+begin_src text
+native dependency / feature / cfg or package/config signals
+owner graph (ranked, capped)
+source_large owner warnings
+public API owners
+test/bench/example surfaces
+finding groups
+docs candidates
+next hints (axes, not hits)
+#+end_src
+
+** Prime budget
+
+Strict internal caps — not exposed as flags:
+
+#+begin_src text
+max_packages=8   max_owners=12     max_edges=16
+max_features=8   max_findings=8    max_api_candidates=8
+max_test_surfaces=8
+#+end_src
+
+Auto mode selection:
+
+#+begin_src text
+package within normal bounds   → mode=package (full graph)
+single small package           → mode=package (full graph + extras)
+#+end_src
+
+** Owner ranking in prime
+
+Owners are ranked, not listed alphabetically:
+
+#+begin_src text
+1. root / facade / interface
+2. public API owners
+3. owners with findings
+4. owners with external dependency edges
+5. source_large owners
+6. owners with tests / benches
+#+end_src
+
+** What prime must NOT output
+
+#+begin_src text
+- no raw hits or callsite lists
+- no source lines
+- no docs prose
+- no full dependency graph
+- no per-file item listings (use source_large + next=items instead)
+#+end_src
+
+** Prime output format with sandbox-verified fields
+
+Medium package (Tokio):
+
+#+begin_example
+[search-prime] mode=package package=tokio src=312 own=78 edge=214 find=3 feat=14 cfg=3
+|package tokio t=lib,test,bench,example feat=full,rt,rt-multi-thread,net,time,io-uring,taskdump dep=mio,bytes,parking_lot,tracing
+|feature io-uring unstable=true dep=io-uring,mio,slab requires_cfg=tokio_unstable target=linux next=features:io-uring,cfg:tokio_unstable
+|feature taskdump unstable=true dep=backtrace requires_cfg=tokio_unstable next=features:taskdump
+|cfg tokio_unstable target_dep=io-uring,libc,mio,slab,backtrace docs_rs=true next=cfg:tokio_unstable
+|owner tokio/src/lib.rs role=root,facade public=true exp=runtime,task,sync,time,net
+|owner tokio/src/runtime/mod.rs role=interface public=true exp=Runtime,Builder,Handle source_large=true next=items,docs:tokio::runtime::Builder
+|owner tokio/src/io role=public-api public=true dep=bytes public_external_allowed=true next=docs:bytes::Buf,public-external-types
+|edge tokio/src/runtime/mod.rs -module-> tokio/src/runtime/builder.rs
+|surface public_api=runtime,sync,time,net,io public_external=bytes::Buf,bytes::BufMut
+|test-surface unit=tokio/tests integration=tests-integration bench=benches example=examples
+|api-candidate tokio::runtime::Builder reason=public-builder next=docs:tokio::runtime::Builder
+|next feature:io-uring,cfg:tokio_unstable,owner:tokio/src/runtime/mod.rs(items),public-api:runtime
+#+end_example
+
+For a large workspace, the agent client selects a package from =search
+workspace= before running prime:
+
+#+begin_src shell
+rs-harness search prime --package compiler/rustc_middle
+#+end_src
+
+Small package with cross-crate signals (agent-client web-search fixture):
+
+#+begin_example
+[search-prime] mode=package package=ext/web-search src=5 own=5 edge=9
+|package ext/web-search t=lib dep=agent-api,agent-core,agent-extension-api,agent-protocol,agent-tools
+|owner ext/web-search/src/tool.rs role=source public=false exp=WebSearchTool next=items,symbol:SearchCommands,symbol:WebSearchAction
+|edge ext/web-search/src/tool.rs -workspace-> agent-api
+|edge ext/web-search/src/tool.rs -workspace-> agent-protocol
+|api-candidate agent_api::SearchCommands reason=typed-command next=symbol:SearchCommands
+|next symbol:SearchCommands,symbol:WebSearchAction
+#+end_example
+
+Small package with source_large (agent-client file-search fixture):
+
+#+begin_example
+[search-prime] mode=package package=file-search src=2 own=3 edge=5 find=0
+|package file-search t=lib dep=ignore,nucleo,crossbeam-channel,tokio
+|owner file-search/src/lib.rs role=source-large public=true exp=FileMatch,FileSearchOptions,run source_large=true next=items,dependency:ignore,docs:ignore::WalkBuilder
+|edge file-search/src/lib.rs -crates-io-> C:ignore
+|api-candidate ignore::WalkBuilder reason=dependency-api next=docs:ignore::WalkBuilder
+|test-surface owner=file-search tests=file-search/tests
+|next dependency:ignore,owner:file-search/src/lib.rs(items),docs:ignore::WalkBuilder
+#+end_example
+
+Package with feature-gated target (orgize):
+
+#+begin_example
+[search-prime] mode=package package=orgize feat=5
+|package orgize t=lib,example:parse,bench:parse feat=indexmap,chrono,tracing,datafusion-sql
+|feature tracing dep=tracing required_by=example:parse next=features:tracing,text:tracing(scope=src)
+|target example:parse required_features=tracing next=example:parse
+|target bench:parse harness=false next=bench:parse
+|owner src/syntax/mod.rs role=interface public=false next=owner:src/syntax/mod.rs
+|next feature:tracing,bench:parse,example:parse
+#+end_example
+
+** How the agent client uses prime to build the subagent flow graph
+
+Agent guide:
+
+```md
+## Phase 1: deep prime
+
+Always start complex Rust tasks with:
+
+`rs-harness search prime`
+
+Read mode, package, feature, cfg, owner, large-owner, api-candidate,
+test-surface, and next fields.
+
+Do not spawn subagents before reading prime unless the user provides an
+exact file and symbol.
+
+## Phase 2: parent planning
+
+Use prime output to choose one or more search axes:
+
+- feature/cfg axis
+- dependency/API docs axis
+- owner/item axis
+- public API/callsite axis
+- tests/bench/examples axis
+- harness finding axis
+
+Spawn read-only subagents only after selecting axes.
+
+Example: if prime shows `feature io-uring ... requires_cfg=tokio_unstable`:
+
+feature subagent:
+  `rs-harness search features io-uring cfg owners tests`
+cfg subagent:
+  `rs-harness search cfg tokio_unstable owners tests`
+source subagent:
+  `rg -n "io_uring|tokio_unstable" tokio/src tokio/tests | rs-harness search ingest items tests`
+```
+
+** =next= placement rule for prime
+
+=next= on owner lines targets that owner implicitly.  Global =|next= only
+for candidates without a clear owner context.  Never duplicate an
+owner-specific next into the global =|next= line.
+
+** Confidence modeling in prime
+
+When facts cannot be confirmed from parser/Cargo data alone, prime uses
+explicit confidence markers rather than guessing:
+
+#+begin_src text
+reason=public-api-carrier         confirmed from parser facts
+reason=possible-public-api-carrier uncertain, needs public-api pipe
+reason=likely-parser-owner        heuristic, needs owner pipe
+public_external_allowed=true      confirmed from cargo metadata
+source=workspace|path|crates-io|git  dependency origin
+#+end_src
+
+This prevents prime from misleading the agent client with false certainty on
+cross-crate or macro-heavy codebases like rustc.  The =source= field on
+=cargo= lines distinguishes workspace-internal from crates-io
+dependencies, which affects search strategy and docs-source selection.
+
+** Strong signal: =source_large=true=
+
+When prime marks an owner as =source_large=true=, the agent client must NOT open the
+file directly.  Instead:
+
+```sh
+rs-harness search owner <file> items
+```
+
+This rule prevents token explosion from files like =file-search/src/lib.rs=
+(1192 lines, ~12 public items) or =tokio/src/runtime/mod.rs= (668 lines).
+
+** =check= — policy evaluation
+
+#+begin_src shell
+<lang-harness> check --changed
+<lang-harness> check --full
+#+end_src
+
+** =agent= — agent-client lifecycle
+
+#+begin_src shell
+<lang-harness> agent install
+<lang-harness> agent doctor
+<lang-harness> agent doctor --json
+#+end_src
+
+Installs/updates =SKILL.org=, hooks, and config into the configured agent
+workspace.  =doctor= checks daemon health, protocol version, cache freshness,
+and hook integrity.  =doctor --json= emits the semantic-language registry
+contract for callable method discovery.
+
+** Shared flags on all =search= views
+
+#+begin_src text
+                 default agent output (compact line protocol)
+--json                    tool / IDE / flowhub output
+#+end_src
+
+If a daemon is running, the CLI internally routes through the daemon socket.
+If no daemon is running, the CLI runs the native parser directly.  The agent
+never knows which path was taken.
+
+#+begin_example
+public contract:
+  CLI args + stdout compact/json + exit code
+
+private optimization:
+  local daemon, TypeScript Program cache, file watcher, socket IPC
+#+end_example
+
+* Daemon failure matrix
+
+| Daemon State          | CLI Behavior                          |
+|-----------------------+---------------------------------------|
+| running, cache fresh  | fast incremental result               |
+| running, cache stale  | auto-rebuild cache, then respond      |
+| not running           | direct parser run (same output)       |
+| protocol mismatch     | deterministic upgrade message, exit 4 |
+| crashed mid-request   | CLI retries once, then direct run     |
+
+The agent never receives "server unavailable" as an error — only as a
+=daemon=missing= diagnostic field when a provider chooses to expose daemon
+status, which is informational.
+
+* Compact format specification: line protocol + ASCII graph
+
+=<lang-harness> search= output is a /line protocol/, not a Markdown report.
+It inherits the existing Rust harness compact contract: stable tags, single
+locator syntax, short action lines, minimal fact lines, no audit headers, no
+prose.
+
+Rules:
+
+#+begin_src text
+- no blank lines
+- no Markdown headings
+- no bullet indentation
+- no source lines unless explicit --lines
+- no Help / Contract unless it is a check finding
+- no prose paragraphs
+- paths relative to project root
+- every line independently readable
+- every block default ≤ 12 lines
+- no Unicode arrows, no box-drawing, no DOT/Mermaid/Graphviz
+#+end_src
+
+Line shape:
+
+#+begin_src text
+[search-kind] k=v k=v k=v          ← header line, always first
+|node KIND:id k=v                   ← typed graph node
+|edge KIND:id -kind[:label]-> KIND:id  ← ASCII edge, always " -kind-> "
+|owner path k=v next=...             ← owner with inline next actions
+|item name kind=... k=v next=...     ← intra-file item with inline next
+|find RULE xN at=KIND:id            ← finding attached to node
+|next kind:arg,kind:arg(scope=x)     ← global next actions (rare, only when
+                                       no owner/item context exists)
+|note k=v                           ← exceptional info (keep ≤ 1)
+#+end_src
+
+=|item= lines only appear with =--item-slice=.
+=|next= is an inline field on owner/item/package/cargo lines, not a separate
+line type.  A standalone =|next= line is only used when no owner/item
+context exists to attach to.
+
+Next actions use compact command fragments:
+
+#+begin_src text
+next=dependency:reqwest
+next=callsite:create_order
+next=pattern:public-error-boundary
+next=text:timeout(scope=tests)
+next=owner:src/api/orders.rs
+next=tests
+next=bench:parse
+#+end_src
+
+If the next action targets the current owner, the owner is implicit.  If it
+targets a different owner, it is explicit: =next=owner:src/api/orders.rs=.
+
+Node prefixes:
+
+#+begin_src text
+P:  package
+O:  owner / module owner
+C:  dependency / crate
+T:  test / bench target
+F:  finding group
+S:  symbol
+#+end_src
+
+Edge kinds (all ASCII, no Unicode):
+
+#+begin_src text
+-mod->          module child edge
+-path-mod->     #[path] mod edge
+-include->      include! edge
+-crate->        local owner dependency (same package)
+-workspace->    workspace-internal dependency (different member)
+-crates-io->    crates.io external dependency
+-path-dep->     path-based external dependency
+-ext->          external dependency (generic, when kind unresolved)
+-test->         owned test / bench edge
+-find->         finding at owner
+-call->         symbol / callsite edge
+-import->       import root edge
+-reexport->     facade re-export edge
+#+end_src
+
+Distinguishing =workspace->= from =crates-io->= matters in monorepos like
+rust-lang/rust and agent-client repos where cross-crate edges are workspace-internal
+but still cross-package.
+
+=--explain= also uses this protocol (diagnostic only, not default):
+
+#+begin_src text
+[search-plan] view=dependency q=reqwest
+|step deps dep=reqwest
+|step native use_root=reqwest
+|step fd scope=src,tests
+|step rg pat=\breqwest\b
+|rank owner,public,direct,test
+#+end_src
+
+* Graph-first defaults
+
+=search= views are split into two modes.  The default is /graph/ —
+structure before hits.  =hits= is opt-in per query.
+
+| View          | Default Mode | Output                                  |
+|---------------+--------------+-----------------------------------------|
+| =prime=       | graph        | =|node= + =|edge= + =|find= + =next=  |
+| =owner=       | graph        | =|node= + =|edge= + =next=             |
+| =dependency=  | graph        | =|dep= + =|edge= + =|owner= + =next=  |
+| =deps=        | hits         | =|dep= + =|owner= usage + optional =|api= |
+| =features=    | graph        | =|feature= + =|dep= + =|target= + =next= |
+| =targets=     | graph        | =|target= list                            |
+| =symbol=      | hits         | =|def= + =|call= + =next=              |
+| =callsite=    | hits         | =|call= + =next=                        |
+| =import=      | graph        | =|node= + =|edge -import->= + =next=    |
+| =pattern=     | hits         | =|owner= + =locations= + =next=         |
+| =patterns=    | graph        | =|pat= list                              |
+| =tests=       | graph        | =|edge -test->= + =next=               |
+| =text=        | hits         | =|owner= + =locations= + =next=         |
+
+Override with =--view graph|hits|both|seeds=.
+
+* Output mode: compact is the default
+
+=rs-harness= is agent-first.  All commands render compact text by default.
+There is no =--compact= flag.  The only output mode switch is =--json= for
+structured consumers.
+
+#+begin_src text
+rs-harness search prime            → compact packet (default)
+rs-harness search prime --json     → structured JSON
+rs-harness check --changed         → compact finding text (default)
+rs-harness check --changed --json  → structured JSON report
+#+end_src
+
+* Graph-first flags
+
+#+begin_src text
+--view graph|hits|both|seeds
+--depth <n>               default 1
+--dir out|in|both         default both for owner, out for dep
+--edge mod,crate,ext,test,find,call,import,reexport,item,feature
+--item-slice              enable =|item= lines for large-file owners
+--owner <owner|path>
+--package <pkg>
+--workspace               cross-package symbol/dep search after search workspace
+--scope src|tests|benches|examples|build|all
+--feature <feature>        limit to feature-gated code
+--target <cfg-or-triple>   limit to target-conditional code
+--owners <n>              default 8
+--edges <n>               default 24
+--hits <n>                default 0 in graph view
+--per-owner <n>           default 5
+--seeds <n>               default 8
+--lines                   default false
+--explain                 show internal resolve steps (diagnostic only)
+#+end_src
+
+=--depth 0= means header line only.  =--hits 0= means no hit lines in graph
+view.  =--dir= controls which direction edges render.
+
+There is no =--backend= flag.  Backend selection is fully internal.  The agent client
+never chooses a backend.
+
+* External candidate adapters: =search ingest=
+
+When the agent client deliberately needs wider lexical or file-path candidates, it
+calls =rg= or =fd= directly — but always pipes output back into
+=rs-harness search ingest= for owner grouping, dedup, ranking, and compact
+packet rendering.  Raw =rg= / =fd= output is never pasted into the chat.
+
+There is exactly one ingest command — no sub-kinds, no =--query=:
+
+#+begin_src shell
+rs-harness search ingest
+#+end_src
+
+Flags (output / scope control only, no source declaration):
+
+#+begin_src text
+--json
+--owner <owner>
+--package <pkg>
+--scope src|tests|benches|examples|build|all
+--view graph|hits|both|seeds
+--owners <n>
+--hits <n>
+--per-owner <n>
+--lines
+--explain
+#+end_src
+
+No =--query=, no =ingest rg= / =ingest paths= / =ingest fd= sub-kind.
+Ingest auto-detects the format from the first few KB of stdin.
+
+** Auto-detection
+
+#+begin_src text
+NUL byte present              → path-list-nul (fd -0)
+first non-space char is "{"   → jsonl (rg --json)
+line matches path:line:col:text → vimgrep
+line matches path:line:text   → rg-n / grep-n
+line is existing project path → path-list
+line starts with diff --git   → diff paths
+otherwise                     → unknown (compact error)
+#+end_src
+
+Unrecognized input:
+
+#+begin_example
+[search-ingest] error=unrecognized-input lines=12
+|fix pipe paths, rg -n, rg --json, git diff --name-only, or fd output
+#+end_example
+
+** Unified pipeline
+
+#+begin_src text
+stdin sniff → parse → path normalize → owner resolve →
+nearest item resolve (when line exists) → role detect →
+rank/dedup → compact packet render
+#+end_src
+
+The header line shows the detected source for trust calibration:
+
+#+begin_src text
+[search-ingest] src=rg-n ...
+[search-ingest] src=paths ...
+[search-ingest] src=rg-json ...
+[search-ingest] src=diff-paths ...
+#+end_src
+
+** Output examples
+
+#+begin_src shell
+rg -n "timeout|cancel|shutdown" src tests | rs-harness search ingest
+#+end_src
+
+#+begin_example
+[search-ingest] src=rg-n in=28 own=3 item=6 hit=12
+|owner src/http/client.rs role=source pub=false test=tests/unit/http/client.rs hit_kind=text locations=42:17,77:9,91:13 next=pattern:public-error-boundary,text:timeout(scope=tests)
+|item send_request kind=function hit_kind=text locations=42:17,77:9,91:13
+|owner src/api/orders.rs role=public-api pub=true hit_kind=text locations=18:5,44:12
+|owner tests/unit/http/client.rs role=test hit_kind=text locations=8:1,33:7 truncated=2
+#+end_example
+
+#+begin_src shell
+fd -e rs "order|api" src tests | rs-harness search ingest
+#+end_src
+
+#+begin_example
+[search-ingest] src=paths in=18 own=5
+|owner src/api/orders.rs role=source pub=true
+|owner src/domain/order.rs role=source pub=true
+|owner tests/unit/api/orders.rs role=test
+#+end_example
+
+#+begin_src shell
+git diff --name-only | rs-harness search ingest
+#+end_src
+
+#+begin_example
+[search-ingest] src=diff-paths in=4 own=2
+|owner src/http/client.rs changed=2 role=source pub=false test=tests/unit/http/client.rs next=check:changed
+|owner tests/unit/http/client.rs changed=1 role=test
+#+end_example
+
+Seed policy: ingest does not know the user's query intent, so it defaults
+to conservative next actions — owner and pattern next actions derived
+from structure, not from matching text.  No =text:= next actions unless
+=--explain= shows internal derivation.
+
+The ingest command ALWAYS returns owner-grouped compact packets with
+=next= actions.
+Raw tool output is never exposed to the agent.
+
+* Structural recipe search: =search pattern=
+
+=ast-grep= is fully internal, mapped through a static recipe registry.
+The agent client selects a recipe by name; it never writes raw =ast-grep= DSL.
+
+#+begin_src shell
+rs-harness search patterns
+rs-harness search pattern <recipe>
+#+end_src
+
+=list-patterns= output:
+
+#+begin_example
+[search-patterns] n=8
+|pat clone-in-loop lang=rust scope=src
+|pat public-anyhow-result lang=rust scope=src
+|pat public-error-boundary lang=rust scope=src
+|pat unsafe-boundary lang=rust scope=src
+|pat tokio-spawn-unawaited lang=rust scope=src
+|pat public-primitive-id lang=rust scope=src
+|pat public-external-type lang=rust scope=src option=dependency
+|pat public-api-shape lang=rust scope=src option=owner
+#+end_example
+
+Pattern output (no =backend= line):
+
+#+begin_example
+[search-pattern] pattern=clone-in-loop q=.clone( pkg=. own=1
+|owner src/index.rs hit_kind=text locations=88:1,94:1 next=owner:src/index.rs
+#+end_example
+
+Internal resolve order per recipe:
+
+#+begin_src text
+1. native parser fact query (required for shipped semantic views)
+2. optional structural adapter candidates (only for recipes that declare them)
+3. optional lexical ingest candidates (only for explicit ingest/text recipes)
+4. owner grouping over parser-known owners always applied
+5. compact packet always rendered with provenance
+#+end_src
+
+Adapters can seed or enrich bounded candidate lists, but they do not replace
+native parser facts and must be visible as adapter/ingest provenance in the
+packet.
+
+=--explain= may show the resolve path for diagnostics, but the default
+output never mentions =backend=.
+
+* Search view reference (graph-first)
+
+** =search prime=
+
+#+begin_src shell
+rs-harness search prime
+#+end_src
+
+#+begin_example
+[search-prime] pkg=3 src=184 own=42 edge=91 find=5
+|node P:. t=lib,bin,test,bench dep=reqwest,tokio,serde
+|node O:src/lib.rs role=root,facade ns=src exp=Client,Error
+|node O:src/api.rs role=branch ns=api imp=crate:3,ext:reqwest:1 exp=create_order,ApiError find=AGENT-R019:2 next=dependency:reqwest,callsite:create_order,tests:api
+|edge O:src/lib.rs -mod-> O:src/api.rs
+|edge O:src/api.rs -crate-> O:src/domain/order.rs
+|edge O:src/api.rs -ext:reqwest-> C:reqwest
+|find F:RUST-MOD-R010 x1 at=O:src/domain/order.rs
+|next dependency:reqwest(owner=src/api.rs),callsite:create_order(owner=src/api.rs),tests:api(path=tests/unit/api.rs)
+#+end_example
+
+=next= on owner lines targets that owner implicitly.  =|next= is only used
+for global suggestions without a clear owner context.  These are NOT a
+plan — they are graph-derived candidate entry points.
+
+** =search owner=
+
+#+begin_src shell
+rs-harness search owner src/http/client.rs --dir both --depth 1
+#+end_src
+
+#+begin_example
+[search-owner] q=src/http/client.rs role=source pub=false imp=ext:reqwest,tokio,crate:3 dep=2 test=1 find=0
+|node O:src/http/client.rs exp=HttpClient,HttpError test=tests/unit/http/client.rs next=pattern:public-error-boundary,callsite:HttpClient
+|edge O:src/http/client.rs -crate-> O:src/domain/order.rs
+|edge O:src/http/client.rs -ext:reqwest-> C:reqwest
+|edge O:src/http/client.rs -test-> T:tests/unit/http/client.rs
+#+end_example
+
+With =--dir in= (who depends on this owner):
+
+#+begin_src shell
+rs-harness search owner src/http/client.rs --dir in --depth 1
+#+end_src
+
+#+begin_example
+[search-owner] q=src/http/client.rs role=source pub=false dep=2 dir=in next=owner:src/api/orders.rs
+|node O:src/http/client.rs
+|edge O:src/api/orders.rs -crate-> O:src/http/client.rs
+|edge O:src/lib.rs -reexport-> O:src/http/client.rs
+#+end_example
+
+With =--item-slice= for large-file owners:
+
+#+begin_src shell
+rs-harness search owner file-search/src/lib.rs --item-slice --edge item,call,ext
+#+end_src
+
+#+begin_example
+[search-owner] q=file-search/src/lib.rs role=source-large item=9 edge=12
+|item FileSearchOptions kind=struct pub=true field=limit,exclude,threads,respect_gitignore
+|item create_session kind=fn pub=true uses=FileSearchOptions,WalkBuilder,Nucleo
+|item walker_worker kind=fn pub=false uses=WalkBuilder,require_git,git_ignore
+|item matcher_worker kind=fn pub=false uses=Nucleo,WorkSignal,TICK_TIMEOUT_MS
+|edge create_session -calls-> walker_worker
+|edge walker_worker -ext:ignore-> C:ignore
+|next callsite:FileSearchOptions,callsite:create_session,pattern:ignore-walker
+#+end_example
+
+Without =--item-slice=, the owner renders as a single =|node= line.
+=--item-slice= is essential for large files where one owner collapses too
+many responsibilities.
+
+** =search dependency=
+
+#+begin_src shell
+rs-harness search dependency reqwest
+#+end_src
+
+#+begin_example
+[search-dependency] q=reqwest pkg=. dep=1 own=3 api=0
+|dep reqwest key=reqwest import=reqwest pkg=reqwest version=0.12 kind=normal opt=false source=manifest manager=cargo feat=json,rustls-tls
+|owner src/http/client.rs role=source pub=false test=tests/unit/http/client.rs hit_kind=text locations=3:5,42:17 next=pattern:public-error-boundary,text:timeout(scope=tests)
+|owner src/api/orders.rs role=public-api pub=true reason=depends-on:src/http/client.rs hit_kind=text locations=19:8 next=callsite:OrderClient
+|edge O:src/http/client.rs -ext:reqwest-> D:reqwest
+|edge O:src/api/orders.rs -crate-> O:src/http/client.rs
+|edge O:src/http/client.rs -test-> T:tests/unit/http/client.rs
+#+end_example
+
+Rename dependency:
+
+#+begin_example
+[search-dependency] q=local_harness pkg=. dep=1 own=1 api=0
+|dep local_harness import=local_harness pkg=rust-lang-project-harness version=0.3 kind=dev opt=false source=manifest manager=cargo feat=-
+|owner src/lib.rs role=root,facade hit_kind=text locations=78:1
+|edge O:src/lib.rs -import-> D:local_harness
+|note import=local_harness renamed=true
+#+end_example
+
+With =--view hits= (after graph, when hits are needed):
+
+#+begin_src shell
+rs-harness search dependency reqwest --view hits --owner src/http/client.rs
+#+end_src
+
+#+begin_example
+[search-dependency] q=reqwest view=hits own=src/http/client.rs next=pattern:public-error-boundary
+|owner src/http/client.rs role=source pub=false hit_kind=text locations=3:5,42:17
+#+end_example
+
+** =search features= / =search cfg=
+
+#+begin_src shell
+rs-harness search features
+rs-harness search features tracing
+rs-harness search features io-uring --package tokio
+rs-harness search cfg loom --package tokio
+rs-harness search cfg tokio_unstable --package tokio
+#+end_src
+
+#+begin_example
+[search-features] pkg=. feat=5
+|feature default enables=dep:serde,dep:tokio source=manifest manager=cargo
+|feature tracing enables=dep:tracing source=manifest manager=cargo
+|feature indexmap enables=dep:indexmap source=manifest manager=cargo
+|feature chrono enables=dep:chrono source=manifest manager=cargo
+|feature datafusion-sql enables=dep:datafusion-sql source=manifest manager=cargo
+|next features:tracing,features:indexmap
+#+end_example
+
+Feature with cfg and target constraints:
+
+#+begin_example
+[search-features] q=io-uring pkg=tokio feat=1 dep=4 target=1 cfg=tokio_unstable
+|feature io-uring enables=dep:io-uring,mio/os-poll source=manifest manager=cargo
+|dep io-uring key=io-uring import=io_uring pkg=io-uring version=0.7 kind=normal opt=true source=manifest manager=cargo target=cfg(all(tokio_unstable,target_os="linux")) feat=-
+|dep libc key=libc import=libc pkg=libc version=0.2 kind=normal opt=true source=manifest manager=cargo target=cfg(all(tokio_unstable,target_os="linux"))
+|dep mio key=mio import=mio pkg=mio version=1 kind=normal opt=true source=manifest manager=cargo target=cfg(all(tokio_unstable,target_os="linux")) feat=os-poll,os-ext
+|target docs.rs rustdoc_cfg=tokio_unstable
+|next dependency:io-uring,text:tokio_unstable(scope=src),dependency:mio
+#+end_example
+
+Cfg search:
+
+#+begin_example
+[search-cfg] q=loom pkg=tokio cfg=1 dep=1 own=0
+|cfg loom declared_in=workspace.lints.rust.unexpected_cfgs expr=cfg(loom) source=manifest manager=cargo next=text:loom(scope=src)
+|dep loom import=loom pkg=loom version=0.7 kind=dev opt=false source=manifest manager=cargo target=cfg(loom) feat=futures,checkpoint
+|next text:cfg(loom)(scope=src),text:loom(scope=tests)
+#+end_example
+
+=search cfg= joins Cargo-parser manifest facts and source-level
+=#[cfg(...)]= usage for one query: feature names, target dependency cfg
+expressions, =unexpected_cfgs.check-cfg= declarations, and owner hits.
+
+** =search deps=
+
+#+begin_src shell
+rs-harness search deps reqwest@0.12::Client
+#+end_src
+
+#+begin_example
+[search-deps] q=reqwest@0.12::Client pkg=. dep=1 own=2 api=0 requestedVersion=0.12 versionScope=current apiQuery=Client
+|dep reqwest import=reqwest pkg=reqwest version=0.12 kind=normal opt=false source=manifest manager=cargo feat=json,rustls-tls
+|owner src/http/client.rs hitKind=dependency-api apiQuery=Client locations=42:17 next=owner:src/http/client.rs
+|owner src/api/orders.rs hitKind=dependency-api apiQuery=Client locations=19:8 next=owner:src/api/orders.rs
+|next dependency:reqwest,docs-use:reqwest::Client,text:Client,tests:Client
+#+end_example
+
+If the query asks for a version outside the current workspace resolution, the
+same view becomes a version distinction packet rather than a local usage claim:
+
+#+begin_example
+[search-deps] q=reqwest@0.11::Client pkg=. dep=1 own=0 api=0 requestedVersion=0.11 versionScope=external apiQuery=Client
+|dep reqwest import=reqwest pkg=reqwest version=0.12 kind=normal opt=false source=manifest manager=cargo feat=json,rustls-tls
+|note requestedVersion=0.11 scope=external currentWorkspaceVersion=0.12 next=docs-use:reqwest@0.11::Client
+|next docs-use:reqwest@0.11::Client,text:Client
+#+end_example
+
+The current workspace package metadata and lockfile define the local version
+scope.  A query for a specific version outside that scope is explicit external
+research; it may route to docs/API facts, but local owner usage must remain
+empty unless the provider has source facts for that external version.
+
+** =search symbol= / =search callsite=
+
+#+begin_src shell
+rs-harness search symbol create_order
+rs-harness search callsite create_order --owner src/api
+#+end_src
+
+#+begin_example
+[search-symbol] q=create_order defs=1 calls=5 own=3 view=hits next=owner:src/api.rs
+|def src/api.rs:42 pub fn create_order
+|call src/api/routes.rs:77 own=api/routes
+|call src/domain/order.rs:91 own=domain/order
+|call tests/unit/api.rs:13 own=test
+#+end_example
+
+** =search import=
+
+#+begin_src shell
+rs-harness search import reqwest
+#+end_src
+
+#+begin_example
+[search-import] q=reqwest own=2 edge=2 view=graph next=dependency:reqwest
+|node O:src/http/client.rs role=source pub=false hit_kind=use locations=3:1,8:1
+|node O:src/http/error.rs role=source pub=true hit_kind=use locations=5:1
+|edge O:src/http/client.rs -import-> C:reqwest
+|edge O:src/http/error.rs -import-> C:reqwest
+#+end_example
+
+** =search pattern= (including =public-external-type=)
+
+#+begin_src shell
+rs-harness search pattern public-anyhow-result
+rs-harness search pattern public-error-boundary
+rs-harness search pattern clone-in-loop --owner src/index.rs
+rs-harness search pattern public-external-type --dependency smallvec
+#+end_src
+
+=public-external-type= finds external dependency types that leak into
+public API signatures — a critical search for dependency replacement tasks:
+
+#+begin_example
+[search-pattern] pattern=public-external-type q=smallvec pkg=. dep=1 own=2 api=4
+|dep smallvec import=smallvec pkg=smallvec version=1 kind=normal opt=false source=manifest manager=cargo
+|api compiler/rustc_middle/src/ty/context.rs line=177 dep=smallvec kind=struct name=TyCtxt public=true doc=true reason=dependency-owner next=docs:TyCtxt
+|api compiler/rustc_middle/src/mir/mod.rs line=42 dep=smallvec kind=struct name=Body public=true doc=true reason=dependency-owner next=docs:Body
+#+end_example
+
+#+begin_example
+[search-pattern] pattern=public-anyhow-result pkg=. hit=2 source=native-parser
+|api src/api.rs:44 kind=fn name=create_order next=owner:src/api.rs source=native-parser signature=fn(req:CreateOrder)->anyhow::Result<Order> params=req:CreateOrder async=false unsafe=false receiver=- return=anyhow::Result<Order> error=anyhow::Result impl=- trait=-
+|api src/cli.rs:31 kind=fn name=run next=owner:src/cli.rs source=native-parser signature=fn()->anyhow::Result<()> params=- async=false unsafe=false receiver=- return=anyhow::Result<()> error=anyhow::Result impl=- trait=-
+#+end_example
+
+=public-anyhow-result= is the =anyhow::Result= specialization of
+=public-error-boundary=.  Both are parser-native public return fact queries; the
+recipe output keeps signature, receiver, impl type, trait path, and normalized
+error-boundary fields instead of treating the query as text search.
+
+=search-pattern= says "worth inspecting"; =check= finding says "violates
+contract."
+
+#+begin_example
+[search-pattern] pattern=clone-in-loop q=.clone( pkg=. own=1
+|owner src/index.rs hit_kind=text locations=88:1,94:1 next=owner:src/index.rs
+#+end_example
+
+No raw =ast-grep= syntax, no =backend= line.  The agent client selects the recipe; the
+CLI executes it.
+
+** =search docs= / =search api=
+
+Dependency API docs are first-class search objects — not prose blobs, but
+native-parser API facts connected to local callsites, features, public API
+leakage, and tests.  The Rust harness must treat its native parser as the
+authority for local source shape; registry and rustdoc sources can enrich facts
+only after parser-owned workspace/path facts are exhausted.
+
+Baseline distinction: =search deps= owns local usage for the dependency version
+range declared by the current workspace; =search docs= owns external/reference
+API facts for an explicitly requested version.  A future composite docs+usage
+packet should be added only after a provider can join those two fact sources
+without hiding provenance; it is not part of the baseline schema or TypeScript
+provider.
+
+#+begin_src shell
+rs-harness search docs tokio::runtime::Builder
+rs-harness search docs bytes::Buf --package tokio
+rs-harness search api tokio::sync::mpsc::Sender::send
+rs-harness search public-external-types --package tokio
+#+end_src
+
+Distinction:
+
+| Command                    | Returns                                          |
+|----------------------------+--------------------------------------------------|
+| =search docs=              | doc facts + API shape, minimal prose             |
+| =search api=               | API shape only: kind, signature, async, unsafe,  |
+|                            | feature, receiver, return, error, trait impls    |
+| =search public-external-types=| external dependency types appearing in         |
+|                            | public API signatures                            |
+
+Data source priority:
+
+#+begin_src text
+1. workspace / path dependency source (native parser facts + rustdoc comments)
+2. Cargo registry source (downloaded crate source)
+3. local rustdoc JSON cache (target/doc/)
+4. docs.rs rustdoc JSON (optional cache/download)
+5. HTML docs (last resort, not default)
+#+end_src
+
+For Rust, MVP implementation starts with parser-native facts only:
+=kind=, =signature=, =params=, =async=, =unsafe=, =receiver=, =return=, and
+=error=.  The CLI renderer must not infer these from compact text, regex-only
+matches, or prose docs.
+This MVP includes public free functions, public inherent impl methods, and trait
+impl methods, so receiver shape, impl type, and trait path are parser-owned.
+The CLI renderer must project those facts without inferring association itself.
+
+Implementation rule: every new Rust API fact lands first in the native parser
+fact model with parser-level tests.  =rs-harness search= may only project those
+facts into compact text or JSON; it is not the source of truth.
+
+The header line declares the data source for trust calibration:
+
+#+begin_src text
+[search-docs] q=tokio::runtime::Builder crate=tokio source=native-parser
+[search-docs] q=bytes@0.6.0::Buf crate=bytes requestedVersion=0.6.0 versionScope=external source=registry-source
+[search-docs] q=ignore@0.4.23::WalkBuilder::require_git crate=ignore requestedVersion=0.4.23 versionScope=external source=docs-rs-json
+#+end_src
+
+If the external source is not available, the packet admits it instead of
+presenting current workspace parser facts as external-version docs:
+
+#+begin_src text
+|note docsSource=registry-source missing=true
+#+end_src
+
+Output format (API facts, not docs prose):
+
+#+begin_example
+[search-docs] q=fallible pkg=. docs=1 source=native-parser
+|api src/lib.rs:11 kind=fn name=fallible next=owner:src/lib.rs source=native-parser docs=local-parser signature=fn(input:String)->anyhow::Result<Thing> params=input:String async=true unsafe=true receiver=- return=anyhow::Result<Thing> error=anyhow::Result impl=- trait=-
+#+end_example
+
+=search deps ignore@0.4.23::WalkBuilder::require_git= remains the local usage
+entry point.  It may point to =search docs ignore::WalkBuilder::require_git=
+when an external docs provider is available, but it must not require docs to
+answer local usage.
+
+=search docs= never outputs long prose by default.  Use =--lines= for
+doc-comment text when needed.
+
+** =search tests=
+
+#+begin_src shell
+rs-harness search tests src/http/client.rs
+#+end_src
+
+#+begin_example
+[search-tests] q=src/http/client.rs pkg=. tests=2 own=1
+|node O:src/http/client.rs kind=owner path=src/http/client.rs next=owner:src/http/client.rs
+|test tests/unit/http/client.rs functions=3 owner=src/http/client.rs reason=symbol:new,symbol:send next=owner:tests/unit/http/client.rs
+|edge O:src/http/client.rs -test-> T:tests/unit/http/client.rs
+|test tests/integration/http.rs functions=2 owner=src/http/client.rs reason=symbol:Client next=owner:tests/integration/http.rs
+|edge O:src/http/client.rs -test-> T:tests/integration/http.rs
+#+end_example
+
+** =check= — uses existing diagnostic compact format
+
+#+begin_src shell
+rs-harness check --changed
+#+end_src
+
+=check= does NOT use the search line protocol.  It uses the existing
+diagnostic compact format:
+
+#+begin_example
+[AGENT-R002] Info: Public item lacks a doc comment
+@ src/owned.rs:2:1
+fix: add a doc comment using clippy::doc_markdown style
+line: 2 | pub fn public_api() {}
+Help: src/owned.rs exposes public item `public_api` without a doc comment.
+Contract: Document public Rust boundaries using `clippy::doc_markdown` style.
+#+end_example
+
+This format is already proven in snapshot tests — no =[advice]=, no =No
+blocking issues found=, no audit headers.
+
+** =agent= — guide and hooks lifecycle
+
+#+begin_src shell
+rs-harness agent install
+rs-harness agent doctor
+rs-harness agent doctor --json
+#+end_src
+
+=install= writes/updates =SKILL.org=, hooks, and config into the configured
+agent workspace.  =doctor= checks daemon health, protocol version, cache
+freshness, hook integrity, and schema readiness.  =doctor --json= emits the
+schema-valid semantic-language registry with =methods= and
+=methodDescriptors= for machine-readable discovery.
+
+* Snapshot test requirements
+
+All =search= output must be covered by snapshot tests, matching
+the existing Rust harness standard for compact render contracts:
+
+#+begin_src text
+tests/unit/search_snapshots/search_prime.snap
+tests/unit/search_snapshots/search_dependency_rename.snap
+tests/unit/search_snapshots/search_owner_slice.snap
+tests/unit/search_snapshots/search_pattern_recipe.snap
+#+end_src
+
+Acceptance criteria for every snapshot:
+
+#+begin_src text
+- no blank lines
+- no source lines by default (--lines opt-in)
+- default ≤ max lines per block
+- paths root-relative
+- every =next= action directly translatable to a subsequent rs-harness search command
+- every dependency fact shows key / import / pkg / kind / target / features
+- every owner line has role / pub / test / find / next
+#+end_src
+
+Three MVP regression tests (must pass before public release):
+
+*** Test A: dependency rename
+
+Fixture: =local_harness = { package = "rust-lang-project-harness" }=
+
+Expected:
+
+#+begin_example
+[search-dep] q=local_harness ...
+|dep key=local_harness import=local_harness pkg=rust-lang-project-harness ...
+|note renamed=true import=local_harness
+#+end_example
+
+Goal: the agent client never searches by package name when the dependency is renamed.
+
+*** Test B: large single-file owner
+
+Fixture: a file with 1000+ lines and 10+ public items.
+
+Expected with =--item-slice=:
+
+#+begin_example
+[search-owner] role=source-large item=N
+|item FileSearchOptions kind=struct ...
+|item walker_worker kind=fn ...
+#+end_example
+
+Goal: =--item-slice= prevents large files from collapsing into one owner node.
+
+*** Test C: feature-gated dependency
+
+Fixture: =[features] tracing = ["dep:tracing"]= and
+=[[example]] required-features = ["tracing"]=.
+
+Expected:
+
+#+begin_example
+[search-features] q=tracing ...
+|feature tracing enables=dep:tracing source=manifest manager=cargo
+|target example:parse req_feat=tracing
+#+end_example
+
+Goal: the agent client changing a feature sees which targets require it.
+
+* Exit codes
+
+Stable and documented:
+
+| Code | Meaning                                          |
+|------+--------------------------------------------------|
+| 0    | clean / ok                                       |
+| 1    | harness findings exist                           |
+| 2    | invalid CLI usage                                |
+| 3    | project / config / protocol error                |
+| 4    | daemon required but unavailable                  |
+|      | (developer-only diagnostic mode, not an agent path) |
+| 5    | stale cache / retryable internal error           |
+
+Daemon unavailable /does not/ cause failure by default.  Only explicit
+developer diagnostics may make it an error, and those diagnostics are not
+advertised in the semantic-language registry.
+
+* Local daemon design
+
+The daemon serves the CLI.  It is never exposed to the agent client.
+
+** Transport
+
+Priority order:
+
+#+begin_src text
+Unix:   .ts-harness/cache/server.sock
+Win:    named pipe
+Last resort: loopback HTTP 127.0.0.1 with random port file
+#+end_src
+
+No MCP, no dynamic tool discovery, no runtime schema negotiation.
+
+** Protocol
+
+Boring NDJSON.  Not an RPC framework.
+
+Request:
+
+#+begin_src json
+{"v":1,"id":"1","method":"snapshot","params":{"root":".","mode":"compact"}}
+#+end_src
+
+Response:
+
+#+begin_src json
+{"v":1,"id":"1","ok":true,"result":{"compact":"Modules: source=184 owners=42\n..."}}
+#+end_src
+
+Error:
+
+#+begin_src json
+{"v":1,"id":"1","ok":false,"error":{"code":"STALE_CACHE","message":"cache invalidated; retry cold"}}
+#+end_src
+
+Rules:
+
+#+begin_src text
+- every request has a timeout
+- every response carries protocol version
+- result size has an upper bound
+- search limit defaults to 20
+- all paths are project-root-relative
+- output ordering is deterministic
+- daemon never returns unbounded JSON
+#+end_src
+
+** Responsibilities
+
+The daemon:
+
+#+begin_src text
+- keeps TypeScript Program warm
+- watches tsconfig / package.json / source changes
+- maintains reasoning tree
+- maintains owner graph
+- maintains import/export/callsite index
+- answers bounded queries
+- invalidates cache deterministically
+#+end_src
+
+The daemon does NOT own policy authority.  That stays in the library/CLI:
+
+#+begin_src text
+daemon → gives facts fast
+CLI    → validates facts version
+       → renders compact text
+       → owns exit code
+       → owns direct parser run
+#+end_src
+
+A daemon bug cannot corrupt the agent contract.
+
+** Lifecycle
+
+The semantic-language protocol does not expose daemon lifecycle commands.
+Providers may keep private developer controls for starting, stopping, or
+inspecting a daemon, but those controls are not =methods=, are not advertised by
+=agent doctor --json=, and are not used by agent guides or hooks.  The
+agent-visible health surface is =<lang-harness> agent doctor=.
+
+#+begin_src json
+{
+  "scripts": {
+    "harness": "ts-harness check --full .",
+    "harness:doctor": "ts-harness agent doctor .",
+    "harness:prime": "ts-harness search prime .",
+    "harness:changed": "ts-harness check --changed ."
+  }
+}
+#+end_src
+
+* Agent guide: teach recipes, not intent
+
+The generated agent guide tells an agent client how to think about the
+primitives.  It does not tell the client to call a planner command.  It
+provides command-group recipes for common task types, subagent guidance, and a
+synthesis format — all of which the agent client executes by composing
+primitives.
+
+````md
+---
+name: rs-harness
+description: Use this guide in Rust repositories for reasoning-tree
+  navigation, Cargo dependency facts, owner-aware search, structural policy
+  checks, and changed-file repair loops.
+---
+
+# rs-harness Agent Client Guide
+
+Use `rs-harness` before broad manual reading.  Prefer graph/search/deps
+primitives over raw `rg`, `fd`, or hand-written `ast-grep`.
+
+The CLI does not infer task intent.  The agent client must choose the
+exploration recipe and decide whether to spawn subagents.
+
+## Phase 1: deep prime — always first
+
+Do not begin by reading files or requesting hits.  If the root is a workspace,
+first get the workspace router:
+
+```sh
+rs-harness search workspace
+```
+
+Then select a package and get the package map:
+
+```sh
+rs-harness search prime
+```
+
+Read =mode=, =package=, =feature=, =cfg=, =owner=, =source_large=,
+=api-candidate=, =test-surface=, =surface=, and =next= fields.
+
+Critical rules from prime:
+- =source_large=true= → never open the file; use =search owner <file> items=.
+- =api-candidate= → a dependency API or workspace type may need docs.
+- =feature ... requires_cfg= → the feature is guarded by a cfg; search both.
+- =surface public_external= → external types are allowed in public API.
+
+Do not spawn subagents before reading prime unless the user provides an
+exact file and symbol.
+
+## Phase 2: parent planning
+
+Use prime output to choose search axes:
+
+- feature/cfg axis
+- dependency/API docs axis
+- owner/item axis
+- public API/callsite axis
+- tests/bench/examples axis
+- harness finding axis
+
+Spawn read-only subagents only after selecting axes.
+
+## Phase 3: focused multi-pipe or bounded single-view
+
+Subagents use focused commands, not broad searches.  Prefer one multi-pipe
+command per subagent when evidence surfaces are predictable:
+
+```sh
+# Feature/cfg subagent:
+rs-harness search features <feature> cfg owners tests --package <pkg>
+
+# Dependency/docs subagent:
+rs-harness search dependency <dep> items docs tests --package <pkg>
+
+# Source expansion subagent:
+rg -n "<query>" <roots> | rs-harness search ingest items tests
+```
+
+Only request separate hit-level searches after selecting owners:
+```sh
+rs-harness search callsite <symbol> --view hits --owner <owner>
+rs-harness search text <query> --view hits --scope tests --owner <owner>
+```
+
+Choose a focused recipe below.
+
+## Subagent rule: graph slice, not full search
+
+For broad tasks, spawn read-only explorer subagents yourself.
+
+Parent gets graph; subagents get slices; hits only within slices:
+- Parent: =search prime= or =search dependency <dep> --view graph=
+- Dependency subagent: =search deps <dep[/subpath][@version][::api]>=
+- Source subagent: =search dependency <dep> --view graph --depth 1 --scope src=
+- Test subagent: =search tests <owner> --view graph=
+
+Each subagent should:
+1. run only the command group assigned by the parent agent;
+2. avoid editing files;
+3. return compact evidence as =[search-subagent]= line + =|= fact lines;
+4. every =|= line must carry a =next= action if evidence is missing.
+
+The parent agent merges subagent evidence into =[search-synthesis]= and
+decides the next search phase.
+
+## Output contract for subagents (line protocol)
+
+```text
+[search-subagent] role=deps dep=reqwest evidence=key:reqwest import:reqwest kind:normal feat:json,rustls-tls missing=- next=dependency:reqwest
+[search-subagent] role=src dep=reqwest evidence=owner:src/http/client.rs hit_kind=use locations=3:5,8:1 pub=false missing=error-boundary next=pattern:public-error-boundary
+[search-subagent] role=test dep=reqwest evidence=test:tests/unit/http/client.rs bench:benches/http_client.rs missing=timeout-test next=text:timeout(scope=tests)
+```
+
+Parent merges into:
+
+```text
+[search-synthesis] flow=dep dep=reqwest owners=src/http/client.rs,src/api/orders.rs tests=2 risk=public-error-boundary,timeout missing=2 next=pattern:public-error-boundary(owner=src/http),text:timeout(scope=tests)
+```
+
+If =missing= is non-empty, parent selects another focused =rs-harness search=
+command using the =next= actions.
+
+## Recipe: dependency change
+
+Use when editing `Cargo.toml`, dependency features, dependency kind, target
+cfg, or code using an external crate.
+
+Parent first runs:
+
+```sh
+rs-harness search prime
+rs-harness search dependency <dep>
+```
+
+Useful parallel subagents:
+
+Dependency subagent:
+```sh
+rs-harness search deps <dep[/subpath][@version][::api]>
+rs-harness search targets
+```
+=versionScope=external= starts an external docs/API research branch; do not use
+current workspace owner hits as evidence for that requested version.
+
+Source usage subagent:
+```sh
+rs-harness search dependency <dep> --scope src
+rs-harness search import <dep-import-root>
+```
+
+Test/bench subagent:
+```sh
+rs-harness search dependency <dep> --scope tests
+rs-harness search tests <dep-or-owner>
+```
+
+Policy subagent:
+```sh
+rs-harness check --changed
+rs-harness search pattern public-error-boundary
+```
+
+## Recipe: public API change
+
+Use when changing public functions, exported structs/enums, error types,
+request/config types, or public constructors.
+
+Parent first runs:
+
+```sh
+rs-harness search symbol <symbol>
+rs-harness search callsite <symbol>
+```
+
+If an owner is known:
+
+```sh
+rs-harness search owner <owner-or-path>
+rs-harness search tests <owner-or-path>
+```
+
+Useful parallel subagents:
+
+Owner boundary subagent:
+```sh
+rs-harness search owner <owner-or-path>
+rs-harness search pattern public-api-shape --owner <owner>
+```
+
+Callsite subagent:
+```sh
+rs-harness search callsite <symbol>
+rs-harness search import <module-or-owner>
+```
+
+Test subagent:
+```sh
+rs-harness search tests <owner-or-path>
+rs-harness search text <symbol> --scope tests
+```
+
+## Recipe: module move or namespace change
+
+Use when moving files, renaming modules, splitting facades, moving
+`mod.rs`, or changing imports.
+
+Parent first runs:
+
+```sh
+rs-harness search owner <path-or-owner>
+rs-harness search import <old-module-root>
+```
+
+Useful parallel subagents:
+
+Owner graph subagent:
+```sh
+rs-harness search owner <path-or-owner>
+rs-harness search prime --limit-owners 12
+```
+
+Import subagent:
+```sh
+rs-harness search import <old-module-root>
+rs-harness search import <new-module-root>
+```
+
+Test mount subagent:
+```sh
+rs-harness search tests <owner-or-path>
+rs-harness search text "#[path" --scope tests
+```
+
+## Flow: dependency API docs and usage
+
+Use when the task asks how a dependency API is used, whether a feature
+enables an API, how docs define an API, or whether a dependency type
+leaks into public API.
+
+Parent:
+```sh
+rs-harness search deps <dep[/subpath][@version][::api]>
+rs-harness search docs <dep>::<item>
+```
+
+Subagents:
+docs=`rs-harness search docs <dep>::<item>`
+usage=`rs-harness search deps <dep[/subpath][@version][::item]>`
+public=`rs-harness search pattern public-external-type --dependency <dep>`
+tests=`rs-harness search text <item-name> --scope tests`
+
+Parent synthesis fields:
+dependency, version, features, api_shape, local_usage, public_leakage,
+tests, risk, next
+
+## Recipe: compact finding repair
+
+Use when task starts from a harness finding.
+
+Parent first runs:
+
+```sh
+rs-harness check --changed
+rs-harness search owner <finding-path>
+```
+
+If the finding is import or dependency related:
+```sh
+rs-harness search import <import-root>
+rs-harness search dependency <dep>
+```
+
+If the finding is API related:
+```sh
+rs-harness search symbol <symbol>
+rs-harness search callsite <symbol>
+```
+
+If the finding is structural:
+```sh
+rs-harness search owner <path>
+rs-harness search tests <owner-or-path>
+```
+
+## Recipe: unknown scope
+
+Use when the user request names a concept but no owner/file is known.
+
+Start with:
+
+```sh
+rs-harness search workspace
+rs-harness search prime
+rs-harness search symbol <concept> --limit-matches 20
+```
+
+If symbol search is too sparse, expand with lexical/file candidates
+(always pipe back to ingest — never paste raw output):
+
+```sh
+rg -n "<concept>" src tests | rs-harness search ingest
+fd -e rs "<concept>" src tests | rs-harness search ingest
+```
+
+If many matches appear, pick the top owner and narrow:
+
+```sh
+rs-harness search owner <top-match-path>
+rs-harness search tests <top-match-path>
+```
+
+Then continue with a more specific recipe.
+
+## External candidate expansion rule
+
+When built-in =search text= or =search symbol= returns too few results,
+use =rg= or =fd= — but always pipe back to =search ingest=:
+
+```sh
+rg -n "<query>" src tests | rs-harness search ingest
+fd -e rs "<name>" src tests | rs-harness search ingest
+git diff --name-only | rs-harness search ingest
+```
+
+Never paste raw =rg= / =fd= output.  The ingest command groups results by
+owner and emits =next= actions.
+
+## Structural pattern rule
+
+Use =search pattern <recipe>= for code shape queries.  List available
+recipes with:
+
+```sh
+rs-harness search patterns
+```
+
+Do not write raw =ast-grep= patterns.  Select a recipe by name.  If no
+recipe matches, fall back to =search text= or =rg | ingest=.
+
+## After edits
+
+Always run:
+
+```sh
+rs-harness check --changed
+```
+
+If Cargo.toml changed:
+
+```sh
+rs-harness search deps
+rs-harness check --changed
+```
+
+Before closeout, choose the proper cargo lane:
+
+```sh
+cargo check --all-targets
+cargo test
+```
+
+## Parent synthesis format (line protocol)
+
+After merging subagent evidence, the parent agent produces a single
+compact synthesis line (not a CLI input):
+
+```text
+[search-synthesis] flow=dep dep=reqwest owners=src/http/client.rs,src/api/orders.rs tests=2 risk=public-error-boundary,timeout missing=2 next=pattern:public-error-boundary(owner=src/http),text:timeout(scope=tests)
+```
+
+This synthesis is an agent-client reasoning artifact — the CLI never reads it.  If
+=missing= is non-empty, the agent client selects additional primitives from the
+relevant recipe using the =next= actions.
+````
+
+* Hooks: inject reminders, don't plan
+
+Hooks are shell scripts.  They do not connect to the daemon, do not generate
+subagent plans, and do not consume natural-language intent.
+
+** =session-start.sh= — inject orientation
+
+#+begin_src shell
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "This repo uses rs-harness. Start with \`rs-harness search workspace\` for multi-package roots, then \`rs-harness search prime\`."
+echo "Use SKILL.org recipes to choose command groups."
+echo "For broad tasks, spawn read-only subagents yourself."
+echo ""
+
+rs-harness search workspace --lines 80 || true
+rs-harness search prime --lines 80 || true
+#+end_src
+
+=|| true= is deliberate — session start must not block the user if harness
+is temporarily broken.
+
+** =before-edit.sh= — owner context
+
+#+begin_src shell
+#!/usr/bin/env bash
+set -euo pipefail
+
+file="${1:-}"
+[ -z "$file" ] && exit 0
+
+rs-harness search owner "$file" || true
+#+end_src
+
+** =after-edit.sh= — changed-file check
+
+#+begin_src shell
+#!/usr/bin/env bash
+set -euo pipefail
+
+rs-harness check --changed
+#+end_src
+
+This /can/ fail — it's the agent repair loop feedback.
+
+** =closeout.sh= — full validation
+
+#+begin_src shell
+#!/usr/bin/env bash
+set -euo pipefail
+
+rs-harness check --full
+cargo check --all-targets
+#+end_src
+
+Optionally:
+
+#+begin_src shell
+cargo test
+#+end_src
+
+** =PreToolUse= guard (conceptual)
+
+If the agent attempts a dangerous broad search like =rg <dep> .= or =find .
+-type f=, the hook injects a one-line reminder:
+
+#+begin_example
+Prefer rs-harness search dependency <dep> / search deps <dep> / search import <dep>.
+#+end_example
+
+It does not plan for the agent — it only nudges toward primitives.
+
+** =Stop= guard (conceptual)
+
+If a Rust file was edited but =check --changed= has not run, block
+continuation:
+
+#+begin_example
+block continuation: run rs-harness check --changed
+#+end_example
+
+* Agent search flow: structured, not chaotic
+
+The agent should follow this order:
+
+#+begin_example
+1. search workspace → route multi-package workspaces before package search
+2. search prime     → see bounded package owner/dependency/finding map
+3. search dependency → inspect external dependency source usage when relevant
+4. search owner     → understand current file's responsibility
+5. search symbol    → find exported symbol definitions
+6. search callsite  → find owner-level import/reexport sites
+7. search import    → inspect import/reexport owner edges
+8. search tests     → locate tests importing the edited owner
+9. search text      → find broader symbol/path candidates
+10. search ingest   → normalize external candidate streams when needed
+11. edit            → apply change
+12. check           → verify change against policy
+13. check --full    → closeout when needed
+#+end_example
+
+NOT:
+
+#+begin_example
+rg keyword
+open many files
+guess public API
+run big test suite
+#+end_example
+
+Example: changing =OrderStatus=.
+
+#+begin_src shell
+ts-harness search workspace .
+ts-harness search prime .
+ts-harness search dependency react .
+ts-harness search deps react/jsx-runtime@19.0.0::jsx .
+ts-harness search symbol OrderStatus .
+ts-harness search callsite OrderStatus .
+ts-harness search import ./order .
+ts-harness search tests src/domain/order.ts .
+ts-harness search text OrderStatus .
+ts-harness search owner src/domain/order.ts .
+rg -n "\bOrderStatus\b" src tests | ts-harness search ingest .
+#+end_src
+
+The agent sees:
+
+#+begin_example
+[search-dependency] q=react dep=1 manifest=1 own=2 hit=3 edge=2 view=graph
+|hit package.json:7:5 owner=. kind=dependency score=10 reason=manifest-package-exact packageRoot=react source=dependencies versionRange=^19.0.0
+|hit src/ui/order-view.ts:1 owner=src/ui/order-view.ts kind=dependency reason=package-root-exact packageRoot=react moduleSpecifier=react
+
+[search-text] q=OrderStatus own=3 hit=3 view=hits
+|hit src/domain/order.ts owner=src/domain/order.ts kind=export score=3 reason=export-name symbol=OrderStatus
+|hit src/api/orders.ts owner=src/api/orders.ts kind=path score=2 reason=path
+|next owner:src/domain/order.ts,owner:src/api/orders.ts
+
+[search-callsite] q=OrderStatus def=1 own=2 hit=2 view=hits
+|hit src/api/orders.ts:1 owner=src/api/orders.ts kind=callsite reason=import-owner symbol=OrderStatus
+|hit tests/unit/domain/order.test.ts:1 owner=tests/unit/domain/order.test.ts kind=callsite reason=import-owner symbol=OrderStatus
+
+[search-ingest] src=rg-n in=4 own=4 hit=4
+|hit src/api/orders.ts:44 owner=src/api/orders.ts kind=text reason=rg-n
+|hit src/ui/order-view.ts:19 owner=src/ui/order-view.ts kind=text reason=rg-n
+#+end_example
+
+The agent immediately knows the owner-grouped blast radius.  Raw lexical output
+is never pasted into the prompt directly; it is normalized into the shared
+semantic-search packet.  TypeScript =callsite= is owner-level in this slice: it
+uses parser-owned import/reexport edges, and can later be upgraded with
+language-service identifier references without changing the packet schema.
+
+* Config: LLM generates, harness validates
+
+The agent can write:
+
+#+begin_src json
+{
+  "decisions": [
+    {
+      "kind": "ownerRuleSeverity",
+      "owner": "src/generated",
+      "ruleIds": ["TS-AGENT-R013"],
+      "severity": "info",
+      "evidence": [
+        "package.json script generate:schema",
+        "src/generated/README.md"
+      ],
+      "rationale": "Generated code is documented at schema source boundary."
+    }
+  ]
+}
+#+end_src
+
+But the harness validates:
+
+#+begin_src text
+- owner path exists?
+- rule id exists?
+- evidence path exists?
+- rationale non-empty?
+- scope narrow enough (owner-local, not global)?
+- not disabling entire agent_policy pack?
+- not silently excluding tests?
+#+end_src
+
+Bad config produces a compact finding:
+
+#+begin_example
+[TS-CONFIG-R004] Warning: Global rule disable lacks evidence
+@ .ts-harness/config.json:12:1
+fix: replace global disable with owner-local decision and rationale
+Help: config disables TS-AGENT-R011 across the project.
+Contract: Agent-authored config must be owner-local or include org-level rationale.
+#+end_example
+
+* =--changed= fast lane
+
+Not every check needs to be full-project.  =--changed= evaluates only:
+
+#+begin_src text
+syntax parse of changed files
+export/import shape
+owner-local rules
+agent policy for touched public surfaces
+extension policy for touched React/Effect files
+config/package facts (only when config files changed)
+#+end_src
+
+Full check is reserved for closeout.
+
+* Project layout
+
+#+begin_example
+repo
+├── package.json
+├── tsconfig.json
+├── .ts-harness/
+│   ├── config.json
+│   ├── cache/
+│   └── server.sock / server.pid
+├── .agent/
+│   ├── skills/ts-harness/SKILL.org
+│   └── hooks/
+│       ├── session-start.sh
+│       ├── before-edit.sh
+│       ├── after-edit.sh
+│       └── closeout.sh
+└── src/
+#+end_example
+
+* Agent integration bundle structure (future)
+
+If an agent-client integration bundle is desired, it contains:
+
+#+begin_example
+ts-harness-agent-bundle
+├── SKILL.org
+├── hooks/
+│   ├── session-start.sh
+│   ├── after-edit.sh
+│   └── closeout.sh
+├── scripts/
+│   ├── start-server.sh
+│   └── doctor.sh
+└── examples/
+    ├── package-scripts.json
+    └── harness-config.json
+#+end_example
+
+No MCP config.  No conversational-tool discovery.  The only advertised
+capability registry is the deterministic semantic-language registry returned by
+=<lang-harness> agent doctor --json=.
+
+* Failure mode reference
+
+| Scenario                | CLI Behavior                                |
+|-------------------------+---------------------------------------------|
+| daemon down             | direct parser run, output =daemon=missing=  |
+| daemon stale            | auto-rebuild cache, then respond            |
+| protocol mismatch       | exit 3, deterministic upgrade message       |
+| cache invalid           | direct parser run, output =cache=invalid= with reason |
+| project root mismatch   | exit 3, refuse cross-project contamination  |
+| request timeout         | retry once, then direct parser run          |
+| direct parser run fails | exit 3, compact error message               |
+
+* MVP order: M1–M7
+
+The real MVP is not "many search subcommands."  It's four capabilities that
+cover Tokio, rust-lang/rust, and large agent-client class projects:
+
+#+begin_src text
+1. search workspace + search prime --package
+2. search features/cfg/deps dependency-version usage
+3. search owner --item-slice
+4. search ingest auto-sniff + owner/item grouping
+#+end_src
+
+| Phase | Deliverable                                               |
+|-------+-----------------------------------------------------------|
+| M1    | Multi-pipe grammar + final-only renderer.  =search <source> |
+|       | <pipe1> <pipe2> ...= with deterministic stages.  =--trace=  |
+|       | for compact stage list.  Full field names, =locations=/     |
+|       | =calls=/=uses= fold hits, next= inline on owner/item lines. |
+| M2    | Cargo feature/cfg pipes.  =search features <f> cfg     |
+|       | owners tests docs=.  Feature→optional-dep→target cfg chain. |
+|       | Tokio =io-uring= / =loom= fixtures.                         |
+| M3    | Items pipe.  =--item-slice= for owner.  Nearest-item for    |
+|       | ingest.  =source-large= role.  agent-client file-search fixture.   |
+| M4    | Docs/API facts.  Workspace/registry-source API facts: kind, |
+|       | signature, async, unsafe, feature, receiver, return, error. |
+|       | =search docs <crate>::<item>= plus versioned                 |
+|       | =search deps <crate[/subpath][@version][::item]>=.          |
+|       | bytes::Buf /                                                 |
+|       | ignore::WalkBuilder fixtures.                               |
+| M5    | Public-api pipe.  =search dependency <dep> public-api=.     |
+|       | Tokio allowed_external_types + rustc_middle smallvec.       |
+| M6    | Ingest auto-sniff + 8 pattern recipes.  Single command,     |
+|       | auto-detect stdin.  Always owner/item-grouped output.       |
+| M7    | SKILL.org multi-pipe flows.  8 flows with multi-pipe         |
+|       | templates: dependency/feature/public-api/external-candidate/ |
+|       | namespace/finding-repair/unknown/docs-api.                  |
+
+Sandbox-verified implementation order — deep PM first, pipes after:
+
+#+begin_src text
+Step 1: Deep PM minimum viable loop
+    rs-harness search workspace / prime / prime --package <pkg>
+    mode=workspace-index for workspace, mode=package for prime
+    |package, |dep, |feature, |cfg, |owner, |edge, |finding,
+    |api-candidate, |test-surface, |surface, |next
+    source=workspace|path|crates-io|git on cargo lines
+
+Step 2: source_large + item slice
+    rs-harness search owner <path> items
+    source_large=true signal (guide: never open the file directly)
+    agent-client file-search/src/lib.rs fixture
+
+Step 3: Cargo feature/cfg
+    rs-harness search features <feature>
+    rs-harness search cfg <cfg>
+    rs-harness search cfg <cfg>
+    feature→optional-dep→target-cfg→docs.rs-metadata chain
+    Tokio io-uring / tokio_unstable fixtures
+
+Step 4: Multi-pipe final-only renderer
+    rs-harness search dependency <dep> items tests
+    rs-harness search features <feature> cfg owners tests
+    --trace for compact stage list, single enriched packet output
+
+Step 5: Docs/API facts
+    rs-harness search docs <crate>::<item>
+    rs-harness search deps <crate[/subpath][@version][::item]>
+    rs-harness search api <crate>::<item>
+    rs-harness search public-external-types --package <pkg>
+    native parser API facts only (kind, signature, params, async, unsafe, receiver, return, error, impl, trait)
+    public-external-types joins parser-native public API type facts with Cargo dependency facts
+    bytes::Buf / ignore::WalkBuilder fixtures
+
+Step 6: SKILL.org two-phase guide
+    Phase 1: deep prime always first (mode/source_large/api-candidate rules)
+    Phase 2: parent axis selection
+    Phase 3: subagent multi-pipe/ingest
+    Phase 4: parent synthesis
+    Phase 5: rs-harness check --changed
+#+end_src
+
+The dominant finding: deep PM is the single most valuable capability
+because it determines whether the LLM can correctly organize the rest of
+the subagent flow graph without full-repo traversal.  Multi-pipe is a
+Phase 3 acceleration, not a replacement for the Phase 1 map.
+
+* Existing TypeScript harness readiness
+
+The TypeScript harness already has:
+
+- A CLI binary: =ts-harness= → =./dist/src/cli/main.js=
+- =package.json= scripts: =build=, =check=, =format=, =lint=, =test=, =harness=
+- Public library surface: =renderTypeScriptProjectHarnessAgentCompactText=,
+  =renderTypeScriptProjectHarnessAgentSnapshot=,
+  =runTypeScriptProjectHarnessAgentSnapshot=, =runTypeScriptProjectHarness=,
+  verification/render/profile/task index APIs
+
+The first iteration extends the existing CLI with stable subcommands rather
+than introducing a new protocol ecosystem.
+
+* The correct division of labor
+
+#+begin_example
+SKILL.org:
+  writes exploration protocol, subagent usage, command-group recipes,
+  synthesis format
+
+Agent parent:
+  judges task type
+  selects recipe
+  spawns subagents
+  merges evidence
+  decides next search phase
+  decides edit plan
+
+Agent subagents:
+  read-only
+  run assigned rs-harness command group
+  return compact evidence
+
+rs-harness CLI:
+  graph / cargo / search / check primitives
+  deterministic output
+  no natural-language intent
+  no subagent planning
+  no task router
+
+hooks:
+  inject reminders
+  prevent obviously bad searches
+  changed check after edits
+  closeout guard before stop
+#+end_example
+
+One sentence:
+
+/Put "intent → plan → subagents" in the agent client.  Put "Cargo facts / reasoning
+graph / owner slices / search hits / compact checks" in rs-harness.  That
+is the correct harness-client boundary./
+
+* The bottom line
+
+#+begin_example
+SKILL.org:
+  teaches agent clients how to use harness
+
+hooks:
+  automatically call harness at the right moments
+
+CLI:
+  stable public protocol — primitives, not planner
+
+daemon:
+  local cache and acceleration
+
+compact text:
+  agent repair contract
+
+JSON:
+  editor / flowhub / CI consumer
+#+end_example
+
+One sentence:
+
+/The first round is always deep prime.  It gives the LLM a search map, not
+answers.  Multi-pipe is Phase 3, used by subagents after the parent has
+reasoned about axes.  Never put intent parsing or planning inside the CLI./

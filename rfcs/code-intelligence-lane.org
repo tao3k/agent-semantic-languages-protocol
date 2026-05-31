@@ -1,0 +1,462 @@
+#+TITLE: RFC: Code Intelligence Lane — harness server as typed Flight service
+#+AUTHOR: agent-semantic-protocols
+#+DATE: 2026-01-18
+#+RFC: 003
+#+DEPENDS: rfcs/cargo-execution-lanes.org (001), rfcs/evidence-layer-architecture.org (002)
+#+SEE_ALSO: rfcs/cli-first-harness-ux.org (005) — the public CLI protocol.  RFC 003
+#+  describes /what/ routes a code-intel service exposes; RFC 005 describes
+#+  /how/ agents invoke them — through stable CLI commands, not MCP.
+
+* One-sentence summary
+
+Each language harness should be a /long-running code-intelligence server/
+exposed through Arrow Flight typed routes — not a one-shot CLI tool.
+Diagnostics is just one route among many.
+
+* The architecture shift
+
+** Before: tool → CLI
+
+#+begin_example
+LLM calls run_typescript_harness
+  → spawns tsc / node / harness CLI
+  → reads stdout
+  → parses compact text
+  → decides next edit
+#+end_example
+
+** After: lane → typed service
+
+#+begin_example
+LLM calls run_code_diagnostics
+  → Rust agent-core routes to typescript-code-intel lane
+  → lane returns compact text + structured RecordBatch
+  → agent-core appends to session, caches artifact
+
+LLM calls search_code
+  → same lane, different route
+  → returns top-k compact hits
+  → full result batch stored as artifact
+
+LLM calls plan_code_edit
+  → lane returns semantic edit plan
+  → agent applies edit, re-runs diagnostics
+#+end_example
+
+* The core insight
+
+This is not about copying generic agent-tool code search.  The advantage is that
+each language harness already owns:
+
+- Compiler-native parser facts (TypeScript Compiler API, =syn=, Python =ast=,
+  JuliaSyntax.jl)
+- Project-level facts (=tsconfig=, =package.json=, =Cargo.toml=, =pyproject.toml=)
+- Owner/reasoning tree
+- Policy findings with stable rule IDs
+- Verification task graph
+
+These facts are /richer/ than what tree-sitter can provide, because they are
+type-aware, config-aware, project-reference-aware, and policy-aware.
+
+* Lane routes
+
+Each code-intel server exposes these typed routes:
+
+** =diagnostics/check=
+
+The existing harness compact text, now as a route.
+
+Input:
+
+#+begin_src text
+project_root: utf8
+changed_paths: list<utf8>?
+previous_compact_hash: utf8?
+mode: compact | structured | snapshot
+#+end_src
+
+Output:
+
+#+begin_src text
+status: ok | fail | unchanged | error
+compact_text: utf8
+finding_rows: RecordBatch
+report_artifact: utf8?
+reasoning_tree_artifact: utf8?
+#+end_src
+
+The LLM-visible format stays as-is:
+
+#+begin_example
+[TS-EFFECT-R002] Warning: Effect service reads global environment
+@ src/services/parser/ParserService.ts:31:19
+fix: move this environment read into a config layer
+line: 31 | const cacheDir = process.env.PARSER_CACHE_DIR
+Help: ...
+Contract: ...
+#+end_example
+
+Do NOT convert this to XML or nested JSON in the prompt — it already works.
+
+** =code/search=
+
+Compiler-aware search — not grep.
+
+Query modes:
+
+| Mode     | What it searches                                     |
+|----------+------------------------------------------------------|
+| =text=   | identifier / string literal / comment text            |
+| =symbol= | typed symbol (function, class, interface, type alias) |
+| =owner=  | files owned by a namespace / module                   |
+| =policy= | files affected by a specific rule ID                  |
+| =mixed=  | combined text + symbol + owner                        |
+
+Request (Arrow batch):
+
+#+begin_src text
+CodeSearchRequest
+  request_id: utf8
+  project_root: utf8
+  query: utf8
+  mode: utf8
+  target_rule_id: utf8?
+  changed_paths: list<utf8>?
+  max_hits: int32
+  token_budget: int32
+#+end_src
+
+Response:
+
+#+begin_src text
+CodeSearchHit
+  hit_id: utf8
+  path: utf8
+  start_line: int32
+  start_col: int32
+  end_line: int32
+  end_col: int32
+  kind: utf8           # function | class | service | import | config |
+                        # effect_api | react_component
+  symbol: utf8?
+  owner_namespace: utf8?
+  score: float32
+  snippet: utf8
+  reason: utf8
+  stable_key: utf8
+  artifact_uri: utf8?
+#+end_src
+
+LLM sees top-k compact hits.  Full result batch goes to artifact store.
+
+** =symbol/definition=
+
+Precise jump-to-definition using compiler-native resolution:
+
+#+begin_src text
+symbol_name: utf8
+optional_path: utf8?
+optional_context: utf8?
+  ↓
+definition_path: utf8
+range: (start_line, start_col, end_line, end_col)
+type_info: utf8?
+export_info: utf8?
+#+end_src
+
+This is more reliable than tree-sitter because TypeScript can resolve
+=tsconfig= path aliases, project references, and ambient declarations.
+
+** =symbol/references=
+
+Impact analysis before refactoring:
+
+#+begin_src text
+symbol_name: utf8
+optional_path: utf8?
+  ↓
+ReferenceRow[]
+  path: utf8
+  line: int32
+  column: int32
+  reference_kind: utf8    # import | call | extend | implement | type_ref
+  is_type_only: bool
+  owner_namespace: utf8?
+  import_resolution: utf8?
+#+end_src
+
+** =owner/graph=
+
+The harness's core differentiator.  Returns the reasoning tree:
+
+#+begin_src text
+OwnerBranches[]
+  path, role, namespace, import_summary, child_edges
+
+OwnerDependencies[]
+  source, target, via_root, is_test_context
+
+FindingGroups[]
+  severity, rule_id, title, count, first_path
+
+PackageEntrypoints[]
+  kind, path, owner
+
+ExtensionFacts[]
+  kind, path, config_source
+
+BuildTools[]
+  kind, path
+#+end_src
+
+The existing =renderTypeScriptReasoningTree= already produces =Modules:=,
+=Extensions:=, =BuildTools:=, =OwnerBranches:=, =OwnerDependencies:=,
+=FindingGroups:= sections [typescript-lang-project-harness README].
+
+** =edit/plan=
+
+The most critical differentiator.  Instead of letting the LLM guess a patch
+from a compact finding, the lane returns a /semantic edit plan/:
+
+#+begin_src text
+EditPlan
+  plan_id: utf8
+  target_finding_key: utf8        # e.g. "TS-EFFECT-R002:ParserService.ts:31"
+  operation_kind: utf8            # move_env_read_to_config_layer
+  target_file: utf8
+  target_range: (start, end)
+  suggested_config_owner: utf8?   # e.g. src/config/parser.ts
+  required_new_param: utf8?       # e.g. cacheDir
+  affected_symbols: list<utf8>
+  risk: low | medium | high
+  validation_route: utf8          # diagnostics/check
+#+end_src
+
+This is NOT a patch — it's a /semantic edit operation/.  The Rust agent-core
+(or the LLM) decides how to apply it.
+
+** =edit/validate=
+
+After the edit is applied, the lane re-checks:
+
+#+begin_src text
+changed_paths: list<utf8>
+target_plan_id: utf8
+  ↓
+is_plan_satisfied: bool
+remaining_findings: list<Finding>
+new_findings: list<Finding>
+#+end_src
+
+* Tool binding: LLM sees 5 tools, not 20 routes
+
+The LLM should not see 20 low-level routes.  It sees 5 high-level tools:
+
+| Tool                   | Lane Route          | Renderer                    |
+|------------------------+---------------------+-----------------------------|
+| =run_code_diagnostics= | =diagnostics/check= | =harness_compact=           |
+| =search_code=          | =code/search=       | =code_search_compact=       |
+| =inspect_symbol=       | =symbol/definition= | =symbol_compact=            |
+|                        | =symbol/references= |                             |
+| =plan_code_edit=       | =edit/plan=         | =edit_plan_compact=         |
+| =validate_code_edit=   | =edit/validate=     | =edit_validate_compact=     |
+
+Each tool is backed by the same lane:
+
+#+begin_src toml
+[tools.search_code]
+backend = "lane"
+lane = "typescript_code_intel"
+route = "code/search"
+renderer = "code_search_compact"
+
+[tools.plan_code_edit]
+backend = "lane"
+lane = "typescript_code_intel"
+route = "edit/plan"
+renderer = "edit_plan_compact"
+#+end_src
+
+* Extension structure
+
+Instead of:
+
+#+begin_example
+agent-extension-typescript-harness
+  └── run_typescript_harness tool + renderer
+#+end_example
+
+It becomes:
+
+#+begin_example
+agent-extension-typescript-code-intel
+  ├── registers lane binding: typescript_code_intel
+  ├── registers tools:
+  │     run_code_diagnostics
+  │     search_code
+  │     inspect_symbol
+  │     plan_code_edit
+  │     validate_code_edit
+  ├── registers renderers:
+  │     harness_compact_renderer
+  │     code_search_compact_renderer
+  │     edit_plan_compact_renderer
+  └── registers artifact types:
+        reasoning_tree
+        search_results
+        edit_plan
+        full_diagnostic_report
+#+end_example
+
+* Mutation authority boundary
+
+The code-intel lane can /search, analyze, plan, and validate/.  It does NOT
+mutate files.  The Rust agent-core owns workspace mutation:
+
+#+begin_example
+plan_code_edit
+  ↓
+LLM decides (or Rust applies deterministic part)
+  ↓
+Rust native edit tool writes file
+  ↓
+run_code_diagnostics / validate_code_edit
+#+end_example
+
+Rationale:
+
+1. Rust server must own workspace mutation authority.
+2. Session log must record every edit.
+3. Edits must trigger diagnostics/check.
+4. DeepSeek cache/history must stay append-only.
+5. If the lane mutates files, agent-core loses auditability.
+
+* DeepSeek cache-first compatibility
+
+All lane returns are compact structured results:
+
+#+begin_src text
+search_code       → top-k compact hits
+plan_code_edit    → compact semantic edit plan
+diagnostics       → compact findings
+full batches      → artifact store (not in prompt)
+#+end_src
+
+The session appends:
+
+#+begin_src text
+tool_result: search_code compact top-k
+tool_result: plan_code_edit compact plan
+tool_result: run_code_diagnostics compact finding
+#+end_src
+
+No full files, no full AST, no full JSON reports in the prompt.  This is
+friendly to DeepSeek prefix cache.
+
+* A complete repair flow (example)
+
+Starting from:
+
+#+begin_example
+[TS-EFFECT-R002] Effect service reads global environment
+@ src/services/parser/ParserService.ts:31:19
+#+end_example
+
+#+begin_example
+1. run_code_diagnostics
+   → compact finding (as above)
+
+2. plan_code_edit({
+     finding_key: "TS-EFFECT-R002:src/services/parser/ParserService.ts:31:19"
+   })
+   → lane returns:
+      operation: move env read into config layer
+      target: ParserService.ts range
+      suggested config owner: src/config/parser.ts
+      affected symbols: ParserService, ParserConfig
+      risk: medium
+
+3. search_code({
+     query: "ParserService config cacheDir",
+     mode: "owner"
+   })
+   → lane returns related config/service files
+
+4. Rust edit_file / apply_patch
+   → modifies source
+
+5. validate_code_edit(plan_id)
+   → plan satisfied? true/false
+
+6. run_code_diagnostics
+   → [ok] typescript or new compact finding
+#+end_example
+
+The LLM never reads the full project, never guesses all references.
+
+* Comparison to generic search tools / tree-sitter
+
+| Aspect            | tree-sitter style             | harness lane style               |
+|-------------------+-------------------------------+----------------------------------|
+| parsing           | syntax-aware                  | project-aware                    |
+| type awareness    | limited                       | compiler-native                  |
+| config awareness  | none                          | tsconfig / Cargo.toml / etc.    |
+| policy awareness  | none                          | rule packs, stable IDs           |
+| owner awareness   | none                          | reasoning tree, owner graph      |
+| verification      | none                          | tasks, receipts, waivers         |
+| edit planning     | LLM guesses patch             | lane returns semantic plan       |
+| search            | regex / text                  | compiler-resolved symbol search  |
+
+This means the lane can answer questions that grep/tree-sitter cannot stably
+answer:
+
+#+begin_example
+"Which service implementation reads process.env?"
+"Should this public async API become an Effect.Effect?"
+"Is this React hook call inside a conditional branch?"
+"Does this owner's dependencies cross the declared boundary?"
+"What is the minimal-impact config layer for fixing TS-EFFECT-R002?"
+#+end_example
+
+* Multi-language: one pattern, many servers
+
+#+begin_example
+Rust Agent Server
+  ├── owns: turn loop / session / prompt / DeepSeek cache / tool registry
+  │
+  ├── Flight lane: typescript-code-intel
+  │     ├── diagnostics/check
+  │     ├── code/search
+  │     ├── symbol/definition
+  │     ├── symbol/references
+  │     ├── owner/graph
+  │     ├── edit/plan
+  │     └── edit/validate
+  │
+  ├── Flight lane: rust-code-intel
+  │     └── (same routes, Rust-native facts)
+  │
+  ├── Flight lane: julia-code-intel
+  │     └── (same routes, JuliaSyntax facts)
+  │
+  └── Flight lane: modelica-code-intel
+        └── (same routes, Modelica-native facts)
+#+end_example
+
+The TypeScript harness already exports =TypeScriptReasoningTree=,
+=TypeScriptReasoningOwnerBranchFact=, =TypeScriptReasoningOwnerDependencyFact=,
+=TypeScriptReasoningDiagnosticFact=, =renderTypeScriptReasoningTree=,
+=renderTypeScriptProjectHarnessAgentCompactText=, and other agent-facing APIs
+[typescript-lang-project-harness].  The extension path is inheriting these
+into a service, not starting from scratch.
+
+* Naming
+
+Recommended:
+
+#+begin_example
+agent-extension-typescript-code-intel
+#+end_example
+
+It expresses: diagnostics + search + graph + edit planning — not just
+harness check.

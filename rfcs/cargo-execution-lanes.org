@@ -1,0 +1,258 @@
+#+TITLE: RFC: Cargo Execution Lanes — check / test / build / verification
+#+AUTHOR: agent-semantic-protocols
+#+DATE: 2026-01-18
+
+* Summary
+
+This RFC proposes four explicit cargo execution lanes — =cargo check=,
+=cargo test=, =build.rs=, and verification — each with its own compact-text
+surface, blocking policy, and agent-facing contract.  The design preserves
+Rust harness's clean 6-line diagnostic invariant while giving agents three
+distinct compact surfaces (diagnostic, snapshot, verification) keyed to the
+lane that needs them.
+
+* Motivation
+
+** Why four lanes instead of one
+
+The current design already embeds a lane split — the library runner keeps
+=Info= non-blocking, the cargo-test gate fails on advice, and the build gate
+blocks =Warning= / =Error= only — but it lives implicitly in the runner
+layer.  Making it explicit as a policy concept prevents three failure modes:
+
+1. An agent (or downstream CI) conflates =cargo check= semantics with
+   =cargo test= semantics — =cargo check= compiles without final codegen and
+   will never execute =#[test] fn enforce_rust_project_harness_gate()=, so a
+   source cargo-test gate cannot be satisfied by a check-only pipeline.
+2. A project applies =advice = allow= to the build gate and accidentally
+   downgrades =cargo check= from a fast compile-coverage lane into an
+   agent-style reporting lane, losing its speed advantage.
+3. An agent treats =cargo test= output as verification evidence — the
+   verification lane is explicitly an /external skill evidence/ lane, not a
+   test-output lane.
+
+** Why the compact surface boundary matters
+
+Rust harness exports three compact renderers with different purposes:
+
+| Surface      | Renderer                                    | Purpose                       |
+|--------------+---------------------------------------------+-------------------------------|
+| diagnostic   | =render_rust_project_harness()=             | edit instruction              |
+| snapshot     | =render_rust_project_harness_agent_snapshot()= | search map / orientation   |
+| verification | =render_rust_verification_plan()=           | external skill contract       |
+
+These should not be collapsed into a single "compact text" abstraction.
+The diagnostic surface is 6-line invariant (rule, locator, fix, source line,
+Help, Contract); the snapshot surface is a project tree summary; the
+verification surface emits only active tasks grouped by owner path.
+
+* Proposed Design
+
+** Lane 1 — =cargo check= lane (compile coverage)
+
+Purpose: fast compile-graph, target, cfg, and feature feedback.
+
+Coverage:
+
+#+begin_src shell
+cargo check
+cargo check --all-targets --profile=test
+cargo check --workspace --all-targets --profile=test
+#+end_src
+
+Policy:
+- Does NOT depend on =#[test]= gate execution.
+- Does NOT treat =Info= advice as failure.
+- Can be blocked by =build.rs= gate on =Warning= / =Error=.
+- Can check declared check-contract coverage (lib, bins, tests, benches, examples).
+- Reminds projects NOT to treat =cargo check= as verification receipt.
+
+Proposed new rules (advisory / config-enabled initially):
+
+| Rule ID            | Title                                                        |
+|--------------------+--------------------------------------------------------------|
+| =RUST-CHECK-R001=  | declared cargo-check command is narrower than harness scope  |
+| =RUST-CHECK-R002=  | project has tests/benches/examples but check contract omits  |
+|                    | =--all-targets= or equivalent target coverage                |
+| =RUST-CHECK-R003=  | cargo-check lane is declared as policy enforcement but no    |
+|                    | complete build gate exists                                   |
+| =RUST-CHECK-R004=  | cargo-check lane is declared as verification evidence; use   |
+|                    | verification receipt/waiver instead                          |
+
+All four should start as advisory / config-enabled, because CI, xtask, and
+justfile conventions vary widely across projects.
+
+** Lane 2 — =cargo test= lane (agent repair visibility)
+
+Purpose: agent-visible repair gate.  This is the lane where compact
+diagnostic text serves its primary function — showing the agent *exactly*
+what to edit.
+
+Coverage:
+
+#+begin_src shell
+cargo test
+cargo test --lib
+unfiltered package test runs
+#+end_src
+
+Policy (mostly already implemented):
+- Source-backed cargo-test gate must be in the lib source tree (=#[cfg(test)]= in
+  =src/lib.rs= or a declared submodule).
+- Cargo-test gate must use =config = { ... }= form — the empty form is rejected by
+  =RUST-PROJ-R011=.
+- Cargo-test gate defaults to advice-as-fail: =assert_rust_project_harness_cargo_test_clean()=
+  calls both =assert_clean()= *and* =assert_no_advisory_findings()= [runner.rs:104-108].
+- =advice = allow= must carry =with_agent_advice_allow_explanation(...)=, otherwise
+  =RUST-PROJ-R015= keeps the finding visible [verification_integration.rs:158-164].
+- Root =tests/*.rs= targets are thin aggregates only (=RUST-PROJ-R007=, =RUST-PROJ-R008=).
+- =cargo test --lib= escape path is closed by =RUST-PROJ-R009=.
+
+Existing rules covering this lane:
+
+| Rule ID           | Title                                                   |
+|-------------------+---------------------------------------------------------|
+| =RUST-PROJ-R006=  | standalone Cargo test target must mount harness gate    |
+| =RUST-PROJ-R009=  | harness-enabled library must mount cargo-test gate      |
+| =RUST-PROJ-R011=  | harness gates must run with explicit verification config|
+| =RUST-PROJ-R015=  | harness advice allowance lacks explanation              |
+
+** Lane 3 — =build.rs= gate lane (filter-proof safety net)
+
+Purpose: structural safety net that runs before libtest's test-name filter
+and covers all compilation paths.
+
+Coverage: =cargo check=, =cargo build=, =cargo test <filter>=, =cargo test
+--lib <filter>=, CI scripts that accidentally filter tests.
+
+Policy (already implemented):
+- Complete build gate = =[build-dependencies]= entry + root =build.rs= call
+  to =assert_rust_project_harness_build_clean_from_env_with_config(...)=.
+- Build gate blocks =Warning= / =Error= *only* — it calls =assert_clean()=
+  but NOT =assert_no_advisory_findings()= [build_gate.rs:19-23].
+- Build gate emits =cargo:rerun-if-changed= for Cargo.toml, Cargo.lock,
+  build.rs, monitored paths, and Rust files [build_gate.rs:20].
+- =build.rs= must stay a thin entrypoint; implementation belongs in a
+  build-dependency module (=RUST-MOD-R006=).
+- =RUST-PROJ-R012= reports three partial states: build-dependency without
+  =build.rs= gate, =build.rs= without gate call, gate call without
+  build-dependency.
+
+A complete build gate also satisfies =RUST-PROJ-R006= and =RUST-PROJ-R009=,
+so projects do not need both =build.rs= and =lib.rs= gates unless they
+deliberately want both lifecycle hooks.
+
+** Lane 4 — verification lane (external skill evidence)
+
+Purpose: external skill evidence planning.  NOT part of =cargo check= or
+=cargo test=.
+
+Coverage: performance, stress, security, chaos, regression,
+responsibility_review, report persistence, receipt/waiver lifecycle.
+
+Policy (already implemented):
+- Verification policy does not execute bench/stress/chaos/security/regression tools;
+  it plans parser-native obligations that external Agent skills satisfy with
+  structured receipts or waivers [204_verification_policy.md:1-5].
+- Compact renderer only prints *active* tasks — passed receipt or complete
+  waiver removes the task from this channel.
+- Tasks are grouped by owner path: one =[verify] owner.rs= block with
+  task-specific lines.
+- Active tasks create durable report obligations — the compact renderer
+  emits one =[verify-report]= block telling the agent which artifacts to
+  persist.
+- =RUST-PROJ-R010= requires a real =[[bench]]= target with =harness = false=
+  when a Rust-native performance binding is configured.
+
+* Bugfix: =RUST-PROJ-R015= missing from =RustRulePack::ProjectPolicy=
+
+=RUST-PROJ-R015= ("Harness advice allowance lacks explanation") is defined
+in the project-policy catalog [pack.rs:36] but is NOT listed in
+=RustRulePack::ProjectPolicy::rule_ids()=, which stops at =RUST-PROJ-R014=
+[model.rs:114].
+
+This means pack-level operations — =with_disabled_rule_pack(RustRulePack::ProjectPolicy)=
+or =with_rule_pack_severity(RustRulePack::ProjectPolicy, ...)= — do not affect R015.
+
+This is a concrete bug that should be fixed before expanding the cargo-check
+policy surface, because R015 is the rule that prevents agents from using
+=advice = allow= as a silent escape hatch from the cargo-test advice gate.
+
+* Optional: repair/search index renderer
+
+Current design: the default diagnostic compact text is a 6-line invariant
+(rule, locator, fix, source line, Help, Contract).  Adding a =search:= line
+to every finding would bloat the hot path.
+
+Proposal: a separate /optional/ renderer derived from the reasoning tree and
+findings, producing owner-aware search direction:
+
+#+begin_example
+[repair-index]
+ - owner=src/api.rs rules=AGENT-R019,RUST-MOD-R010
+   inspect=callers,tests,facade
+   roots=src/api.rs,src/api/,tests/unit/api/
+   query=ApiRequest|ApiConfig|public_api_name
+#+end_example
+
+This would be snapshot/sidecar level, not default-finding-block level:
+
+#+begin_src text
+default cargo test failure:
+  render_rust_project_harness(report)
+
+agent needs orientation:
+  render_rust_project_harness_agent_snapshot(project_root)
+
+agent needs search plan:
+  render_rust_project_harness_repair_index(report, reasoning_tree)
+#+end_src
+
+This preserves the 6-line diagnostic invariant while giving agents a
+structured search surface when they need to expand context.
+
+* Implementation Order
+
+1. [ ] Fix =RustRulePack::ProjectPolicy::rule_ids()= to include =RUST-PROJ-R015=.
+2. [ ] Add a =Cargo Execution Lanes= doc under =docs/01_core/=, defining the four
+   lanes, their compact surfaces, and their blocking policies.
+3. [ ] Keep cargo-test source gate advice-as-fail semantics — do NOT
+   down-level it to =cargo check=.
+4. [ ] Keep build gate blocking-only — do NOT add =assert_no_advisory_findings()=
+   to the build gate path.
+5. [ ] Add config-enabled =cargo check= contract policy (=RUST-CHECK-R001=
+   through =RUST-CHECK-R004=) as advisory rules, checking target coverage
+   rather than executing tests.
+6. [ ] (Optional) Add =render_rust_project_harness_repair_index()= as a
+   reasoning-tree-derived sidecar renderer.
+
+* References
+
+- [[file:../languages/rust-lang-project-harness/docs/01_core/101_harness_boundary.md][Harness Boundary]] — compact text contract, self-apply policy, advice handling
+- [[file:../languages/rust-lang-project-harness/docs/03_features/201_rule_catalog.md][Rule Catalog]] — blocking rules, agent advice rules, rendered diagnostic policy
+- [[file:../languages/rust-lang-project-harness/docs/03_features/202_runner_modes.md][Runner Modes]] — project runner, cargo-test embedding, build gate config
+- [[file:../languages/rust-lang-project-harness/docs/03_features/203_cli.md][CLI]] — compact text default, agent snapshot flag, exit status
+- [[file:../languages/rust-lang-project-harness/docs/03_features/204_verification_policy.md][Verification Policy]] — task families, receipt/waiver lifecycle, report obligations
+- [[file:../languages/rust-lang-project-harness/src/model.rs][model.rs:106-114]] — =RustRulePack::rule_ids()= (lacks R015)
+- [[file:../languages/rust-lang-project-harness/src/rules/project_policy/pack.rs][pack.rs:36]] — =RUST_PROJ_R015= definition
+- [[file:../languages/rust-lang-project-harness/src/runner.rs][runner.rs:104-108]] — =assert_rust_project_harness_cargo_test_clean()= (advice-as-fail)
+- [[file:../languages/rust-lang-project-harness/src/build_gate.rs][build_gate.rs:19-23]] — build gate: =assert_clean()= only, no advice check
+- [[file:../languages/rust-lang-project-harness/src/agent_snapshot.rs][agent_snapshot.rs]] — snapshot renderer, branch/dependency cap, finding groups
+
+* See Also
+
+- [[file:evidence-layer-architecture.org][RFC 002 — Evidence-Layer Architecture]]: the broader vision of syntax facts →
+  semantic facts → performance evidence → SDD flowhub, with M1–M6 roadmap.
+
+* Appendix: Summary of the four lanes
+
+| Lane          | Cargo Command        | Blocks          | Advice Fails? | Gate Location      |
+|---------------+----------------------+-----------------+---------------+--------------------|
+| check         | =cargo check=        | Warning / Error | No            | build.rs (optional)|
+| test          | =cargo test=         | Warning / Error | Yes (default) | =#[cfg(test)]=     |
+| build         | all compile paths    | Warning / Error | No            | build.rs           |
+| verification  | (external skills)    | N/A             | N/A           | harness config     |
+
+The check lane is for fast compile feedback; the test lane is for agent
+repair visibility; the build lane is the filter-proof safety net; the
+verification lane is for external skill evidence planning.
