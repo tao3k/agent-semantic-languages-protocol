@@ -97,6 +97,31 @@ fn cli_install_requires_available_provider_binary() {
     std::fs::remove_dir_all(root).expect("cleanup temp project root");
 }
 
+#[cfg(unix)]
+#[test]
+fn cli_install_requires_executable_provider_binary() {
+    let root = temp_project_root("install-non-executable-provider-bin");
+    let provider_path = write_fake_provider_file(&root, "rs-harness", 0o644);
+    let output = Command::new(env!("CARGO_BIN_EXE_semantic-agent-hook"))
+        .env("PATH", &provider_path)
+        .args([
+            "install",
+            "--client",
+            "codex",
+            root.to_str().expect("utf8 temp root"),
+        ])
+        .output()
+        .expect("run semantic-agent-hook install");
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("expected PATH to contain"),
+        "install stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    std::fs::remove_dir_all(root).expect("cleanup temp project root");
+}
+
 #[test]
 fn cli_install_migrates_legacy_top_level_unified_exec_to_features() {
     let root = temp_project_root("install-unified-exec-feature");
@@ -210,6 +235,10 @@ fn cli_install_refuses_to_overwrite_invalid_codex_toml() {
 }
 
 fn write_fake_provider_binary(root: &std::path::Path, binary: &str) -> PathBuf {
+    write_fake_provider_file(root, binary, 0o755)
+}
+
+fn write_fake_provider_file(root: &std::path::Path, binary: &str, mode: u32) -> PathBuf {
     let bin_dir = root.join(".bin");
     std::fs::create_dir_all(&bin_dir).expect("create fake provider bin dir");
     let path = bin_dir.join(binary);
@@ -221,7 +250,7 @@ fn write_fake_provider_binary(root: &std::path::Path, binary: &str) -> PathBuf {
         let mut permissions = std::fs::metadata(&path)
             .expect("fake provider metadata")
             .permissions();
-        permissions.set_mode(0o755);
+        permissions.set_mode(mode);
         std::fs::set_permissions(&path, permissions).expect("chmod fake provider");
     }
     bin_dir
