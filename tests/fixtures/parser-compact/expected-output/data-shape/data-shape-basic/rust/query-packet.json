@@ -13,6 +13,26 @@
       "name": "UserSummary",
       "projection": {
         "exactRead": "src/lib.rs:1:5",
+        "expandActions": [
+          {
+            "kind": "hot-block",
+            "read": "src/lib.rs:2:2",
+            "reason": "parser-projection-field",
+            "target": "n1"
+          },
+          {
+            "kind": "hot-block",
+            "read": "src/lib.rs:3:3",
+            "reason": "parser-projection-field",
+            "target": "n2"
+          },
+          {
+            "kind": "hot-block",
+            "read": "src/lib.rs:4:4",
+            "reason": "parser-projection-field",
+            "target": "n3"
+          }
+        ],
         "losslessStructure": true,
         "mode": "compact",
         "nodes": [
@@ -23,6 +43,33 @@
             "label": "pub struct UserSummary",
             "read": "src/lib.rs:1:5",
             "role": "declaration"
+          },
+          {
+            "depth": 1,
+            "id": "n1",
+            "kind": "field",
+            "label": "field pub user_id: u64",
+            "parentId": "n0",
+            "read": "src/lib.rs:2:2",
+            "role": "field"
+          },
+          {
+            "depth": 1,
+            "id": "n2",
+            "kind": "field",
+            "label": "field pub name: String",
+            "parentId": "n0",
+            "read": "src/lib.rs:3:3",
+            "role": "field"
+          },
+          {
+            "depth": 1,
+            "id": "n3",
+            "kind": "field",
+            "label": "field pub active: bool",
+            "parentId": "n0",
+            "read": "src/lib.rs:4:4",
+            "role": "field"
           }
         ],
         "sourceAuthority": "native-parser",
@@ -31,6 +78,107 @@
       "read": "src/lib.rs:1:5",
       "truncated": false,
       "visibility": "public"
+    },
+    {
+      "doc": false,
+      "kind": "impl",
+      "location": {
+        "lineRange": "7:15",
+        "path": "src/lib.rs"
+      },
+      "name": "UserSummary",
+      "projection": {
+        "exactRead": "src/lib.rs:7:15",
+        "expandActions": [
+          {
+            "kind": "hot-block",
+            "read": "src/lib.rs:9:13",
+            "reason": "parser-projection-control-flow",
+            "target": "n2"
+          },
+          {
+            "kind": "hot-block",
+            "read": "src/lib.rs:11:13",
+            "reason": "parser-projection-control-flow",
+            "target": "n4"
+          }
+        ],
+        "losslessStructure": true,
+        "mode": "compact",
+        "nodes": [
+          {
+            "depth": 0,
+            "id": "n0",
+            "kind": "impl",
+            "label": "impl UserSummary",
+            "read": "src/lib.rs:7:15",
+            "role": "declaration"
+          },
+          {
+            "depth": 1,
+            "id": "n1",
+            "kind": "fn",
+            "label": "pub fn label(&self) -> String",
+            "parentId": "n0",
+            "read": "src/lib.rs:8:14",
+            "role": "declaration"
+          },
+          {
+            "depth": 2,
+            "flags": [
+              "branch",
+              "guard"
+            ],
+            "id": "n2",
+            "kind": "if",
+            "label": "if self.active",
+            "parentId": "n1",
+            "read": "src/lib.rs:9:13",
+            "role": "control-flow"
+          },
+          {
+            "depth": 3,
+            "flags": [
+              "call"
+            ],
+            "id": "n3",
+            "kind": "macro",
+            "label": "call format!(\"{}#{}\", self.name, self.user_id)",
+            "parentId": "n2",
+            "read": "src/lib.rs:10:10",
+            "role": "call"
+          },
+          {
+            "depth": 2,
+            "flags": [
+              "branch"
+            ],
+            "id": "n4",
+            "kind": "else",
+            "label": "else",
+            "parentId": "n1",
+            "read": "src/lib.rs:11:13",
+            "role": "control-flow"
+          },
+          {
+            "depth": 3,
+            "flags": [
+              "call"
+            ],
+            "id": "n5",
+            "kind": "call",
+            "label": "call to_string",
+            "parentId": "n4",
+            "read": "src/lib.rs:12:12",
+            "role": "call"
+          }
+        ],
+        "sourceAuthority": "native-parser",
+        "syntax": "semantic-outline"
+      },
+      "read": "src/lib.rs:7:15",
+      "truncated": false,
+      "visibility": "private"
     }
   ],
   "method": "query/owner-items",
@@ -45,7 +193,7 @@
   "queryCoverage": [
     {
       "match": "exact",
-      "matchCount": 1,
+      "matchCount": 2,
       "nextAction": "code",
       "status": "hit",
       "value": "UserSummary"

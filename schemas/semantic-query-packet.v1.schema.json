@@ -326,6 +326,7 @@
             "declaration",
             "control-flow",
             "call",
+            "field",
             "terminal",
             "mutation",
             "effect",
