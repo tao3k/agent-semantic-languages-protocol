@@ -172,6 +172,7 @@ O=owner:path(src/cache.rs)!owner;T=test:path(tests/unit/cache.rs)!tests\n";
 #[test]
 fn search_packet_writeback_replays_rendered_stdout_artifact() {
     let root = temp_root("search-packet-writeback");
+    std::fs::create_dir_all(root.join(".git")).expect("create git marker");
     std::fs::create_dir_all(root.join("src")).expect("create src");
     let source = b"pub fn cached_prime() {}\n";
     std::fs::write(root.join("src/lib.rs"), source).expect("write source");
