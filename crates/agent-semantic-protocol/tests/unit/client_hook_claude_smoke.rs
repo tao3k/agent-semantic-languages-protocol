@@ -2,7 +2,8 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 #[test]
 fn claude_install_writes_project_settings_hooks() {
@@ -118,13 +119,23 @@ fn claude_fixture() -> PathBuf {
         .expect("git init");
     std::fs::create_dir_all(root.join("src")).expect("create src");
     std::fs::write(root.join("src/lib.rs"), "pub fn demo() {}\n").expect("write src");
+    let bin_dir = root.join(".bin");
+    std::fs::create_dir_all(&bin_dir).expect("create provider bin dir");
+    let provider_path = bin_dir.join("rs-harness");
+    std::fs::write(
+        &provider_path,
+        "#!/bin/sh\nif [ \"$1\" = \"agent\" ] && [ \"$2\" = \"guide\" ]; then\n  printf '[agent-guide] language=rust provider=rs-harness\\n'\nfi\nexit 0\n",
+    )
+    .expect("write fake provider");
+    make_executable(&provider_path);
     root
 }
 
-fn install_claude_hooks(root: &std::path::Path) {
+fn install_claude_hooks(root: &Path) {
     let output = Command::new(env!("CARGO_BIN_EXE_asp"))
         .args(["hook", "install", "--client", "claude"])
         .arg(root)
+        .env("PATH", prepend_path(&root.join(".bin")))
         .env_remove("PRJ_CACHE_HOME")
         .env_remove("PRJ_HOME_CACHE")
         .output()
@@ -136,11 +147,7 @@ fn install_claude_hooks(root: &std::path::Path) {
     );
 }
 
-fn run_claude_pre_tool_decision(
-    root: &std::path::Path,
-    payload: Value,
-    extra_args: &[&str],
-) -> Value {
+fn run_claude_pre_tool_decision(root: &Path, payload: Value, extra_args: &[&str]) -> Value {
     let mut command = Command::new(env!("CARGO_BIN_EXE_asp"));
     command
         .args(["hook", "pre-tool", "--client", "claude"])
@@ -170,4 +177,28 @@ fn run_claude_pre_tool_decision(
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).expect("parse hook stdout")
+}
+
+fn prepend_path(path_prefix: &Path) -> OsString {
+    let mut paths = vec![path_prefix.to_path_buf()];
+    if let Some(path) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&path));
+    }
+    std::env::join_paths(paths).expect("join PATH")
+}
+
+fn make_executable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(path)
+            .expect("provider metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions).expect("provider permissions");
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
 }

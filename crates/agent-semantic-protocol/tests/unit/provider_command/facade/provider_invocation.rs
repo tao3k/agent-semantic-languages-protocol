@@ -2,8 +2,8 @@ use std::env;
 use std::process::Command;
 
 use crate::provider_command::support::{
-    asp_command, prepend_path, provider, temp_project_root, write_activation, write_echo_provider,
-    write_runtime_profiles,
+    asp_command, make_executable, prepend_path, provider, temp_project_root, write_activation,
+    write_echo_provider, write_runtime_profiles,
 };
 
 #[test]
@@ -30,11 +30,7 @@ printf 'renderer=%s
 "#,
     )
     .expect("write provider wrapper");
-    let mut permissions = std::fs::metadata(&wrapper_path)
-        .expect("wrapper metadata")
-        .permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
-    std::fs::set_permissions(&wrapper_path, permissions).expect("set wrapper permissions");
+    make_executable(&wrapper_path);
     write_activation(
         &root,
         &[provider(
@@ -119,11 +115,7 @@ fn language_facade_query_uses_runtime_profile_before_path_lookup() {
         "#!/bin/sh\nprintf 'path provider should not run\\n' >&2\nexit 42\n",
     )
     .expect("write path provider");
-    let mut permissions = std::fs::metadata(&path_provider)
-        .expect("path provider metadata")
-        .permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
-    std::fs::set_permissions(&path_provider, permissions).expect("set path provider permissions");
+    make_executable(&path_provider);
 
     write_activation(&root, &[provider("rust", Vec::new())]);
     write_runtime_profiles(
@@ -224,11 +216,7 @@ fn provider_native_ast_patch_command_is_wrapped_by_language_facade() {
         format!("#!/bin/sh\nexec '{harness_binary_quoted}' \"$@\"\n"),
     )
     .expect("write rs-harness wrapper");
-    let mut wrapper_permissions = std::fs::metadata(&wrapper_path)
-        .expect("wrapper metadata")
-        .permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut wrapper_permissions, 0o755);
-    std::fs::set_permissions(&wrapper_path, wrapper_permissions).expect("chmod wrapper");
+    make_executable(&wrapper_path);
 
     let packet = serde_json::json!({
         "target": {

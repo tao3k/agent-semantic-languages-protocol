@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::provider_command::support::{
-    asp_command, prepend_path, provider, temp_project_root, write_activation, write_echo_provider,
-    write_pwd_provider,
+    asp_command, make_executable, prepend_path, provider, temp_project_root, write_activation,
+    write_echo_provider, write_pwd_provider, write_runtime_profiles,
 };
 
 #[test]
@@ -18,7 +18,6 @@ fn rust_search_facade_execs_activated_provider() {
         ("python", "py-harness", "py"),
     ];
     std::fs::create_dir_all(&bin_dir).expect("create bin dir");
-    use std::os::unix::fs::PermissionsExt;
     for (_, binary, label) in providers.iter().copied() {
         let call_count_path = root.join(format!("{label}-provider-count"));
         let provider_path = bin_dir.join(binary);
@@ -28,11 +27,7 @@ fn rust_search_facade_execs_activated_provider() {
             label
         );
         std::fs::write(&provider_path, script).expect("write provider");
-        let mut permissions = std::fs::metadata(&provider_path)
-            .expect("provider metadata")
-            .permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&provider_path, permissions).expect("provider permissions");
+        make_executable(&provider_path);
     }
     write_activation(
         &root,
@@ -183,6 +178,13 @@ fn language_facade_normalizes_relative_nested_project_root_arg() {
     )
     .expect("write child manifest");
     write_activation(&root, &[provider("rust", Vec::new())]);
+    let bin_dir = root.join(".bin");
+    write_pwd_provider(&bin_dir, "rs-harness");
+    write_runtime_profiles(
+        &root,
+        "rust",
+        vec![bin_dir.join("rs-harness").display().to_string()],
+    );
 
     let output = asp_command(&root)
         .current_dir(&root)

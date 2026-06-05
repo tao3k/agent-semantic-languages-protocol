@@ -11,14 +11,7 @@ mod language {
         let provider_path = bin_dir.join("rs-harness");
         std::fs::write(&provider_path, "#!/bin/sh\nprintf 'doctor:%s\n' \"$*\"\n")
             .expect("write provider");
-        let mut permissions = std::fs::metadata(&provider_path)
-            .expect("provider metadata")
-            .permissions();
-        {
-            use std::os::unix::fs::PermissionsExt;
-            permissions.set_mode(0o755);
-        }
-        std::fs::set_permissions(&provider_path, permissions).expect("provider permissions");
+        crate::provider_command::support::make_executable(&provider_path);
 
         crate::provider_command::support::write_activation(
             &root,

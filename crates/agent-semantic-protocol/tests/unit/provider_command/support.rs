@@ -229,6 +229,10 @@ fn write_provider_script(bin_dir: &Path, binary: &str, text: &str) {
     std::fs::create_dir_all(bin_dir).expect("create fake provider bin dir");
     let path = bin_dir.join(binary);
     std::fs::write(&path, text).expect("write fake provider");
+    make_executable(&path);
+}
+
+pub(super) fn make_executable(path: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -237,5 +241,9 @@ fn write_provider_script(bin_dir: &Path, binary: &str, text: &str) {
             .permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&path, permissions).expect("chmod fake provider");
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
     }
 }
