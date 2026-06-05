@@ -1,7 +1,8 @@
 //! Prompt-output write-back for replay-safe provider results.
 
+use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use agent_semantic_client_core::{
     AGENT_SEMANTIC_CLIENT_CACHE_MANIFEST_PROTOCOL_ID,
@@ -14,6 +15,7 @@ use agent_semantic_client_core::{
     append_syntax_query_plan_args,
 };
 use agent_semantic_client_db::ClientDb;
+use sha2::{Digest, Sha256};
 
 use super::probe::{ProviderCacheProbe, provider_cache_probe};
 use super::request::{
@@ -535,9 +537,102 @@ fn prompt_output_generation(
         cache_status: CacheStatus::Hit,
         raw_source_stored: false,
         request_fingerprint: Some(request_fingerprint),
-        file_hashes: None,
+        file_hashes: prompt_output_file_hashes(project_root, stdout),
         artifact_ids: Some(vec![CacheArtifactId::from(artifact_id)]),
     }
+}
+
+fn prompt_output_file_hashes(
+    project_root: &Path,
+    stdout: &[u8],
+) -> Option<Vec<ClientCacheFileHash>> {
+    let text = std::str::from_utf8(stdout).ok()?;
+    let mut paths = BTreeSet::new();
+    for line in text.lines() {
+        collect_locator_paths(line, &mut paths);
+    }
+    let file_hashes = paths
+        .into_iter()
+        .filter_map(|path| hash_project_file(project_root, &path))
+        .collect::<Vec<_>>();
+    if file_hashes.is_empty() {
+        None
+    } else {
+        Some(file_hashes)
+    }
+}
+
+fn collect_locator_paths(line: &str, paths: &mut BTreeSet<String>) {
+    for token in line.split_whitespace() {
+        let token = token.trim_matches(|character: char| {
+            matches!(character, ',' | ';' | '(' | ')' | '[' | ']' | '{' | '}')
+        });
+        let token = token
+            .strip_prefix("owner:")
+            .or_else(|| token.strip_prefix("path:"))
+            .or_else(|| token.strip_prefix("read="))
+            .or_else(|| token.strip_prefix("target="))
+            .unwrap_or(token);
+        let path = strip_locator_suffix(token);
+        if looks_like_source_path(path) {
+            paths.insert(path.to_string());
+        }
+    }
+}
+
+fn strip_locator_suffix(value: &str) -> &str {
+    let Some((index, _)) = value
+        .char_indices()
+        .find(|(_, character)| *character == ':')
+    else {
+        return value;
+    };
+    let suffix = &value[index + 1..];
+    if !suffix.is_empty()
+        && suffix
+            .chars()
+            .all(|character| character.is_ascii_digit() || character == ':')
+    {
+        &value[..index]
+    } else {
+        value
+    }
+}
+
+fn looks_like_source_path(value: &str) -> bool {
+    value.ends_with(".rs")
+        || value.ends_with(".ts")
+        || value.ends_with(".tsx")
+        || value.ends_with(".js")
+        || value.ends_with(".jsx")
+        || value.ends_with(".py")
+        || value.ends_with(".jl")
+}
+
+fn hash_project_file(project_root: &Path, path: &str) -> Option<ClientCacheFileHash> {
+    let file_path = safe_project_file_path(project_root, path)?;
+    let bytes = fs::read(file_path).ok()?;
+    let digest = Sha256::digest(&bytes);
+    Some(ClientCacheFileHash {
+        path: path.to_string(),
+        sha256: format!("{digest:x}"),
+    })
+}
+
+fn safe_project_file_path(project_root: &Path, path: &str) -> Option<PathBuf> {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        return None;
+    }
+    let mut relative = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(part) => relative.push(part),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(project_root.join(relative))
 }
 
 fn upsert_generation(manifest: &mut ClientCacheManifest, generation: ClientCacheGeneration) {

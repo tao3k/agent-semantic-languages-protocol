@@ -4,8 +4,9 @@ use std::process::Command;
 
 use super::fixtures::valid_manifest;
 use crate::provider_command::support::{
-    cache_root, provider, temp_project_root, write_activation, write_cache_manifest,
-    write_echo_provider, write_marker_provider, write_stdout_stderr_provider,
+    CACHE_SOURCE_PATH, CACHE_SOURCE_SHA256, cache_root, provider, temp_project_root,
+    write_activation, write_cache_manifest, write_cache_source_fixture, write_echo_provider,
+    write_marker_provider, write_stdout_stderr_provider,
 };
 
 #[test]
@@ -17,6 +18,7 @@ fn client_search_miss_writes_prompt_output_cache_for_next_hit() {
     let different_args_called = root.join("provider-called-for-different-args");
     let stdout_text = "[search-prime] cached\n|owner src/lib.rs\n";
     let stdout_after_invalidate = "[search-prime] after invalidate\n|owner src/lib.rs\n";
+    write_cache_source_fixture(&root);
     write_stdout_stderr_provider(&bin_dir, "rs-harness", stdout_text, "");
     write_activation(&root, &[provider("rust", Vec::new())]);
 
@@ -324,9 +326,12 @@ fn client_search_receipt_reports_warm_provider_when_matching_generation_exists()
     let search_bin_dir = search_root.join(".bin");
     let search_provider_args_log = search_root.join("provider-args.log");
     let search_packet_path = search_root.join("search-packet.json");
+    write_cache_source_fixture(&search_root);
     std::fs::write(
         &search_packet_path,
-        r#"{"schemaId":"agent.semantic-protocols.semantic-search-packet","schemaVersion":"1","protocolId":"agent.semantic-protocols.semantic-language","protocolVersion":"1","languageId":"rust","providerId":"rs-harness","view":"prime","query":"CacheReplay","querySet":["CacheReplay"],"searchSynthesis":{"algorithm":"cache-packet-writeback","seeds":[{"kind":"owner","target":"src/lib.rs","targetRole":"path"},{"kind":"symbol","target":"CacheReplay","targetRole":"symbol","read":"src/lib.rs:1:5"},{"kind":"tests","target":"tests/cache_replay.rs","targetRole":"path"}]}}"#,
+        attach_cache_file_hashes(
+            r#"{"schemaId":"agent.semantic-protocols.semantic-search-packet","schemaVersion":"1","protocolId":"agent.semantic-protocols.semantic-language","protocolVersion":"1","languageId":"rust","providerId":"rs-harness","view":"prime","query":"CacheReplay","querySet":["CacheReplay"],"searchSynthesis":{"algorithm":"cache-packet-writeback","seeds":[{"kind":"owner","target":"src/lib.rs","targetRole":"path"},{"kind":"symbol","target":"CacheReplay","targetRole":"symbol","read":"src/lib.rs:1:5"},{"kind":"tests","target":"tests/cache_replay.rs","targetRole":"path"}]}}"#,
+        ),
     )
     .expect("write search packet");
     std::fs::create_dir_all(&search_bin_dir).expect("create fake search provider bin dir");
@@ -460,9 +465,12 @@ esac
     let query_bin_dir = query_root.join(".bin");
     let provider_args_log = query_root.join("provider-args.log");
     let packet_path = query_root.join("query-packet.json");
+    write_cache_source_fixture(&query_root);
     std::fs::write(
         &packet_path,
-        r#"{"schemaId":"agent.semantic-protocols.semantic-query-packet","schemaVersion":"1","protocolId":"agent.semantic-protocols.semantic-language","protocolVersion":"1","languageId":"rust","providerId":"rs-harness","binary":"rs-harness","namespace":"agent.semantic-protocols.languages.rust.rs-harness","method":"query/owner-items","projectRoot":".","ownerPath":"src/lib.rs","outputMode":"code","query":"CacheReplay","queryTerms":["CacheReplay"],"queryCoverage":[{"value":"CacheReplay","status":"hit","match":"exact","matchCount":1,"nextAction":"code"}],"matchMode":"exact","truncated":false,"matches":[{"kind":"struct","name":"CacheReplay","visibility":"private","doc":false,"location":{"path":"src/lib.rs","lineRange":"1:3"},"read":"src/lib.rs:1:3","code":"struct CacheReplay\nfield stdout: Vec<u8>","truncated":false,"projection":{"mode":"compact","syntax":"semantic-outline","sourceAuthority":"native-parser","sourceFingerprint":"src/lib.rs:1:3:44","exactRead":"src/lib.rs:1:3","losslessStructure":true,"nodes":[{"id":"query-cache-node","kind":"struct","role":"declaration","label":"struct CacheReplay","depth":0,"nativeId":"rust:struct:CacheReplay","read":"src/lib.rs:1:3","structuralFingerprint":"struct:declaration:CacheReplay"}],"renderedNodeIds":["query-cache-node"]}}],"patchSafety":{"safeForPatch":true,"reasons":[]}}"#,
+        attach_cache_file_hashes(
+            r#"{"schemaId":"agent.semantic-protocols.semantic-query-packet","schemaVersion":"1","protocolId":"agent.semantic-protocols.semantic-language","protocolVersion":"1","languageId":"rust","providerId":"rs-harness","binary":"rs-harness","namespace":"agent.semantic-protocols.languages.rust.rs-harness","method":"query/owner-items","projectRoot":".","ownerPath":"src/lib.rs","outputMode":"code","query":"CacheReplay","queryTerms":["CacheReplay"],"queryCoverage":[{"value":"CacheReplay","status":"hit","match":"exact","matchCount":1,"nextAction":"code"}],"matchMode":"exact","truncated":false,"matches":[{"kind":"struct","name":"CacheReplay","visibility":"private","doc":false,"location":{"path":"src/lib.rs","lineRange":"1:3"},"read":"src/lib.rs:1:3","code":"struct CacheReplay\nfield stdout: Vec<u8>","truncated":false,"projection":{"mode":"compact","syntax":"semantic-outline","sourceAuthority":"native-parser","sourceFingerprint":"src/lib.rs:1:3:44","exactRead":"src/lib.rs:1:3","losslessStructure":true,"nodes":[{"id":"query-cache-node","kind":"struct","role":"declaration","label":"struct CacheReplay","depth":0,"nativeId":"rust:struct:CacheReplay","read":"src/lib.rs:1:3","structuralFingerprint":"struct:declaration:CacheReplay"}],"renderedNodeIds":["query-cache-node"]}}],"patchSafety":{"safeForPatch":true,"reasons":[]}}"#,
+        ),
     )
     .expect("write query packet");
     std::fs::create_dir_all(&query_bin_dir).expect("create fake provider bin dir");
@@ -577,4 +585,17 @@ esac
     assert_eq!(provider_args_after_hit.lines().count(), provider_arg_count);
 
     let _ = std::fs::remove_dir_all(query_root);
+}
+
+fn attach_cache_file_hashes(packet: &str) -> String {
+    let mut packet: Value = serde_json::from_str(packet).expect("packet JSON");
+    packet["cache"] = serde_json::json!({
+        "fileHashes": [
+            {
+                "path": CACHE_SOURCE_PATH,
+                "sha256": CACHE_SOURCE_SHA256,
+            }
+        ]
+    });
+    serde_json::to_string(&packet).expect("serialize packet JSON")
 }

@@ -6,6 +6,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub(super) const CACHE_SOURCE_PATH: &str = "src/lib.rs";
+pub(super) const CACHE_SOURCE_TEXT: &str = "struct CacheReplay;\n";
+pub(super) const CACHE_SOURCE_SHA256: &str =
+    "96bc4a7e16de4a4843d4cdf330fabd1448993732fc6a3bec97fed6393a79ecae";
+
 pub(super) struct ProviderSpec {
     language_id: &'static str,
     command_prefix: Vec<String>,
@@ -117,6 +122,13 @@ pub(super) fn cache_root(root: &Path) -> PathBuf {
 
 pub(super) fn cache_manifest_path(root: &Path) -> PathBuf {
     cache_root(root).join("cache-manifest.json")
+}
+
+pub(super) fn write_cache_source_fixture(root: &Path) {
+    let source_path = root.join(CACHE_SOURCE_PATH);
+    std::fs::create_dir_all(source_path.parent().expect("source parent"))
+        .expect("create source fixture dir");
+    std::fs::write(source_path, CACHE_SOURCE_TEXT).expect("write source fixture");
 }
 
 pub(super) fn asp_command(root: &Path) -> Command {

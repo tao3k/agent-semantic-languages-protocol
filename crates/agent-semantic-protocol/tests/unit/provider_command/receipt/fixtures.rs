@@ -1,6 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::provider_command::support::cache_root;
+use crate::provider_command::support::{
+    CACHE_SOURCE_PATH, CACHE_SOURCE_SHA256, cache_root, write_cache_source_fixture,
+};
 
 pub(super) fn valid_manifest(root: &std::path::Path) -> Value {
     valid_manifest_with_artifact(root, "search/rust-main-1.json")
@@ -25,7 +27,7 @@ pub(super) fn valid_manifest_with_artifact(root: &std::path::Path, artifact_id: 
                 "schemaIds": ["agent.semantic-protocols.semantic-search-packet"],
                 "cacheStatus": "miss",
                 "rawSourceStored": false,
-                "fileHashes": [],
+                "fileHashes": fresh_file_hashes(root),
                 "artifactIds": [artifact_id]
             }
         ]
@@ -54,11 +56,21 @@ pub(super) fn valid_query_manifest_with_artifact(
                 "schemaIds": ["agent.semantic-protocols.semantic-query-packet"],
                 "cacheStatus": "miss",
                 "rawSourceStored": false,
-                "fileHashes": [],
+                "fileHashes": fresh_file_hashes(root),
                 "artifactIds": [artifact_id]
             }
         ]
     })
+}
+
+fn fresh_file_hashes(root: &std::path::Path) -> Value {
+    write_cache_source_fixture(root);
+    json!([
+        {
+            "path": CACHE_SOURCE_PATH,
+            "sha256": CACHE_SOURCE_SHA256
+        }
+    ])
 }
 
 pub(super) fn sample_search_packet() -> Value {

@@ -68,11 +68,12 @@ fn extracts_predicates_for_provider_projection() {
             (#any-eq? @function.name "render_query_frontier")
             (#any-of? @function.name "parse_query" "run_query")
             (#any-match? @function.name "^render_")
+            (#not-match? @function.name "^test_")
             (#not-eq? @function.name @other.name))"#,
     )
     .expect("query ABI plan");
 
-    assert_eq!(plan.predicates.len(), 5);
+    assert_eq!(plan.predicates.len(), 6);
     assert_eq!(plan.predicates[0].op, SyntaxQueryPredicateOp::Eq);
     assert_eq!(plan.predicates[0].capture, "function.name");
     assert_eq!(
@@ -109,6 +110,12 @@ fn extracts_predicates_for_provider_projection() {
     assert_eq!(
         plan.predicates[4].values,
         vec![SyntaxQueryPredicateValue::Capture("other.name".to_string())]
+    );
+    assert_eq!(plan.predicates[5].op, SyntaxQueryPredicateOp::NotMatch);
+    assert_eq!(plan.predicates[5].capture, "function.name");
+    assert_eq!(
+        plan.predicates[5].values,
+        vec![SyntaxQueryPredicateValue::String("^test_".to_string())]
     );
 }
 
