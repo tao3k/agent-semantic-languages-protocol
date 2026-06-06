@@ -16,3 +16,6 @@
 [submodule "analyzers/ScienceResearch.jl"]
 	path = analyzers/ScienceResearch.jl
 	url = git@github.com:tao3k/ScienceResearch.jl.git
+[submodule "languages/orgize"]
+	path = languages/orgize
+	url = https://github.com/tao3k/orgize

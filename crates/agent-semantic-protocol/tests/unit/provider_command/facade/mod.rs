@@ -6,6 +6,7 @@ mod language {
         let root =
             crate::provider_command::support::temp_project_root("language-agent-doctor-facade");
         let bin_dir = root.join(".bin");
+        let cache_home = root.join(".cache");
         std::fs::create_dir_all(&bin_dir).expect("create bin dir");
 
         let provider_path = bin_dir.join("rs-harness");
@@ -25,6 +26,7 @@ mod language {
                 "PATH",
                 crate::provider_command::support::prepend_path(&bin_dir),
             )
+            .env("PRJ_CACHE_HOME", &cache_home)
             .args(["rust", "agent", "doctor", "--json", "."])
             .output()
             .expect("run asp");
@@ -36,12 +38,13 @@ mod language {
         );
         let stdout = String::from_utf8(output.stdout).expect("stdout");
         assert!(
-            stdout.contains("doctor:agent doctor --json ."),
+            stdout.contains("doctor:agent doctor --json"),
             "stdout={stdout}"
         );
         std::fs::remove_dir_all(root).expect("remove temp root");
     }
 }
+mod document;
 mod guide;
 mod pipe;
 mod provider_invocation;

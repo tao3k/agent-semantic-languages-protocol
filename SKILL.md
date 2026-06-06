@@ -21,10 +21,23 @@ Start with `asp <language> guide .` when a task needs the provider-owned tool
 map. Use `asp providers` or `asp doctor` when the active language or provider
 binary is unclear.
 
+Document languages use the same facade shape but are not policy harnesses:
+`asp org <guide|search|query> ...` forwards to `orgize ...`, and
+`asp md <guide|search|query> ...` forwards to `orgize md ...`.
+Use them for parser-owned document structure and exact selector reads; `check`,
+`ast-patch`, and `evidence` are intentionally unsupported for document files.
+
 ## Rules
 
 - Use the `asp <language>` facade for agent exploration; provider binaries are
   implementation/debug surfaces.
+- Do not move language workspace discovery into `asp`. The facade may locate a
+  provider project hint from that language's marker file, such as `Cargo.toml`,
+  `tsconfig.json`, `package.json`, `pyproject.toml`, or `Project.toml`, but it
+  must not parse workspace membership or language layout. Cargo workspace
+  parsing belongs to `rs-harness`; TypeScript, Python, and Julia project
+  discovery belong to their provider binaries. `PRJ_CACHE_HOME` and git
+  toplevel `.cache` only select state storage.
 - Do not add `--json` during agent exploration. `--json` is for schema tests,
   validators, receipts, and IDE integrations.
 - When a search/query term contains shell metacharacters copied from docs or
