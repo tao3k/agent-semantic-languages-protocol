@@ -12,7 +12,17 @@ mod protocol_binary;
 mod provider;
 mod provider_process;
 mod provider_roots;
+mod query_direct_read;
+mod search_config;
 mod search_pipe;
+mod search_pipe_candidates;
+mod search_pipe_graph_turbo;
+mod search_pipe_render;
+mod search_suggest;
 mod source_access;
 
 pub(crate) use dispatch::run_protocol_command;
+pub(in crate::command) use hook_enforcement::codex_enforcement_report;
+pub(in crate::command) use protocol_binary::{
+    ensure_protocol_binary_installed_for_path, protocol_binary_on_path,
+};

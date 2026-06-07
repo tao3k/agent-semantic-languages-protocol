@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .utils import dict_value, optional_int, string_list
+from .utils import dict_value, list_value, optional_int, string_list
 
 
 _COMMAND_KINDS = {
@@ -103,6 +103,7 @@ class TraceCommandParser:
             result_payload,
             metrics_payload,
         )
+        self.attach_failure_frontier(command, payload, command_payload)
         self.attach_next_items(command, payload, command_payload)
         self.attach_output_artifacts(command, payload, result_payload, metrics_payload)
         self.copy_optional_metadata(payload, command)
@@ -123,6 +124,64 @@ class TraceCommandParser:
             "outputMode": self.output_mode(payload, argv),
             "metrics": self.metrics(payload, result_payload, metrics_payload),
         }
+
+    def attach_failure_frontier(
+        self,
+        command: dict[str, Any],
+        payload: dict[str, Any],
+        command_payload: dict[str, Any],
+    ) -> None:
+        frontier = self.failure_frontier_entries(payload.get("failureFrontier"))
+        if not frontier:
+            frontier = self.failure_frontier_entries(
+                command_payload.get("failureFrontier")
+            )
+        if frontier:
+            command["failureFrontier"] = frontier
+
+    def failure_frontier_entries(self, value: Any) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for item in list_value(value):
+            entry = self.failure_frontier_entry(item)
+            if entry:
+                entries.append(entry)
+        return entries
+
+    def failure_frontier_entry(self, item: Any) -> dict[str, Any]:
+        if not isinstance(item, dict):
+            return {}
+        entry = self.failure_frontier_string_fields(item)
+        self.copy_failure_frontier_location_fields(item, entry)
+        return entry
+
+    def failure_frontier_string_fields(self, item: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: item[key]
+            for key in (
+                "rule",
+                "severity",
+                "path",
+                "message",
+                "summary",
+                "repair",
+                "hotBlockSelector",
+                "hotBlockReason",
+                "nextAction",
+                "nextSelector",
+                "nextRoot",
+            )
+            if isinstance(item.get(key), str) and item[key]
+        }
+
+    def copy_failure_frontier_location_fields(
+        self,
+        item: dict[str, Any],
+        entry: dict[str, Any],
+    ) -> None:
+        for key in ("line", "column"):
+            value = optional_int(item.get(key))
+            if value is not None:
+                entry[key] = value
 
     def attach_next_items(
         self,

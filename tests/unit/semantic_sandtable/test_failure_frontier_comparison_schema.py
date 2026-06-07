@@ -56,6 +56,7 @@ def test_failure_frontier_comparison_packet_is_schema_valid() -> None:
     assert packet["status"] == "pass"
     assert packet["delta"]["commandReductionRatio"] == 0.5
     assert packet["frontier"]["coverageRatio"] == 1.0
+    assert packet["frontier"]["declaredFailureFrontier"] == []
     assert packet["thresholds"]["maxSameFileWindowFanout"] == 0
 
 

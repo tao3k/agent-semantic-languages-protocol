@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
@@ -61,6 +62,54 @@ class StepRunnerWorkspaceCommandTests(unittest.TestCase):
                 "render",
                 "--packet",
                 "-",
+            ],
+            [str(part) for part in command],
+        )
+
+    def test_protocol_command_prefers_built_workspace_binary(self) -> None:
+        with TemporaryDirectory() as directory:
+            repo_root = Path(directory)
+            binary = repo_root / "target/debug/asp"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            command = _workspace_dev_command(
+                repo_root,
+                ["asp", "rust", "search", "fzf", "codeql"],
+            )
+
+        self.assertEqual(
+            [
+                str(binary.resolve()),
+                "rust",
+                "search",
+                "fzf",
+                "codeql",
+            ],
+            [str(part) for part in command],
+        )
+
+    def test_protocol_hook_binary_command_still_appends_activation(self) -> None:
+        with TemporaryDirectory() as directory:
+            repo_root = Path(directory)
+            binary = repo_root / ".bin/asp"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            command = _workspace_dev_command(
+                repo_root,
+                ["asp", "hook", "pre-tool", "--client", "codex"],
+            )
+
+        self.assertEqual(
+            [
+                str(binary.resolve()),
+                "hook",
+                "pre-tool",
+                "--client",
+                "codex",
+                "--activation",
+                str(repo_root / ".cache/agent-semantic-protocol/hooks/activation.json"),
             ],
             [str(part) for part in command],
         )

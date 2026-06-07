@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub(crate) struct ParsedArgs {
     pub(crate) command: Option<String>,
+    pub(crate) activation_root: PathBuf,
     pub(crate) project_root: PathBuf,
     pub(crate) forwarded_args: Vec<String>,
     pub(crate) receipt_json: bool,
@@ -16,6 +17,7 @@ pub(crate) fn parse_client_args(
     language_id: Option<&str>,
 ) -> Result<ParsedArgs, String> {
     let mut command = None;
+    let mut activation_root = cwd.clone();
     let mut project_root = cwd;
     let mut explicit_project_root = false;
     let mut forwarded_args = Vec::new();
@@ -34,6 +36,7 @@ pub(crate) fn parse_client_args(
                     iter.next()
                         .ok_or_else(|| "--root requires a value".to_string())?,
                 );
+                activation_root = project_root.clone();
                 explicit_project_root = true;
             }
             "--receipt-json" => {
@@ -61,6 +64,7 @@ pub(crate) fn parse_client_args(
     }
     Ok(ParsedArgs {
         command,
+        activation_root,
         project_root,
         forwarded_args,
         receipt_json,

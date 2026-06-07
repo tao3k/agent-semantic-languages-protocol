@@ -52,3 +52,39 @@ returns =skip= instead of failing:
   "skipUnlessEnv": ["ASP_LIVE_CLAUDE_CLI", "ANTHROPIC_AUTH_TOKEN"]
 }
 #+end_src
+
+** Deep-question large-library audits
+
+Large-library sandtables may define =evidence.deepQuestionCases= for
+agent-facing questions that are deliberately deeper than a single symbol lookup.
+Each case records the natural-language question, the scenario step ids that
+exercise it, the query terms expected to seed parser-owned search, and an audit
+budget for semantic command use.  These cases are not answer fixtures; they are
+runtime behavior probes for whether Claude, Codex, or a future SDK wrapper uses
+compact graph/search/query commands before source reads.
+
+The first Rust coverage set uses ten cases across the Tokio, bytes, and ignore
+large-library matrices.  A live Tokio case may run under the Tokio 0.6.0
+workdir with a prompt such as:
+
+#+begin_src text
+tokio 0.6.0 的 Vec<scalar> collection fields 意义是什么？
+#+end_src
+
+The live scenario MUST stay env-gated with =skipUnlessEnv= and SHOULD request
+hook events so command traces can be converted into receipts.  After a run, the
+operator builds a receipt from the command trace with:
+
+#+begin_src sh
+semantic-sandtable --build-receipt-from-trace <trace-root-or-jsonl> \
+  --scenario-id rust.tokio-claude-deep-question-flow \
+  --language rust --project-name tokio --project-source registry \
+  --intent "tokio Vec<scalar> collection fields"
+#+end_src
+
+The receipt summary owns the audit counters used by deep-question budgets:
+=aspCommands=, =searchCommands=, =queryCommands=, =directReadCommands=,
+=repeatedCommands=, and =repeatedSearches=.  A good run should spend most of its
+budget on compact =search= and targeted =query= commands, avoid repeated argv,
+and keep =direct-source-read= behind an exact selector chosen from parser-owned
+frontier output.

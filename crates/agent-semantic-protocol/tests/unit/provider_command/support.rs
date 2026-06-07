@@ -154,14 +154,6 @@ pub(super) fn write_command_hint_provider(bin_dir: &Path, binary: &str) {
     );
 }
 
-pub(super) fn write_stdin_provider(bin_dir: &Path, binary: &str) {
-    write_provider_script(
-        bin_dir,
-        binary,
-        "#!/bin/sh\nIFS= read -r line\nprintf 'stdin=%s\\n' \"$line\"\n",
-    );
-}
-
 pub(super) fn write_stdout_stderr_provider(
     bin_dir: &Path,
     binary: &str,

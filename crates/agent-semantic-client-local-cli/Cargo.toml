@@ -7,9 +7,16 @@ license = "MIT"
 
 [dependencies]
 agent-semantic-client-core = { path = "../agent-semantic-client-core" }
+agent-semantic-provider-transport = { path = "../agent-semantic-provider-transport" }
+bytes = { workspace = true }
 
 [build-dependencies]
 rust-lang-project-harness = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 rust-lang-project-harness = { workspace = true }
+
+[[bench]]
+name = "backend_hot_path"
+harness = false

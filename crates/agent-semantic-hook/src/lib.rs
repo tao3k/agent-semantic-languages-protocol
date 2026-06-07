@@ -3,7 +3,6 @@
 //! Root semantic agent hook runtime for provider manifests and project activations.
 
 mod activation_store;
-mod cache_paths;
 mod classifier;
 mod codex_config;
 mod codex_trust;
@@ -25,10 +24,6 @@ mod tool_action;
 pub use crate::activation_store::{
     default_activation_path, discover_activation_path, load_activation, load_or_sync_activation,
     parse_hook_activation, write_activation,
-};
-pub use cache_paths::{
-    PRJ_CACHE_HOME_ENV, ProjectCacheSource, ProjectRuntimeLayout, project_hook_cache_dir,
-    project_hook_state_dir, project_runtime_layout,
 };
 pub use classifier::{HookClassificationRequest, classify_hook, classify_hook_with_config};
 pub use codex_config::{

@@ -1,0 +1,121 @@
+"""Command catalog for the Python tooling entrypoint."""
+
+from __future__ import annotations
+
+from .command_spec import CommandSpec
+
+
+COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec(
+        ("sandtable",),
+        "tools.semantic_sandtable.cli",
+        "semantic_sandtable_main",
+        "argv",
+        "Run semantic sandtable scenarios and receipt checks.",
+    ),
+    CommandSpec(
+        ("parser", "compact-snapshots"),
+        "tools.parser_compact_snapshots",
+        "main",
+        "argv",
+        "Print the retired root compact snapshot migration notice.",
+    ),
+    CommandSpec(
+        ("codeql", "bounded-evidence"),
+        "tools.codeql_bounded_evidence",
+        "emit_codeql_bounded_evidence",
+        "argv",
+        "Emit bounded CodeQL evidence metadata for ASP flow fixtures.",
+    ),
+    CommandSpec(
+        ("codeql", "evidence"),
+        "tools.codeql_evidence",
+        "emit_codeql_evidence",
+        "argv",
+        "Emit CodeQL CLI metadata as ASP evidence.",
+    ),
+    CommandSpec(
+        ("graph", "turbo"),
+        "asp_graph_turbo.cli",
+        "main",
+        "argv",
+        "Rank typed ASP graph facts into compact frontier output.",
+    ),
+    CommandSpec(
+        ("graph", "turbo", "artifacts"),
+        "asp_graph_turbo.artifacts_cli",
+        "main",
+        "argv",
+        "Evaluate graph turbo against cached ASP search artifacts.",
+    ),
+    CommandSpec(
+        ("graph", "turbo", "timeline"),
+        "asp_graph_turbo.timeline_cli",
+        "main",
+        "argv",
+        "Infer search rounds and subagent microbursts from cached ASP artifacts.",
+    ),
+    CommandSpec(
+        ("schema", "profiles"),
+        "tools.schema_profiles",
+        "main",
+        "argv",
+        "Validate language package schema downsync profiles.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "contract"),
+        "tools.tree_sitter.contract",
+        "main",
+        "legacy_argv",
+        "Validate a grammar-profile contract fingerprint.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "validate", "json-abi-corpus"),
+        "tools.tree_sitter.validate_json_abi_corpus",
+        "main",
+        "no_args",
+        "Validate tree-sitter JSON ABI corpus capture output.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "validate", "python-query-corpus"),
+        "tools.tree_sitter.validate_python_query_corpus",
+        "main",
+        "no_args",
+        "Validate Python tree-sitter query corpus fixtures.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "validate", "rust-query-corpus"),
+        "tools.tree_sitter.validate_rust_queries",
+        "main",
+        "sys_argv",
+        "Validate Rust tree-sitter query corpus fixtures.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "validate", "typescript-query-corpus"),
+        "tools.tree_sitter.validate_typescript_query_corpus",
+        "main",
+        "sys_argv",
+        "Validate TypeScript tree-sitter query corpus fixtures.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "sync", "rust-queries"),
+        "tools.tree_sitter.sync_rust_queries",
+        "main",
+        "sys_argv",
+        "Sync Rust tree-sitter query snapshots from an upstream checkout.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "sync", "typescript-query-corpus"),
+        "tools.tree_sitter.sync_typescript_query_corpus",
+        "main",
+        "sys_argv",
+        "Refresh TypeScript tree-sitter query corpus metadata.",
+    ),
+    CommandSpec(
+        ("validate", "language-workspace-search-contract"),
+        "tools.language_workspace_search_contract",
+        "main",
+        "argv",
+        "Validate cross-language workspace/search ingest provider contracts.",
+    ),
+)

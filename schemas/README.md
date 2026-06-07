@@ -15,7 +15,8 @@ machine-oriented form, leaving readability to validators and artifact viewers
 rather than spending terminal tokens on pretty-print whitespace.
 Document language providers such as `org` and `md` use document-specific packet
 shapes. `semantic-document-search-packet.v1.schema.json` owns metadata search
-facts for headings, properties, tables, blocks, links, and selectors.
+facts for headings, TOC outlines, properties, tables, blocks, links, and
+selectors.
 `semantic-document-query-packet.v1.schema.json` owns document query metadata
 and filtered `--content` element projections, with explicit `queryKind`,
 `querySurface`, and `contentBlocks` fields. Document hook recovery must use
@@ -171,14 +172,23 @@ question and the `extensions.codeql` ASP project config or an explicit
 extension command allows that evidence path.
 
 `agent-semantic-project-config.v1.schema.json` owns the shared `asp.toml`
-project configuration surface. Providers ignore hidden directories by default,
-merge additive `discovery.ignoredDirNames`, and scan hidden directories only
-when listed in `discovery.includeHiddenDirNames`. Hook activation also consumes
-`providers.<language>.enabled` and `providers.<language>.binary` to disable a
-language provider or pin its executable path. Provider-specific policy config
-may stay in language-owned files, but source discovery, fd/rg prefilters, and
-hook activation should consume the nearest `asp.toml` before selecting provider
-facts or binaries.
+project configuration surface. `discovery.ignoredDirNames` is the canonical
+directory-skip list, and `discovery.includeHiddenDirNames` is the only
+schema-owned way to opt hidden directories into provider project walks. The
+ASP facade applies activation-root config first and invocation-root config
+second; list assignments are normalized replacements, not prompt-time merges.
+The legacy `[search] ignoreDirs/includeHiddenDirs` names remain runtime input
+compatibility only. Source-language providers, embedded document providers
+(`org`/`md`), fd/rg prefilters, and hook activation should consume the same
+normalized config before selecting provider facts or binaries. Built-in
+document providers are enabled by default and require no activation entry, but
+they still honor `providers.org.enabled=false` and
+`providers.md.enabled=false`. Hook activation also consumes
+`providers.<language>.enabled` to disable external providers and
+`providers.<language>.binary` to pin external provider executables.
+Provider-specific policy config may stay in language-owned files, but source
+discovery and provider selection must not silently diverge from the nearest
+`asp.toml`.
 The same config owns extension activation under `extensions.*`. The CodeQL
 extension is default off and default experimental:
 `extensions.codeql.enabled=false`, `extensions.codeql.experimental=true`, and
@@ -427,12 +437,13 @@ upstream parser grammar coverage.
 
 Agent-facing syntax query stdout has a separate render contract from the JSON
 packet: non-`--code` output is locator/frontier evidence only, while `--code`
-prints pure source code. Rust currently renders the reference
-`compact-graph-frontier` profile, and TypeScript/Python render the
-`corpus-locator` profile. Both profiles are valid only when backed by the same
-ASP-compiled tree-sitter query plan and provider-native projection, and neither
-profile may expose cache ids, SQLite paths, receipts, full node lists, or raw
-source windows in default non-JSON output.
+prints pure source code. Rust currently renders a graph-rendered
+locator-frontier profile, and TypeScript/Python render the `corpus-locator`
+profile. These are render profiles over frontier facts, not "compact frontier"
+protocols. Both profiles are valid only when backed by the same ASP-compiled
+tree-sitter query plan and provider-native projection, and neither profile may
+expose cache ids, SQLite paths, receipts, full node lists, or raw source windows
+in default non-JSON output.
 
 `parser-compact-case.v1.schema.json` and
 `parser-compact-token-cost.v1.schema.json` are the root fixture contracts for
@@ -504,7 +515,12 @@ candidate receipt/trace. The candidate must prove command reduction, bounded
 window fanout, and full coverage of explicit `expectedHotBlocks`. Receipt-path
 comparisons validate stable checked-in replay evidence; trace-path comparisons
 first normalize JSONL command traces into the same receipt contract, then run
-the identical gate. Fewer commands alone is not sufficient evidence.
+the identical gate. Trace receipts preserve structured `failureFrontier`
+entries from compact provider stdout, including rule/severity/path, the
+single-line message/summary/repair fields, `hotBlockSelector`, and the copyable
+`next` selector/root. When a comparison does not pass explicit
+`expectedHotBlocks`, those structured frontier selectors become the declared
+hot-block set. Fewer commands alone is not sufficient evidence.
 
 `semantic-sandtable-receipt.v1.schema.json` is the compact evidence contract
 for a real-trigger agent exploration before it is converted into replayable

@@ -18,7 +18,7 @@
     "maxCommands": 1,
     "maxTotalLinesWarn": 12,
     "maxTotalElapsedMsWarn": 30000,
-    "maxTotalStdoutBytesWarn": 1600
+    "maxTotalStdoutBytesWarn": 4096
   },
   "evidence": {
     "source": "real-trigger",
@@ -60,10 +60,11 @@
         "seeds",
         "."
       ],
+      "timeoutSeconds": 90,
       "expect": {
         "stdoutContains": [
-          "[search-fzf]",
-          "q=codeql",
+          "[search-ingest]",
+          "symbol(codeql)",
           "frontier="
         ],
         "stdoutNotContains": [
@@ -76,8 +77,8 @@
           "rawOutput"
         ],
         "maxStdoutLinesWarn": 12,
-        "maxStdoutBytesWarn": 1600,
-      "maxElapsedMsWarn": 90000
+        "maxStdoutBytesWarn": 4096,
+        "maxElapsedMsWarn": 90000
       }
     }
   ]

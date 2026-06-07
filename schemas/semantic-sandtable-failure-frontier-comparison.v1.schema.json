@@ -140,6 +140,12 @@
         "expectedHotBlocks": {
           "$ref": "#/$defs/stringList"
         },
+        "declaredFailureFrontier": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/failureFrontierEntry"
+          }
+        },
         "declaredHotBlocks": {
           "$ref": "#/$defs/stringList"
         },
@@ -192,6 +198,64 @@
         "maxSameFileWindowFanout": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "failureFrontierEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "path", "line", "column"],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "enum": ["info", "warning", "error"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repair": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hotBlockSelector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hotBlockReason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nextAction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nextSelector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nextRoot": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

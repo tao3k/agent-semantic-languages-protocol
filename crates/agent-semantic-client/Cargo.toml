@@ -6,14 +6,21 @@ description = "Thin agent semantic client over native semantic language provider
 license = "MIT"
 
 [dependencies]
+bytes = { workspace = true }
 sha2 = { workspace = true }
 agent-semantic-client-core = { path = "../agent-semantic-client-core" }
 agent-semantic-client-db = { path = "../agent-semantic-client-db" }
 agent-semantic-client-local-cli = { path = "../agent-semantic-client-local-cli" }
+agent-semantic-provider-transport = { path = "../agent-semantic-provider-transport" }
 serde_json = { workspace = true }
 
 [build-dependencies]
 rust-lang-project-harness = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 rust-lang-project-harness = { workspace = true }
+
+[[bench]]
+name = "client_microbench"
+harness = false

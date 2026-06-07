@@ -7,6 +7,7 @@ use agent_semantic_tree_sitter::{
     SyntaxQueryAbiPredicate, SyntaxQueryPredicateValue, builtin_catalog_source,
     compile_query_abi_source,
 };
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 /// Internal ASP-to-provider argument carrying query capture names.
@@ -50,7 +51,7 @@ pub struct ClientRequest {
     pub language_id: Option<LanguageId>,
     pub forwarded_args: Vec<String>,
     pub project_root: PathBuf,
-    pub stdin: Option<Vec<u8>>,
+    pub stdin: Option<Bytes>,
 }
 
 impl ClientRequest {
@@ -82,8 +83,8 @@ impl ClientRequest {
 
     /// Attach stdin bytes that should be replayed to the provider process.
     #[must_use]
-    pub fn with_stdin(mut self, stdin: Vec<u8>) -> Self {
-        self.stdin = Some(stdin);
+    pub fn with_stdin(mut self, stdin: impl Into<Bytes>) -> Self {
+        self.stdin = Some(stdin.into());
         self
     }
 }

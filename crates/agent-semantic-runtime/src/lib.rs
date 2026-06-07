@@ -1,11 +1,11 @@
 #![deny(dead_code)]
 
-//! Shared ASP runtime state layout.
+//! Runtime state materialization for ASP project-local storage.
 
-mod layout;
+mod state;
 
-pub use layout::{
-    PRJ_CACHE_HOME_ENV, ProjectCacheSource, ProjectRuntimeLayout, project_artifacts_dir,
-    project_client_cache_dir, project_hook_cache_dir, project_hook_state_dir,
-    project_runtime_layout,
+pub use state::{
+    ProjectRuntimeState, ensure_project_artifacts_dir, ensure_project_client_cache_dir,
+    ensure_project_hook_cache_dir, ensure_project_hook_state_dir, ensure_project_runtime_home,
+    project_runtime_state,
 };

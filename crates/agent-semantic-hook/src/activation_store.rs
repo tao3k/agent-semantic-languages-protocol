@@ -1,8 +1,8 @@
 //! Activation loading and provider manifest defaults for `agent-semantic-hook`.
 
-use crate::cache_paths::project_hook_cache_dir;
 use crate::protocol_activation::{HookActivation, HookRuntime, parse_activation};
 use crate::provider_manifest::{build_default_activation, provider_manifests};
+use agent_semantic_runtime::ensure_project_hook_cache_dir;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -65,7 +65,7 @@ pub fn write_activation(path: &Path, activation: &HookActivation) -> Result<(), 
 
 /// Return the managed cache path for a project's hook activation.
 pub fn default_activation_path(project_root: &Path) -> PathBuf {
-    project_hook_cache_dir(project_root)
+    ensure_project_hook_cache_dir(project_root)
         .unwrap_or_else(|_| {
             project_root
                 .join(".cache")

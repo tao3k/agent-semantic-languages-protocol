@@ -20,6 +20,11 @@ fn base_receipt() -> ClientReceipt {
             exit_code: 0,
             stdout_bytes: ByteCount::new(0),
             stderr_bytes: ByteCount::new(0),
+            stdout_sha256: None,
+            stderr_sha256: None,
+            stdout_truncated: false,
+            stderr_truncated: false,
+            timed_out: false,
             elapsed_ms: ElapsedMillis::new(0),
         },
     )

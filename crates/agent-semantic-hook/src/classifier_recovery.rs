@@ -103,9 +103,10 @@ fn render_document_flow(lines: &mut Vec<String>, language_id: &str) {
     lines.push(format!(
         "3. Query element metadata with `asp {language_id} query --term <term> --view metadata .`, `asp {language_id} query --kind <element-kind> --view metadata .`, `asp {language_id} query --field <key=value> --view metadata .`, or `asp {language_id} query --selector <path-or-range> --view metadata .`."
     ));
-    lines.push(format!(
+    lines.push(
         "4. For pure matched element text, add `--content` to an explicit query with `--selector`, `--term`, `--kind`, or `--field`."
-    ));
+            .to_string(),
+    );
     lines.push(format!(
         "5. For hook recovery source-preserved direct reads only, use `asp {language_id} query --from-hook direct-source-read --selector <path-or-range> .`."
     ));

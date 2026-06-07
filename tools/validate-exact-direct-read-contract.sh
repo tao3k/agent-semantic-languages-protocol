@@ -87,7 +87,7 @@ assert_pure_code "$rust_code" "pub(super) fn parse_query" "rust exact code"
 typescript_read="$(
   asp typescript query \
     --from-hook direct-source-read \
-    --selector src/cli/protocol-tree-sitter-query.ts:53:58 \
+    --selector src/cli/protocol-tree-sitter-query.ts:55:58 \
     languages/typescript-lang-project-harness
 )"
 assert_contains "$typescript_read" "[read-owner]" "typescript exact read"
@@ -100,7 +100,7 @@ assert_no_cache_noise "$typescript_read" "typescript exact read"
 typescript_code="$(
   asp typescript query \
     --from-hook direct-source-read \
-    --selector src/cli/protocol-tree-sitter-query.ts:53:58 \
+    --selector src/cli/protocol-tree-sitter-query.ts:55:58 \
     --code \
     languages/typescript-lang-project-harness
 )"

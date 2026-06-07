@@ -131,6 +131,63 @@ class SemanticDocumentSearchPacketSchemaTests(unittest.TestCase):
 
         self.assertEqual([], list(validator.iter_errors(packet)))
 
+    def test_document_search_packet_accepts_toc_view(self) -> None:
+        validator = schema_validator_for(
+            REPO_ROOT / "schemas" / "semantic-document-search-packet.v1.schema.json"
+        )
+        packet = {
+            "schemaId": "agent.semantic-protocols.semantic-document-search-packet",
+            "schemaVersion": "1",
+            "protocolId": "agent.semantic-protocols.semantic-language",
+            "protocolVersion": "1",
+            "languageId": "md",
+            "providerId": "orgize",
+            "binary": "asp",
+            "namespace": "agent.semantic-protocols.languages.md.orgize",
+            "method": "search/toc",
+            "projectRoot": ".",
+            "view": "toc",
+            "documentMode": "metadata",
+            "query": "",
+            "documentCount": 1,
+            "factCount": 1,
+            "owners": [
+                {
+                    "path": "README.md",
+                    "role": "document",
+                    "parserAuthority": "comrak",
+                }
+            ],
+            "documentFacts": [
+                {
+                    "id": "heading:README.md:1:1",
+                    "kind": "heading",
+                    "sourceKind": "NodeValue::Heading",
+                    "name": "Project",
+                    "documentPath": "README.md",
+                    "location": {"path": "README.md", "lineRange": "1:1"},
+                    "parserAuthority": "comrak",
+                    "queryKeys": ["Project", "heading"],
+                    "attributes": {"level": "1", "title": "Project"},
+                }
+            ],
+            "nextActions": [
+                {
+                    "kind": "query",
+                    "target": "selector",
+                    "command": "asp md query --selector README.md:1-1 --view metadata",
+                }
+            ],
+            "notes": [
+                {
+                    "kind": "search-document",
+                    "message": "Document TOC facts are heading metadata.",
+                }
+            ],
+        }
+
+        self.assertEqual([], list(validator.iter_errors(packet)))
+
 
 if __name__ == "__main__":
     unittest.main()

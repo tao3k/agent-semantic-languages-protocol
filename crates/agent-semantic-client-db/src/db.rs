@@ -111,6 +111,12 @@ impl ClientDb {
         cache_root.as_ref().join(AGENT_SEMANTIC_CLIENT_DB_FILE)
     }
 
+    /// Return the SQLite DB path backing this handle.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.db_path
+    }
+
     /// Inspect an existing DB path without creating or migrating it.
     #[must_use]
     pub fn inspect(db_path: impl AsRef<Path>) -> ClientDbReport {
@@ -130,23 +136,8 @@ impl ClientDb {
             };
         }
 
-        match Self::open_read_only(&db_path).and_then(|db| {
-            let summary = db.summary()?;
-            let runtime_pragmas = db.runtime_pragmas()?;
-            Ok((summary, runtime_pragmas))
-        }) {
-            Ok((summary, runtime_pragmas)) => ClientDbReport {
-                db_path,
-                status: ClientDbStatus::Present,
-                generation_count: summary.generation_count,
-                syntax_row_generation_count: summary.syntax_row_generation_count,
-                syntax_row_match_count: summary.syntax_row_match_count,
-                syntax_row_capture_count: summary.syntax_row_capture_count,
-                artifact_event_count: summary.artifact_event_count,
-                raw_source_stored: summary.raw_source_stored,
-                runtime_pragmas: Some(runtime_pragmas),
-                reason: None,
-            },
+        match Self::open_read_only(&db_path).and_then(|db| db.inspect_open()) {
+            Ok(report) => report,
             Err(error) => ClientDbReport {
                 db_path,
                 status: ClientDbStatus::Invalid,
@@ -160,6 +151,36 @@ impl ClientDb {
                 reason: Some(error),
             },
         }
+    }
+
+    /// Open an existing SQLite DB in read-only mode.
+    ///
+    /// Returns `Ok(None)` when the path is missing so callers can avoid a
+    /// second path inspection before a hot cache lookup.
+    pub fn open_read_only_existing(db_path: impl AsRef<Path>) -> Result<Option<Self>, String> {
+        let db_path = db_path.as_ref();
+        if !db_path.exists() {
+            return Ok(None);
+        }
+        Self::open_read_only(db_path).map(Some)
+    }
+
+    /// Inspect this already opened DB handle without reopening the SQLite file.
+    pub fn inspect_open(&self) -> Result<ClientDbReport, String> {
+        let summary = self.summary()?;
+        let runtime_pragmas = self.runtime_pragmas()?;
+        Ok(ClientDbReport {
+            db_path: self.db_path.clone(),
+            status: ClientDbStatus::Present,
+            generation_count: summary.generation_count,
+            syntax_row_generation_count: summary.syntax_row_generation_count,
+            syntax_row_match_count: summary.syntax_row_match_count,
+            syntax_row_capture_count: summary.syntax_row_capture_count,
+            artifact_event_count: summary.artifact_event_count,
+            raw_source_stored: summary.raw_source_stored,
+            runtime_pragmas: Some(runtime_pragmas),
+            reason: None,
+        })
     }
 
     /// Open the SQLite DB and run idempotent schema migration.
@@ -440,6 +461,20 @@ impl ClientDb {
         )
     }
 
+    /// Return matching generation metadata using this already opened DB handle.
+    pub fn lookup_generation_open(
+        &self,
+        lookup: &ClientDbGenerationLookup,
+    ) -> Result<Option<ClientDbGenerationHit>, String> {
+        self.lookup_generation_for(
+            &lookup.language_id,
+            &lookup.provider_id,
+            &lookup.project_root,
+            &lookup.export_method,
+            lookup.request_fingerprint.as_deref(),
+        )
+    }
+
     /// Return recent matching generation artifact metadata, newest first.
     pub fn lookup_recent_generations(
         lookup: &ClientDbGenerationLookup,
@@ -450,6 +485,25 @@ impl ClientDb {
             return Ok(Vec::new());
         }
         Self::open_read_only(db_path)?.lookup_recent_generations_for(
+            &lookup.language_id,
+            &lookup.provider_id,
+            &lookup.project_root,
+            &lookup.export_method,
+            lookup.request_fingerprint.as_deref(),
+            limit,
+        )
+    }
+
+    /// Return recent matching generation metadata using this opened DB handle.
+    pub fn lookup_recent_generations_open(
+        &self,
+        lookup: &ClientDbGenerationLookup,
+        limit: u32,
+    ) -> Result<Vec<ClientDbGenerationHit>, String> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        self.lookup_recent_generations_for(
             &lookup.language_id,
             &lookup.provider_id,
             &lookup.project_root,

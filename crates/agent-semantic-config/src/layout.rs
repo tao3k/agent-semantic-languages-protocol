@@ -1,4 +1,6 @@
-//! Project identity and filesystem layout for local ASP runtime state.
+#![deny(dead_code)]
+
+//! Unified project identity, configuration, and local state layout for ASP.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -63,9 +65,10 @@ pub struct ProjectRuntimeLayout {
     pub agent_skill_path: Option<PathBuf>,
 }
 
+/// Injected environment for deterministic config tests and controlled callers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct ProjectRuntimeEnv {
-    prj_cache_home: Option<PathBuf>,
+pub struct ProjectRuntimeEnv {
+    pub prj_cache_home: Option<PathBuf>,
 }
 
 impl ProjectRuntimeEnv {
@@ -82,7 +85,8 @@ pub fn project_runtime_layout(project_root: impl AsRef<Path>) -> ProjectRuntimeL
     project_runtime_layout_with_env(project_root, ProjectRuntimeEnv::from_process())
 }
 
-fn project_runtime_layout_with_env(
+/// Resolve project-local runtime paths with an injected environment.
+pub fn project_runtime_layout_with_env(
     project_root: &Path,
     runtime_env: ProjectRuntimeEnv,
 ) -> ProjectRuntimeLayout {
@@ -165,11 +169,13 @@ pub fn project_artifacts_dir(project_root: impl AsRef<Path>) -> Result<PathBuf, 
     Ok(project_cache_root(project_root)?.join(SEMANTIC_AGENT_PROTOCOL_ARTIFACTS_DIR))
 }
 
-fn project_cache_root(project_root: impl AsRef<Path>) -> Result<PathBuf, String> {
+/// Return the state cache root, using git toplevel before `PRJ_CACHE_HOME`.
+pub fn project_cache_root(project_root: impl AsRef<Path>) -> Result<PathBuf, String> {
     project_cache_root_with_env(project_root.as_ref(), ProjectRuntimeEnv::from_process())
 }
 
-fn project_cache_root_with_env(
+/// Return the state cache root with an injected environment.
+pub fn project_cache_root_with_env(
     project_root: &Path,
     runtime_env: ProjectRuntimeEnv,
 ) -> Result<PathBuf, String> {

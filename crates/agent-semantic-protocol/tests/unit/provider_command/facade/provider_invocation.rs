@@ -105,6 +105,38 @@ printf 'renderer=%s
 }
 
 #[test]
+fn asp_toml_provider_bin_overrides_activation_binary() {
+    let root = temp_project_root("provider-bin-override-facade");
+    let bin_dir = root.join(".bin");
+    let override_bin = bin_dir.join("override-rs-harness");
+    write_echo_provider(&bin_dir, "override-rs-harness", "override");
+    std::fs::write(
+        root.join("asp.toml"),
+        format!("[languages.rust]\nbin = \"{}\"\n", override_bin.display()),
+    )
+    .expect("write asp.toml");
+    write_activation(&root, &[provider("rust", Vec::new())]);
+
+    let output = asp_command(&root)
+        .env("PRJ_CACHE_HOME", root.join(".cache"))
+        .env_remove("PATH")
+        .args(["rust", "evidence", "."])
+        .output()
+        .expect("run asp rust evidence with provider bin override");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("stdout"),
+        "override args=[evidence]\n"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn language_facade_query_uses_activation_prefix_before_path_lookup() {
     let root = temp_project_root("provider-activation-prefix-facade");
     let profile_bin_dir = root.join(".profile-bin");

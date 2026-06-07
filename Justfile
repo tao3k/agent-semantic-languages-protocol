@@ -183,7 +183,7 @@ check-tree-sitter-query-contracts:
     direnv exec . bash tools/run-tree-sitter-query-contracts.sh
 
 check-language-workspace-search-contracts:
-    direnv exec . bash tools/validate-language-workspace-search-contract.sh
+    direnv exec . uv run --project packages/python --frozen python -m tools validate language-workspace-search-contract
 
 check-rfc-docs:
     direnv exec . uv run --project packages/python --frozen pytest \

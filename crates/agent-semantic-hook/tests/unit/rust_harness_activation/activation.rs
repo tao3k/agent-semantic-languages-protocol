@@ -96,7 +96,7 @@ fn rust_harness_activation_routes_direct_reads_to_provider_query() {
 }
 
 #[test]
-fn rust_harness_activation_routes_source_glob_search_to_hook_query() {
+fn rust_harness_activation_routes_source_glob_search_to_fzf_frontier() {
     let decision = classify_hook(
         &rust_harness_activation(),
         "codex",
@@ -109,18 +109,18 @@ fn rust_harness_activation_routes_source_glob_search_to_hook_query() {
 
     assert_eq!(decision.decision, DecisionKind::Deny);
     assert_eq!(decision.reason_kind, ReasonKind::RawBroadSearch);
-    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Query);
+    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Fzf);
     assert_eq!(decision.routes[0].provider_id, "rs-harness");
     assert_eq!(decision.routes[0].binary, "asp");
     let argv = &decision.routes[0].argv;
     assert!(
         argv.windows(2)
-            .any(|window| window[0] == "--selector" && window[1] == "**/*.rs"),
+            .any(|window| window[0] == "search" && window[1] == "fzf"),
         "{argv:?}"
     );
+    assert!(argv.iter().any(|arg| arg == "HookDecision"), "{argv:?}");
     assert!(
-        argv.windows(2)
-            .any(|window| window[0] == "--term" && window[1] == "HookDecision"),
+        !argv.iter().any(|arg| arg == "direct-source-read"),
         "{argv:?}"
     );
 }

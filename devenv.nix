@@ -61,6 +61,7 @@
     shellcheck.enable = true;
     nixfmt.enable = true;
     clippy.enable = true;
+    ruff.enable = true;
     clippy.packageOverrides.cargo = config.languages.rust.toolchain.cargo;
     clippy.packageOverrides.clippy = config.languages.rust.toolchainPackage;
     clippy.settings.allFeatures = true;

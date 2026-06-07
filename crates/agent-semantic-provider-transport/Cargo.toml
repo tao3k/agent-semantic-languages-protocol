@@ -1,0 +1,26 @@
+[package]
+name = "agent-semantic-provider-transport"
+version = "0.1.0"
+edition = "2024"
+description = "Tokio process transport for external ASP language providers."
+license = "MIT"
+
+[dependencies]
+bstr = { workspace = true }
+bytes = { workspace = true }
+futures-util = { workspace = true }
+memchr = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+[build-dependencies]
+rust-lang-project-harness = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+rust-lang-project-harness = { workspace = true }
+
+[[bench]]
+name = "transport_hot_path"
+harness = false

@@ -1,50 +1,8 @@
 use crate::provider_command::support::{
     asp_command, make_executable, prepend_path, temp_project_root,
 };
-use std::path::{Path, PathBuf};
 
-#[test]
-fn top_level_usage_lists_document_facades() {
-    let root = temp_project_root("document-facade-top-level-help");
-
-    let output = asp_command(&root)
-        .arg("--help")
-        .output()
-        .expect("run top-level help");
-
-    assert_eq!(output.status.code(), Some(2));
-    let stderr = String::from_utf8(output.stderr).expect("stderr");
-    assert!(
-        stderr.contains("rust|typescript|python|julia|org|md"),
-        "stderr={stderr}"
-    );
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
-fn document_facade_help_does_not_spawn_orgize() {
-    let root = temp_project_root("document-facade-help");
-
-    for language in ["org", "md"] {
-        let output = asp_command(&root)
-            .env("PATH", "")
-            .args([language, "--help"])
-            .output()
-            .expect("run document help");
-
-        assert!(
-            output.status.success(),
-            "language={language} stderr={}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let stdout = String::from_utf8(output.stdout).expect("stdout");
-        assert!(
-            stdout.contains(&format!("usage: asp {language} <guide|search|query> ...")),
-            "stdout={stdout}"
-        );
-    }
-    let _ = std::fs::remove_dir_all(root);
-}
+use super::support::{asp_org_query, write_org_elements_fixture};
 
 #[test]
 fn org_facade_uses_native_orgize_dependency() {
@@ -209,68 +167,62 @@ fn org_facade_query_covers_org_element_kinds() {
 }
 
 #[test]
-fn md_facade_uses_native_orgize_dependency() {
-    let root = temp_project_root("md-document-facade");
-    let bin_dir = root.join(".bin");
-    std::fs::create_dir_all(&bin_dir).expect("create bin dir");
-    let orgize = bin_dir.join("orgize");
-    std::fs::write(&orgize, "#!/bin/sh\nexit 42\n").expect("write orgize");
-    make_executable(&orgize);
+fn org_facade_search_toc_returns_heading_outline() {
+    let root = temp_project_root("org-document-toc-search");
+    write_org_elements_fixture(&root);
 
     let output = asp_command(&root)
-        .env("PATH", prepend_path(&bin_dir))
-        .args(["md", "search", "prime", "--view", "seeds", "."])
+        .args(["org", "search", "toc", "."])
         .output()
-        .expect("run asp md search");
-
+        .expect("run asp org toc");
     assert!(
         output.status.success(),
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).expect("stdout");
-    assert!(stdout.contains("[search-prime] lang=md"), "stdout={stdout}");
-    let _ = std::fs::remove_dir_all(root);
-}
-
-#[test]
-fn document_facade_rejects_non_document_commands() {
-    let root = temp_project_root("document-facade-rejects-check");
-
-    let output = asp_command(&root)
-        .args(["org", "check", "."])
-        .output()
-        .expect("run asp org check");
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8(output.stderr).expect("stderr");
+    assert!(stdout.contains("[search-toc] lang=org"), "{stdout}");
+    assert!(stdout.contains("heading=3"), "{stdout}");
+    assert!(stdout.contains("maxLevel=3"), "{stdout}");
     assert!(
-        stderr.contains("unsupported document command `check`"),
-        "stderr={stderr}"
+        stdout.contains("|doc path=\"./plan.org\" heading=3"),
+        "{stdout}"
     );
-    let _ = std::fs::remove_dir_all(root);
-}
-
-fn write_org_elements_fixture(root: &Path) -> PathBuf {
-    let path = root.join("plan.org");
-    std::fs::write(
-        &path,
-        "* TODO [#A] Task :work:\nSCHEDULED: <2026-06-06 Sat>\n:PROPERTIES:\n:CUSTOM_ID: task-1\n:END:\n\nProvider activation carries execution mode.\nDocument providers stay embedded inside ASP.\n\n| Key | Value |\n| Foo | Bar |\n\n- [X] ship element map\n- plain list item\n[[https://example.com][site]]\n[[file:diagram.png]]\n\n#+begin_src rust\nfn main() {}\n#+end_src\n\n#+begin_export html\n<div>exported</div>\n#+end_export\n",
-    )
-    .expect("write org elements fixture");
-    path
-}
-
-fn asp_org_query(root: &Path, args: &[&str]) -> String {
-    let output = asp_command(root)
-        .arg("org")
-        .args(args)
-        .output()
-        .expect("run asp org query");
     assert!(
-        output.status.success(),
-        "args={args:?} stderr={}",
-        String::from_utf8_lossy(&output.stderr)
+        stdout.contains("level=1 title=\"Task\" todo=\"TODO\""),
+        "{stdout}"
     );
-    String::from_utf8(output.stdout).expect("stdout")
+    assert!(
+        stdout.contains("level=2 title=\"Repository Map\""),
+        "{stdout}"
+    );
+    assert!(stdout.contains("level=3 title=\"Docs\""), "{stdout}");
+    assert!(
+        stdout.contains("next=\"asp org query --selector ./plan.org:"),
+        "{stdout}"
+    );
+
+    let json_output = asp_command(&root)
+        .args(["org", "search", "toc", "--json", "."])
+        .output()
+        .expect("run asp org toc json");
+    assert!(
+        json_output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&json_output.stderr)
+    );
+    let packet: serde_json::Value =
+        serde_json::from_slice(&json_output.stdout).expect("parse toc packet");
+    assert_eq!(packet["method"], "search/toc");
+    assert_eq!(packet["view"], "toc");
+    assert!(
+        packet["documentFacts"]
+            .as_array()
+            .expect("document facts")
+            .iter()
+            .all(|fact| fact["kind"] == "heading"),
+        "{packet:#}"
+    );
+
+    let _ = std::fs::remove_dir_all(root);
 }

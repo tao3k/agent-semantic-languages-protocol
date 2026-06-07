@@ -28,6 +28,7 @@ class SemanticDocumentRegistrySchemaTests(unittest.TestCase):
         for language_id in ["org", "md"]:
             self.assertEqual("embedded", languages[language_id]["execution"])
             self.assertNotIn("search/owner", languages[language_id]["methods"])
+            self.assertIn("search/toc", languages[language_id]["methods"])
             packet_schemas = {
                 packet_schema
                 for descriptor in languages[language_id]["methodDescriptors"]
@@ -35,6 +36,13 @@ class SemanticDocumentRegistrySchemaTests(unittest.TestCase):
             }
             self.assertIn("semantic-document-search-packet.v1", packet_schemas)
             self.assertIn("semantic-document-query-packet.v1", packet_schemas)
+            toc_search = next(
+                descriptor
+                for descriptor in languages[language_id]["methodDescriptors"]
+                if descriptor["method"] == "search/toc"
+            )
+            self.assertEqual("toc", toc_search["view"])
+            self.assertFalse(toc_search["requiresQuery"])
             document_query = next(
                 descriptor
                 for descriptor in languages[language_id]["methodDescriptors"]

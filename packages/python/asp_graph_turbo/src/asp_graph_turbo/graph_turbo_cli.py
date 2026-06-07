@@ -23,6 +23,11 @@ _COMMANDS: dict[str, tuple[str, str, str]] = {
         "main",
         "Audit cached ASP artifacts as timeline, episode, and frontier actions.",
     ),
+    "metrics": (
+        "asp_graph_turbo.metrics_cli",
+        "main",
+        "Render real-trigger metrics for graph turbo RFC validation.",
+    ),
 }
 
 

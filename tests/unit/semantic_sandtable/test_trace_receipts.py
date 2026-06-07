@@ -100,6 +100,12 @@ def _summary() -> dict[str, int]:
         "stdoutBytes": 300,
         "stderrBytes": 0,
         "elapsedMs": 8,
+        "aspCommands": 3,
+        "searchCommands": 0,
+        "queryCommands": 2,
+        "directReadCommands": 2,
+        "repeatedCommands": 0,
+        "repeatedSearches": 0,
         "jsonSearches": 0,
         "compactSearches": 0,
     }

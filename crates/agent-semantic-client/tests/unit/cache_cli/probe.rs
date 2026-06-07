@@ -90,7 +90,7 @@ fn tree_sitter_rows_replay_when_latest_unrelated_generation_is_stale() {
 
     let probe = provider_cache_probe(&root, &snapshot, &request).expect("probe");
     let replay = probe.replay.as_ref().expect("row replay");
-    let stdout = String::from_utf8(replay.stdout.clone()).expect("utf8");
+    let stdout = std::str::from_utf8(replay.stdout.as_ref()).expect("utf8");
 
     assert_eq!(probe.cache_status, CacheStatus::Hit);
     assert!(stdout.contains("C=capture:function.name(parse_query)@src/lib.rs:10!code"));
@@ -189,7 +189,7 @@ rank=O frontier=O.owner\n";
 
     assert_eq!(probe.cache_status, CacheStatus::Hit);
     assert_eq!(
-        String::from_utf8(replay.stdout.clone()).expect("utf8"),
+        std::str::from_utf8(replay.stdout.as_ref()).expect("utf8"),
         stdout
     );
     assert_eq!(probe.sqlite_read_count, 3);
@@ -260,7 +260,7 @@ rank=Q frontier=Q.fzf\n";
 
     assert_eq!(probe.cache_status, CacheStatus::Hit);
     assert_eq!(
-        String::from_utf8(replay.stdout.clone()).expect("utf8"),
+        std::str::from_utf8(replay.stdout.as_ref()).expect("utf8"),
         stdout
     );
     assert_eq!(probe.sqlite_read_count, 3);

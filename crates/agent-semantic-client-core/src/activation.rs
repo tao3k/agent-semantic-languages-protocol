@@ -1,17 +1,20 @@
 //! Provider activation snapshot loading for `agent-semantic-client`.
 
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use agent_semantic_config::project_hook_state_dir;
 use agent_semantic_hook::{
     ActivatedProvider, ProviderExecution, RuntimeProviderHealthStatus, builtin_provider_manifests,
-    load_or_sync_activation, parse_activation, project_hook_state_dir,
-    runtime_profile_command_argv, runtime_profiles_for_runtime,
-    runtime_project_root_for_activation,
+    load_or_sync_activation, parse_activation, runtime_profile_command_argv,
+    runtime_profiles_for_runtime, runtime_project_root_for_activation,
 };
 
 use crate::receipt::NativeProvenance;
 use crate::types::{LanguageId, ProviderId};
+
+pub const ASP_PROVIDER_ACTIVATION_PATH_ENV: &str = "ASP_PROVIDER_ACTIVATION_PATH";
 
 /// Provider resolved from the project hook activation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -83,6 +86,9 @@ impl ResolvedProvider {
     /// Return the profile-pinned provider argv when runtime profile health is usable.
     #[must_use]
     pub fn runtime_command_prefix(&self) -> Option<Vec<String>> {
+        if !self.provider_command_prefix.is_empty() {
+            return None;
+        }
         self.runtime_command_argv.clone()
     }
 }
@@ -111,6 +117,12 @@ pub struct ProviderRegistrySnapshot {
 
 impl ProviderRegistrySnapshot {
     pub fn load(project_root: &Path) -> Result<Self, String> {
+        if let Some(activation_path) = env::var_os(ASP_PROVIDER_ACTIVATION_PATH_ENV) {
+            let activation_path = PathBuf::from(activation_path);
+            if activation_path.is_file() {
+                return Self::load_from_path(&activation_path);
+            }
+        }
         let direct_activation_path = match project_hook_state_dir(project_root) {
             Ok(hook_state_dir) => Some(hook_state_dir.join("activation.json")),
             Err(error) => {

@@ -1,6 +1,7 @@
 //! Document language provider facade backed by orgize.
 
-use orgize::agent::{self, DocumentLanguage};
+use super::search_config::AspConfig;
+use orgize::agent::{self, DocumentLanguage, DocumentWalkConfig};
 
 const DOCUMENT_LANGUAGES: &[&str] = &["org", "md"];
 
@@ -9,6 +10,14 @@ pub(crate) fn is_document_language(language_id: &str) -> bool {
 }
 
 pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result<(), String> {
+    run_language_command_with_config(language_id, args, &AspConfig::default())
+}
+
+pub(crate) fn run_language_command_with_config(
+    language_id: &str,
+    args: &[String],
+    config: &AspConfig,
+) -> Result<(), String> {
     if is_help(args) {
         println!("{}", usage(language_id));
         return Ok(());
@@ -22,7 +31,14 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         ));
     }
 
-    agent::run_document_command(document_language(language_id)?, args.to_vec())
+    agent::run_document_command_with_walk_config(
+        document_language(language_id)?,
+        args.to_vec(),
+        DocumentWalkConfig::new(
+            config.search.ignore_dirs.clone(),
+            config.search.include_hidden_dirs.clone(),
+        ),
+    )
 }
 
 fn is_help(args: &[String]) -> bool {

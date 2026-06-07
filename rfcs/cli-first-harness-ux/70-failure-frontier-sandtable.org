@@ -25,6 +25,26 @@ The comparison succeeds only when all of these are true:
 - every expected hot block is covered by a candidate direct-read selector or a
   candidate frontier =next= target
 
+Provider check output should expose the frontier as line protocol rather than a
+source-window dump.  The compact stdout contract is:
+
+#+begin_example
+[fail] <language> blockingFindings=<n> parsed=<parsed>/<files>
+|failureFrontier rule=<rule-id> severity=<severity> path=<path> line=<line> column=<column>
+|message <single-line title>
+|summary <single-line explanation>
+|repair <single-line repair hint>
+|hotBlock selector=<path-or-range> reason=blocking-finding
+|next action=direct-source-read selector=<path-or-range> root=<project-root>
+#+end_example
+
+=next= remains a copyable action surface for agents.  Sandtable trace receipts
+also preserve a structured =failureFrontier= array with the same fields, so
+comparison gates can derive =expectedHotBlocks= from provider output when the
+scenario does not pass =--expected-hot-block= explicitly.  =message=,
+=summary=, and =repair= must stay single-line and compact: they carry rule
+semantics, not source snippets.
+
 The canonical replay evidence is:
 
 #+begin_example

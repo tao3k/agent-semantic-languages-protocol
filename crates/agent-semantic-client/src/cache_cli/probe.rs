@@ -41,7 +41,11 @@ pub(crate) fn provider_cache_probe(
     let cache_report = ClientCacheManifest::inspect_project(project_root);
     let cache_root = cache_report.cache_root.as_ref()?;
     let db_path = ClientDb::default_path(cache_root);
-    let db_report = ClientDb::inspect(&db_path);
+    let db = ClientDb::open_read_only_existing(&db_path).ok().flatten();
+    let db_report = db
+        .as_ref()
+        .and_then(|db| db.inspect_open().ok())
+        .unwrap_or_else(|| ClientDb::inspect(&db_path));
     let mut sqlite_read_count = if db_report.status == ClientDbStatus::Present {
         1
     } else {
@@ -53,13 +57,14 @@ pub(crate) fn provider_cache_probe(
         .unwrap_or_default();
     let export_method = request_export_method(request);
     let generation_hit = if db_report.status == ClientDbStatus::Present {
-        sqlite_read_count += 1;
-        selected_provider
+        db.as_ref()
+            .zip(selected_provider)
             .zip(export_method.clone())
-            .and_then(|(provider, export_method)| {
+            .and_then(|((db, provider), export_method)| {
+                sqlite_read_count += 1;
                 let request_fingerprint =
                     request_lookup_fingerprint(provider, project_root, &export_method, request);
-                ClientDb::lookup_generation(&ClientDbGenerationLookup {
+                db.lookup_generation_open(&ClientDbGenerationLookup {
                     db_path: db_path.clone(),
                     language_id: provider.language_id.clone(),
                     provider_id: provider.provider_id.clone(),
@@ -86,6 +91,7 @@ pub(crate) fn provider_cache_probe(
             }
         })
         .or_else(|| {
+            let db = db.as_ref()?;
             let provider = selected_provider?;
             let export_method = export_method.as_ref()?;
             if db_report.status != ClientDbStatus::Present
@@ -95,7 +101,7 @@ pub(crate) fn provider_cache_probe(
             }
             sqlite_read_count += 1;
             load_fresh_prime_replay(
-                &db_path,
+                db,
                 cache_root,
                 project_root,
                 provider,
@@ -104,6 +110,7 @@ pub(crate) fn provider_cache_probe(
             )
         })
         .or_else(|| {
+            let db = db.as_ref()?;
             let provider = selected_provider?;
             let export_method = export_method.as_ref()?;
             if db_report.status != ClientDbStatus::Present
@@ -113,7 +120,7 @@ pub(crate) fn provider_cache_probe(
             }
             sqlite_read_count += 1;
             load_fresh_fzf_replay(
-                &db_path,
+                db,
                 cache_root,
                 project_root,
                 provider,
@@ -159,23 +166,24 @@ pub(crate) fn provider_cache_probe(
 }
 
 fn load_fresh_prime_replay(
-    db_path: &Path,
+    db: &ClientDb,
     cache_root: &Path,
     project_root: &Path,
     provider: &ResolvedProvider,
     export_method: &CacheExportMethod,
     request: &ClientRequest,
 ) -> Option<ProviderCacheReplay> {
-    let hit = ClientDb::lookup_generation(&ClientDbGenerationLookup {
-        db_path: db_path.to_path_buf(),
-        language_id: provider.language_id.clone(),
-        provider_id: provider.provider_id.clone(),
-        project_root: project_root.to_path_buf(),
-        export_method: export_method.clone(),
-        request_fingerprint: None,
-    })
-    .ok()
-    .flatten()?;
+    let hit = db
+        .lookup_generation_open(&ClientDbGenerationLookup {
+            db_path: db.path().to_path_buf(),
+            language_id: provider.language_id.clone(),
+            provider_id: provider.provider_id.clone(),
+            project_root: project_root.to_path_buf(),
+            export_method: export_method.clone(),
+            request_fingerprint: None,
+        })
+        .ok()
+        .flatten()?;
     if generation_file_hashes_match(project_root, &hit) {
         load_replay_artifact(cache_root, &hit, request)
     } else {
@@ -184,25 +192,26 @@ fn load_fresh_prime_replay(
 }
 
 fn load_fresh_fzf_replay(
-    db_path: &Path,
+    db: &ClientDb,
     cache_root: &Path,
     project_root: &Path,
     provider: &ResolvedProvider,
     export_method: &CacheExportMethod,
     request: &ClientRequest,
 ) -> Option<ProviderCacheReplay> {
-    let hits = ClientDb::lookup_recent_generations(
-        &ClientDbGenerationLookup {
-            db_path: db_path.to_path_buf(),
-            language_id: provider.language_id.clone(),
-            provider_id: provider.provider_id.clone(),
-            project_root: project_root.to_path_buf(),
-            export_method: export_method.clone(),
-            request_fingerprint: None,
-        },
-        FRESH_FZF_CANDIDATE_LIMIT,
-    )
-    .ok()?;
+    let hits = db
+        .lookup_recent_generations_open(
+            &ClientDbGenerationLookup {
+                db_path: db.path().to_path_buf(),
+                language_id: provider.language_id.clone(),
+                provider_id: provider.provider_id.clone(),
+                project_root: project_root.to_path_buf(),
+                export_method: export_method.clone(),
+                request_fingerprint: None,
+            },
+            FRESH_FZF_CANDIDATE_LIMIT,
+        )
+        .ok()?;
     for hit in hits {
         if generation_file_hashes_match(project_root, &hit)
             && search_fzf_generation_matches_request(cache_root, &hit, request).is_some()

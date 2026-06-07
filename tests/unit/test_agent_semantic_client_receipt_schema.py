@@ -40,6 +40,17 @@ class SemanticAgentClientReceiptSchemaTests(unittest.TestCase):
                     "exitCode": 0,
                     "stdoutBytes": 300,
                     "stderrBytes": 0,
+                    "stdoutSha256": (
+                        "0123456789abcdef0123456789abcdef"
+                        "0123456789abcdef0123456789abcdef"
+                    ),
+                    "stderrSha256": (
+                        "abcdef0123456789abcdef0123456789"
+                        "abcdef0123456789abcdef0123456789"
+                    ),
+                    "stdoutTruncated": False,
+                    "stderrTruncated": False,
+                    "timedOut": False,
                     "elapsedMs": 12,
                 }
             ],

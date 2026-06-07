@@ -68,6 +68,16 @@ content, and range-local element frontiers.  Agents should be able to choose a
 document query from the guide without guessing field names or falling back to
 raw reads.
 
+=search toc= is the document-first repository orientation view.  It uses the
+same provider discovery as =search prime=, but returns only heading facts,
+grouped by document path, with =level=, =title=, line range, Org TODO/priority
+or tag fields when present, and a selector-query next action for each heading.
+Agents should use it before broad document reads when the task is to understand
+repo documentation structure, README sections, design docs, RFC outlines, or
+Org task hierarchies.  =search toc --json= emits the normal
+=semantic-document-search-packet.v1= shape with =method=search/toc= and
+=view=toc=, while compact output stays optimized for prompt navigation.
+
 Document query no-hit output is still a protocol surface.  A query with
 =hit=0= must not stop at a count-only receipt.  It must state that combined
 terms/kinds/fields are an intersection, then return bounded next actions such
@@ -231,7 +241,7 @@ mechanical range splits are only the fallback.  Every frontier =code= action
 must map back to:
 
 #+begin_src shell
-<lang-harness> query --from-hook direct-source-read --selector <path[:line-range]> --code .
+<lang-harness> query --from-hook direct-source-read [--workspace] --selector <path[:line-range]> --code .
 #+end_src
 
 For exact selectors without =--code=, the provider may return a bounded
@@ -716,6 +726,17 @@ source.  Agents must not replace this with raw =git show :path=, raw =git diff=,
 or shell source dumps; if the provider cannot produce the requested source
 version, it should fail with an explicit provider error or emit a read-plan
 repair action rather than silently falling back to a different layer.
+
+=--workspace= is a selector scope flag, not a content-version flag.  Agents use
+it when the selector is workspace-relative, for example
+=crates/<member>/src/file.rs:1:40= while the project root argument is the
+workspace root.  Providers must resolve that path against the workspace root
+before applying source-version selection.  =--source= remains limited to
+choosing =worktree=, =index=, or =head= bytes for the resolved path and must not
+be overloaded to mean workspace-relative lookup.
+The =asp <language>= facade accepts and forwards =--workspace= as a shared query
+flag, but it must not parse language package membership; Rust, TypeScript,
+Python, and Julia providers own the native path-context resolution.
 
 When an owner-scoped item query has no exact or contains match, the provider may
 return a bounded owner-local fallback instead of an empty packet.  The fallback

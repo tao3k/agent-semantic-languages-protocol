@@ -57,27 +57,65 @@ are intentionally unsupported for document files.
   shell command.
 - `asp hook install --client codex .` installs hooks, provider activation, and
   the rendered skill for the detected providers.
-- Search is discovery and should not inline source code.
+- Search and non-code query are discovery surfaces and should not inline source
+  code.
+- Direct source reads are last-mile transport for exact, source-preserved text
+  after a parser-owned frontier has selected the locator. Do not use
+  `direct-source-read` for discovery, owner mapping, import scanning, symbol
+  search, or "show me this file" habits.
 - Query with `--code` is for exact or unique code extraction.
-- Tree-sitter query is the syntax base; native parser facts enrich the
-  capture/frontier.
+- Tree-sitter-compatible query is the syntax base; native parser facts enrich
+  the capture/frontier. When syntax shape matters, use the tree-sitter guide
+  and locator query before falling back to source-preserved direct read.
 - Hook config may disable provider `ast-patch`; when disabled, patch with
   `apply_patch` after exact locator/code evidence.
 
 ## Complex Flows
 
+### Command Selection Ladder
+
+For code tasks, keep the command order structural-first:
+
+```sh
+asp <language> search prime --view seeds .
+asp <language> search fzf '<term-or-error>' owner tests --view seeds .
+asp <language> search owner <owner-path> items --query '<symbol-or-a|b|c>' .
+asp <language> query <owner-path> --term '<candidate>' --names-only .
+asp <language> query guide treesitter .
+asp <language> query --treesitter-query '<pattern>' .
+asp <language> query --selector <exact-path-or-range> --treesitter-query '<narrow-pattern>' --code .
+```
+
+Use the first command once per fresh language/root session, then reuse that
+frontier. Use owner-local item queries and tree-sitter locator output to choose
+an exact selector. Only after that selector is known should stdout become source
+text through `--code`.
+
 ### Hook Recovery
 
 When a hook blocks a raw source read or broad raw search, follow the recovery
 route printed in the hook message. Do not retry `Read`, `cat`, `sed`, `rg`, or
-source-dump commands on the same matched source.
+source-dump commands on the same matched source. Treat any
+`direct-source-read` route as a bounded fallback, not the default next step.
+First try the structural recovery path that matches the blocked intent:
 
 ```sh
-asp <language> query --from-hook direct-source-read --selector <path-or-range> --code .
-asp <language> query --from-hook direct-source-read --selector <glob-or-path> --term <term> --surface owners,tests --view seeds .
+asp <language> search fzf '<blocked-term-or-symbol>' owner tests --view seeds .
+asp <language> search owner <owner-path> items --query '<symbol-or-a|b|c>' .
+asp <language> query <owner-path> --term '<candidate>' --names-only .
+asp <language> query --treesitter-query '<pattern>' .
+asp <language> query --selector <exact-path-or-range> --treesitter-query '<narrow-pattern>' --code .
+asp <language> query --from-hook direct-source-read --selector <exact-path-or-range> --code .
 asp org query --from-hook direct-source-read --selector <path-or-range> .
 asp md query --from-hook direct-source-read --selector <path-or-range> .
 ```
+
+Use `direct-source-read --code` only when the exact selector is already known
+and source preservation matters, such as a small file-header import window,
+staged/index/head source-version inspection, or a provider-selected read-plan
+frontier that cannot be expressed as a syntax query. If the selector is a whole
+file, glob, package root, or broad line range, ask the provider for owner items,
+tree-sitter locator output, or a read-plan frontier instead of printing code.
 
 For document languages, do not add `--content` to `direct-source-read`. Use
 `query --content` only as a filtered element-content projection with
@@ -91,6 +129,7 @@ asp <language> search prime --view seeds .
 asp <language> search fzf <term> owner tests --view seeds .
 asp <language> search owner <owner-path> items --query '<symbol-or-a|b|c>' .
 asp <language> query <owner-path> --term <candidate> --names-only .
+asp <language> query --treesitter-query '<pattern>' .
 asp <language> query <owner-path> --term <candidate> --code .
 ```
 
@@ -114,12 +153,14 @@ asp md query guide .
 
 ```sh
 asp org search prime --view seeds .
+asp org search toc .
 asp org query --term <heading-property-task-or-table-term> --view metadata .
 asp org query --term <heading-property-task-or-table-term> --content .
 asp org query --kind <element-kind> --view metadata .
 asp org query --field <key=value> --view metadata .
 asp org query --selector <path:start-end> --view metadata .
 asp md search prime --view seeds .
+asp md search toc .
 asp md query --term <heading-paragraph-task-link-or-table-term> --view metadata .
 asp md query --term <heading-paragraph-task-link-or-table-term> --content .
 asp md query --kind paragraph --view metadata .
@@ -130,6 +171,9 @@ asp md query --selector <path:start-end> --view metadata .
 Document search and query return parser-owned element facts: headings,
 paragraphs,
 properties, planning rows, tables, blocks, lists, tasks, links, and images.
+Use `search toc` as the repository documentation entrypoint: it returns only
+document heading outlines grouped by file, with `level`, `title`, range
+locators, and selector-query next actions.
 Use selector query for the element frontier inside a known range. Use
 `--content` when stdout should be only the matched element content. Use
 `direct-source-read` only when source-preserved document text is required after
@@ -174,9 +218,12 @@ asp <language> query --treesitter-query '<pattern>' .
 asp <language> query --selector <path-or-range> --treesitter-query '<narrow-pattern>' --code .
 ```
 
-Without `--code`, tree-sitter query output should be a capture/frontier locator.
+Without `--code`, tree-sitter query output is a capture/frontier locator. Use
+it to pick the owner, symbol, import, call, attribute, decorator, or test window.
 With `--code`, stdout should be pure source for an exact selector or unique
-match.
+match. If the provider cannot compile the pattern or reports unsupported
+captures, record that reason and fall back to owner items or a bounded
+direct-source-read instead of silently widening the read.
 
 ### Verification
 

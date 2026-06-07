@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::cache_paths::project_hook_state_dir;
+use agent_semantic_runtime::ensure_project_hook_state_dir;
 use serde_json::json;
 
 use crate::protocol::{HOOK_PROTOCOL_ID, HookDecision};
@@ -19,13 +19,7 @@ pub fn append_hook_event_state(
     project_root: &Path,
     decision: &HookDecision,
 ) -> Result<PathBuf, String> {
-    let state_dir = project_hook_state_dir(project_root)?;
-    fs::create_dir_all(&state_dir).map_err(|error| {
-        format!(
-            "failed to create hook state dir {}: {error}",
-            state_dir.display()
-        )
-    })?;
+    let state_dir = ensure_project_hook_state_dir(project_root)?;
     let state_path = state_dir.join(HOOK_EVENT_STATE_FILE);
     let event = json!({
         "schemaId": HOOK_EVENT_SCHEMA_ID,
@@ -84,7 +78,7 @@ pub fn append_hook_event_state(
 pub fn remove_incompatible_hook_event_state(
     project_root: &Path,
 ) -> Result<Option<PathBuf>, String> {
-    let state_path = project_hook_state_dir(project_root)?.join(HOOK_EVENT_STATE_FILE);
+    let state_path = ensure_project_hook_state_dir(project_root)?.join(HOOK_EVENT_STATE_FILE);
     if !state_path.is_file() {
         return Ok(None);
     }

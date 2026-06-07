@@ -1,0 +1,135 @@
+{
+  "id": "rust.tokio-claude-deep-question-flow",
+  "title": "Tokio 0.6.0 live Claude deep question command audit flow",
+  "language": "rust",
+  "coverage": [
+    "search-flow",
+    "performance",
+    "large-library"
+  ],
+  "tags": [
+    "large-library",
+    "tokio",
+    "claude",
+    "deep-question",
+    "live"
+  ],
+  "skipUnlessEnv": [
+    "ASP_LIVE_CLAUDE_CLI",
+    "ANTHROPIC_AUTH_TOKEN",
+    "SANDTABLE_RUST_TOKIO_060_ROOT"
+  ],
+  "evidence": {
+    "source": "real-trigger",
+    "targetLibrary": {
+      "language": "rust",
+      "name": "Tokio",
+      "package": "tokio",
+      "repository": "tokio-rs/tokio",
+      "workdirKind": "registry"
+    },
+    "intentCases": [
+      {
+        "intentKind": "feature-implementation",
+        "intent": "Trace a collection-field modeling question through compact graph search before source reads",
+        "stepIds": [
+          "claude-tokio-vec-scalar"
+        ],
+        "queryTerms": [
+          "Vec",
+          "scalar",
+          "collection",
+          "fields"
+        ]
+      },
+      {
+        "intentKind": "api-usage",
+        "intent": "Ask Claude to report the API-facing meaning of Vec<scalar> collection fields from parser-owned evidence",
+        "stepIds": [
+          "claude-tokio-vec-scalar"
+        ],
+        "queryTerms": [
+          "Vec",
+          "scalar"
+        ]
+      },
+      {
+        "intentKind": "implementation-principle",
+        "intent": "Audit whether Claude uses graph/search/query commands instead of broad source reads",
+        "stepIds": [
+          "claude-tokio-vec-scalar"
+        ],
+        "queryTerms": [
+          "collection",
+          "fields"
+        ]
+      }
+    ],
+    "deepQuestionCases": [
+      {
+        "id": "tokio-vec-scalar-collection-fields",
+        "question": "tokio 0.6.0 的 Vec<scalar> collection fields 意义是什么？它们在结构体字段建模里为什么不是普通 scalar field？",
+        "stepIds": [
+          "claude-tokio-vec-scalar"
+        ],
+        "queryTerms": [
+          "Vec",
+          "scalar",
+          "collection",
+          "fields"
+        ],
+        "audit": {
+          "maxAspCommands": 8,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 4,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      }
+    ]
+  },
+  "workdir": {
+    "env": "SANDTABLE_RUST_TOKIO_060_ROOT",
+    "candidates": [
+      "~/.cargo/registry/src/*/tokio-0.6.0"
+    ]
+  },
+  "budgets": {
+    "maxCommands": 1,
+    "maxTotalElapsedMsWarn": 120000,
+    "maxTotalStdoutBytesWarn": 200000
+  },
+  "steps": [
+    {
+      "id": "claude-tokio-vec-scalar",
+      "kind": "agent-cli",
+      "agentCli": {
+        "client": "claude",
+        "binary": "claude",
+        "prompt": "在当前 tokio 0.6.0 工作目录中回答：tokio 0.6.0 的 Vec<scalar> collection fields 意义是什么？请先用 ASP Rust compact graph/search/query 定位证据，避免宽泛阅读全文；回答末尾列出实际使用过的 asp search/query/direct-read 命令。",
+        "outputFormat": "stream-json",
+        "inputFormat": "text",
+        "includeHookEvents": true,
+        "verbose": true,
+        "env": {
+          "ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}"
+        },
+        "requiredEnv": [
+          "ANTHROPIC_AUTH_TOKEN"
+        ]
+      },
+      "timeoutSeconds": 120,
+      "expect": {
+        "exitCode": 0,
+        "stdoutContains": [
+          "Vec",
+          "scalar"
+        ],
+        "maxStdoutBytesWarn": 200000,
+        "maxElapsedMsWarn": 120000
+      }
+    }
+  ]
+}

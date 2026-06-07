@@ -1,5 +1,6 @@
 //! Prompt-output write-back for replay-safe provider results.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -14,6 +15,11 @@ use agent_semantic_client_core::{
     append_syntax_query_plan_args, syntax_query_ast_abi_fingerprint,
 };
 use agent_semantic_client_db::ClientDb;
+use agent_semantic_provider_transport::{
+    OutputMode, ProviderProcessLimits, ProviderProcessSpec, StdinMode,
+    run_provider_process as run_transport_process,
+};
+use bytes::Bytes;
 
 use super::locator_artifact::{
     locator_file_hashes_from_packet, maybe_write_search_output_artifact, prompt_output_file_hashes,
@@ -90,7 +96,7 @@ pub(crate) fn write_prompt_output_cache_after_provider_success(
     fn export_provider_packet(
         provider: &ResolvedProvider,
         request: &ClientRequest,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<Bytes> {
         let invocation = provider.command_prefix();
         let (program, prefix_args) = invocation.split_first()?;
         let mut args = prefix_args.to_vec();
@@ -108,14 +114,20 @@ pub(crate) fn write_prompt_output_cache_after_provider_success(
         .ok()?;
         insert_json_flag_before_project_root(&mut forwarded_args);
         args.extend(forwarded_args);
-        let output = std::process::Command::new(program)
-            .current_dir(&request.project_root)
-            .args(args)
-            .output()
-            .ok()?;
+        let output = run_transport_process(ProviderProcessSpec {
+            program: program.clone(),
+            args,
+            cwd: request.project_root.clone(),
+            env: BTreeMap::new(),
+            stdin: StdinMode::Closed,
+            stdout: OutputMode::Capture,
+            stderr: OutputMode::Capture,
+            limits: ProviderProcessLimits::default(),
+        })
+        .ok()?;
         if !output.status.success()
             || output.stdout.is_empty()
-            || output.stdout.len() as u64 > MAX_CACHE_REPLAY_ARTIFACT_BYTES
+            || output.receipt.stdout_bytes as u64 > MAX_CACHE_REPLAY_ARTIFACT_BYTES
         {
             return None;
         }
@@ -347,7 +359,7 @@ pub(crate) fn write_prompt_output_cache_after_provider_success(
             std::str::from_utf8(stdout).ok()?;
             (
                 export_method,
-                stdout.to_vec(),
+                Bytes::copy_from_slice(stdout),
                 "prompt-output/",
                 ".txt",
                 ArtifactKind::PromptOutput,

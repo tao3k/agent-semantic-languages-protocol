@@ -39,6 +39,9 @@ mod cache_replay_tests;
 #[path = "../tests/unit/cli_args.rs"]
 mod cli_args_tests;
 #[cfg(test)]
+#[path = "../tests/unit/provider_method.rs"]
+mod provider_method_tests;
+#[cfg(test)]
 #[path = "../tests/unit/search_history.rs"]
 mod search_history_tests;
 #[cfg(test)]

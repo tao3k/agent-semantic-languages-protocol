@@ -57,6 +57,74 @@
           "gitignore"
         ]
       }
+    ],
+    "deepQuestionCases": [
+      {
+        "id": "ignore-overridebuilder-precedence",
+        "question": "OverrideBuilder 的匹配优先级和 gitignore 规则如何交互？先定位 builder、matcher 和测试 owner。",
+        "stepIds": [
+          "prime",
+          "intent-query-set"
+        ],
+        "queryTerms": [
+          "OverrideBuilder",
+          "precedence",
+          "gitignore"
+        ],
+        "audit": {
+          "maxAspCommands": 7,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 3,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      },
+      {
+        "id": "ignore-walkbuilder-filter-composition",
+        "question": "WalkBuilder 如何组合 hidden、gitignore、override 等过滤条件？需要 compact frontier 而不是全文阅读。",
+        "stepIds": [
+          "prime",
+          "intent-query-set"
+        ],
+        "queryTerms": [
+          "WalkBuilder",
+          "filter",
+          "hidden"
+        ],
+        "audit": {
+          "maxAspCommands": 7,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 3,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      },
+      {
+        "id": "ignore-gitignore-nested-whitelist",
+        "question": "嵌套 .gitignore 和白名单规则冲突时 ignore crate 的组织原则是什么？先找 rule parse 和 matcher owner。",
+        "stepIds": [
+          "prime",
+          "intent-query-set"
+        ],
+        "queryTerms": [
+          "gitignore",
+          "whitelist",
+          "matcher"
+        ],
+        "audit": {
+          "maxAspCommands": 7,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 3,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      }
     ]
   },
   "workdir": {

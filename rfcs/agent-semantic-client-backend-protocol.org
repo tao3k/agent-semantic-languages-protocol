@@ -342,6 +342,146 @@ Local mode shells out to installed native provider CLIs by reading the provider
 registry and project activation.  It must prefer provider JSON or packet export
 only for machine reuse.  The user-facing output remains compact text.
 
+*** Tokio provider process transport
+
+Local native provider execution is an async process-transport concern, not a
+collection of ad hoc =std::process::Command::output()= calls.  The client and
+facade layers should converge on a Tokio-backed transport for every external
+provider process:
+
+This transport is an independent workspace crate, not an implementation detail
+inside =agent-semantic-protocol=.  The crate boundary is
+=agent-semantic-provider-transport=: it owns Tokio process spawning, concurrent
+stdio capture, stdin modes, limits, status propagation, and transport receipts.
+It must not depend on provider registries, cache rows, hook activation, graph
+ranking, compact rendering, or language-specific parser facts.  Higher layers
+construct a process spec and consume the output/receipt.
+
+#+begin_example
+ProviderProcessSpec
+  program, args, cwd, env
+  stdinMode  = inherit | closed | bytes
+  stdoutMode = capture | tee
+  stderrMode = capture | tee
+  limits     = maxStdoutBytes, maxStderrBytes, timeout
+  receipt    = elapsedMs, statusCode, statusSuccess,
+               stdoutBytes, stderrBytes, stdoutSha256, stderrSha256,
+               truncated, timedOut
+#+end_example
+
+The =asp= CLI may remain a synchronous command surface.  Internally, provider
+execution uses one Tokio runtime and =tokio::process::Command=.  The transport
+must read stdout and stderr concurrently, write stdin without blocking child
+exit observation, wait on the child, and enforce timeout/cancellation with
+=tokio::select!=.  This avoids pipe deadlocks and makes =search ingest=,
+packet-first miss, graph-render stdin, provider stderr suppression, and receipt
+calibration share one implementation.
+
+The default mode is byte-first and non-PTY.  Provider stdout and stderr are
+captured as bytes and decoded only at the render or diagnostic boundary.
+Machine protocol paths must keep stdout and stderr separate.  PTY support, if
+added later, is an explicit interactive mode and must not be used for cache,
+receipt, schema validation, or compact graph rendering.
+
+Provider stdio framing must use Tokio codec adapters rather than local
+line/chunk loops.  The default capture frame is
+=tokio_util::codec::FramedRead<BytesCodec>=.  Text line framing is reserved for
+protocols that explicitly declare JSONL or line-oriented receipts and should
+use =LinesCodec=.  Binary packet framing, if added, should use
+=LengthDelimitedCodec=.  The transport crate owns these adapters so wrapper
+layers do not hand-roll stdout/stderr splitting, EOF handling, or partial-frame
+logic.
+
+Only the default =BytesCodec= path is exact stdout/stderr replay.  =LinesCodec=
+captures normalized UTF-8 line payloads, and =LengthDelimitedCodec= captures
+decoded frame payloads.  Those modes are for protocols that declare line or
+binary framing up front; their receipts count retained payload bytes rather
+than raw wire bytes with delimiters.
+
+The transport hot path stays byte-first.  Ingest and provider wrapper code must
+prefer =bstr= and =memchr= for newline/NUL or delimiter scans, retaining bytes
+until compact rendering or diagnostics need strings.  Mostly UTF-8 payloads may
+decode lossily only at those boundaries.  Single small JSON packets may still
+use =serde_json::from_slice=.  Continuous JSON receipts or packet streams must
+use =serde_json::Deserializer::into_iter= or an async JSON codec such as
+=tokio-serde-json= instead of concatenating stdout into a large string.
+=agent-semantic-provider-transport= exposes the shared byte-text helper module
+for these wrapper boundaries: borrowed =BStr= views, lossy text rendering,
+ASCII trimming, LF/NUL record splitting, and delimiter scans belong there
+rather than in provider facades, search-pipe wrappers, or cache replay modules.
+
+The v1 output surface is intentionally limited to =capture= and =tee=.  Future
+=inherit= or =stream= output modes require an explicit receipt story because
+uncaptured inherited bytes cannot be replayed, digested, capped, or written to
+cache artifacts safely.
+
+First implementation scope is intentionally narrow:
+
+- add =crates/agent-semantic-provider-transport= as the shared transport crate;
+- migrate =asp <language>= provider facade execution to the Tokio transport;
+- preserve inherited stdin for =search ingest= and equivalent stdin-coupled
+  provider commands;
+- tee output through Tokio =io-std= handles so async provider execution does not
+  block on parent stdout/stderr writes;
+- preserve provider stdout/stderr ordering at the stream boundary as much as
+  possible, while keeping capture accounting separate;
+- return the provider's exit status exactly after writing the captured streams;
+- keep guide rewriting and provider command construction unchanged.
+
+Packet rendering and cache replay must also use this transport instead of
+temporary files or local string-stream loops.  Search packet bytes are passed to
+=asp graph render --packet -= through =StdinMode::bytes=; replay from a durable
+artifact path may keep passing the path because the artifact file itself is the
+cache authority.  The client local-native miss path records the transport
+receipt inside =providerCommands[]= so =--receipt-json= reports provider
+process count, exit status, elapsed time, full stdout/stderr byte counts,
+digests, truncation, and timeout state without changing default stdout.
+Search-pipe wrappers and history/audit helpers use the same transport and
+byte-first parsing rules; they are not separate mini process or string-stream
+frameworks.
+
+Current transport migration audit:
+
+| Boundary | Required owner | Status | Evidence gate |
+|----------+----------------+--------+---------------|
+| local native provider miss execution | =agent-semantic-client-local-cli= -> =agent-semantic-provider-transport= | migrated | =cargo test -p agent-semantic-client-local-cli= |
+| protocol facade provider execution | =agent-semantic-protocol::provider_process= -> =agent-semantic-provider-transport= | migrated | =cargo test -p agent-semantic-protocol provider_process= |
+| graph render stdin packet replay | =agent-semantic-client= -> =asp graph render --packet -= over =StdinMode::bytes= | migrated | =cargo test -p agent-semantic-client= |
+| search-pipe / ingest wrappers | facade wrapper -> shared transport and byte-text helpers | migrated for hot path | search-pipe unit tests plus real =search ingest= smoke |
+| history/audit helper execution | helper wrapper -> shared transport | migrated for provider subprocesses | history/audit unit tests |
+| tests, fixture setup, build scripts | local =std::process::Command= | retained | not a provider hot path |
+
+Receipt smoke must validate the real machine stream rather than only schema
+fixtures: run at least one local-native miss with =--receipt-json=, assert
+stderr is exactly one =agent-semantic-client-receipt.v1= object, and assert
+the embedded =providerCommands[]= entries carry command digest, byte counts,
+truncation state, timeout state, status, and elapsed time.  Cache-hit receipts
+must keep =providerCommands=[]=, proving replay did not spawn a provider.
+
+Performance evidence for this phase is deliberately local and reproducible:
+
+#+begin_src shell
+cargo bench -p agent-semantic-provider-transport --bench transport_hot_path
+cargo test -p agent-semantic-provider-transport
+cargo test -p agent-semantic-client-local-cli
+cargo test -p agent-semantic-client
+cargo test -p agent-semantic-protocol document_provider
+#+end_src
+
+P4 checkpoint sample from the local workspace:
+
+| Probe | Command shape | Result |
+|-------+---------------+--------|
+| byte transport bench | =cargo bench -p agent-semantic-provider-transport --bench transport_hot_path= | =transport_hot_path time: [135.25 ns 138.95 ns 143.60 ns]= |
+| exact direct read | =direnv exec . sh -c '/usr/bin/time -p .bin/asp rust query --from-hook direct-source-read --selector crates/agent-semantic-protocol/src/command/document_provider.rs:1-80 --code . >/tmp/asp-direct-read-smoke.out'= | =real 0.00=, stdout =1857= bytes |
+| Rust search wrapper | =direnv exec . sh -c '/usr/bin/time -p .bin/asp rust search fzf DocumentWalkConfig --view seeds crates/agent-semantic-protocol >/tmp/asp-rust-fzf-smoke.out'= | =real 0.01=, stdout =776= bytes |
+| configured document walk | =asp md query --term cached-secret-token --view metadata .= in a temp project with =[discovery] includeHiddenDirNames=[".cache"]= | =real 0.03=, stdout =135= bytes |
+
+Provider command latency regressions should be investigated at the transport
+or wrapper boundary first: repeated owner fanout, accidental project walks,
+empty ingest, and direct-source-read commands that traverse directories are
+wrapper bugs, not language-parser cache misses.
+
 The first implementation checkpoint is a protocol-owned transparent facade:
 
 #+begin_src shell
@@ -587,14 +727,14 @@ the same provider generation.  During the first client DB phase, =asp
 search/query/check= probes these generation rows before invoking the native
 provider.  A matching generation marks the local-native receipt as
 =cacheStatus=warm-provider= and still spawns the provider when generation rows
-alone are not enough to replay compact output.  =cacheStatus=hit= is allowed
+alone are not enough to replay prompt-rendered output.  =cacheStatus=hit= is allowed
 only when the generation references a replayable provider-owned artifact.  In
 the first implementation, =prompt-output/*.txt= under the protocol artifact root
 is the fastest replay path and may be paired with
   =prompt-output/*.command.json= provider-command provenance, =search/*.json=
   semantic-search-packet artifacts are replayable through the shared =asp graph
   render --packet <artifact> --view seeds= renderer, =query/*.json=
-  semantic-query-packet artifacts are replayable for =query/owner-items= compact
+  semantic-query-packet artifacts are replayable for =query/owner-items= prompt
   query output, and =semantic-tree-sitter-query/*.json= artifacts are replayable
   for exact non-=--code= syntax-locate/capture requests.  The client also writes
   normalized =syntax_query_*= rows from validated
@@ -603,13 +743,13 @@ is the fastest replay path and may be paired with
   be rendered.  A replayable generation must also carry non-empty =fileHashes=
   that match the current project files.  Missing, unreadable, or mismatched
   source hashes make the generation =cacheStatus=stale=, not =hit=, and the
-  client must invoke the native provider instead of replaying old compact
+  client must invoke the native provider instead of replaying old rendered
   output.  For =semantic-tree-sitter-query.v1= packets, those hashes may come
   from packet-provided =/cache/fileHashes= or from client-computed path+sha256
   values over validated locator fields such as =selector=, =read=, =path=, and
   capture/match ranges.  This freshness fallback stores no raw source and does
-  not infer language semantics.  Both syntax paths render the current compact
-  locator/frontier surface from structured facts and must not store or replay
+  not infer language semantics.  Both syntax paths render the current
+  locator/frontier prompt surface from structured facts and must not store or replay
   raw source.  Exact
   syntax query cache identity is the ASP-compiled query AST/ABI fingerprint plus
   grammar/profile/catalog provenance and provider generation; stdout text is a

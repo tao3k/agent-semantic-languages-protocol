@@ -7,6 +7,7 @@ use agent_semantic_client_core::{
     ByteCount, CacheStatus, ClientMethod, ClientRequest, LanguageId, ProviderRegistrySnapshot,
 };
 use agent_semantic_client_local_cli::{LocalNativeCliBackend, LocalNativeOutput};
+use bytes::Bytes;
 
 use crate::cache_cli::{
     apply_provider_cache_probe, cache_hit_receipt, provider_cache_probe,
@@ -20,7 +21,7 @@ pub(crate) fn run_provider_method(
     method: ClientMethod,
     language_id: LanguageId,
 ) -> Result<(), String> {
-    let snapshot = ProviderRegistrySnapshot::load(&parsed.project_root)?;
+    let snapshot = ProviderRegistrySnapshot::load(&parsed.activation_root)?;
     let forwarded_args = provider_forwarded_args(&method, parsed.forwarded_args);
     let mut request = ClientRequest::new(method, parsed.project_root.clone())
         .with_forwarded_args(forwarded_args)
@@ -138,15 +139,15 @@ fn is_stdin_candidate_ingest_request(request: &ClientRequest) -> bool {
             .is_some_and(|arg| arg == "ingest")
 }
 
-fn managed_stdin_bytes() -> Result<Vec<u8>, String> {
+fn managed_stdin_bytes() -> Result<Bytes, String> {
     if io::stdin().is_terminal() {
-        return Ok(Vec::new());
+        return Ok(Bytes::new());
     }
     let mut stdin = Vec::new();
     io::stdin()
         .read_to_end(&mut stdin)
         .map_err(|error| format!("failed to read provider stdin: {error}"))?;
-    Ok(stdin)
+    Ok(Bytes::from(stdin))
 }
 
 fn wants_agent_compact_output(args: &[String]) -> bool {
@@ -186,9 +187,10 @@ fn arg_is_option_value(args: &[String], index: usize) -> bool {
     previous.starts_with("--") && !previous.contains('=')
 }
 
-fn should_try_search_packet_first(request: &ClientRequest) -> bool {
+pub(crate) fn should_try_search_packet_first(request: &ClientRequest) -> bool {
     request.method == ClientMethod::Search
         && !is_prime_seed_search(&request.forwarded_args)
+        && !is_workspace_seed_search(&request.forwarded_args)
         && !request
             .forwarded_args
             .iter()
@@ -198,6 +200,10 @@ fn should_try_search_packet_first(request: &ClientRequest) -> bool {
 
 fn is_prime_seed_search(args: &[String]) -> bool {
     args.first().is_some_and(|arg| arg == "prime") && has_seed_view(args)
+}
+
+fn is_workspace_seed_search(args: &[String]) -> bool {
+    args.first().is_some_and(|arg| arg == "workspace") && has_seed_view(args)
 }
 
 fn has_seed_view(args: &[String]) -> bool {
@@ -225,7 +231,8 @@ fn run_search_packet_first_miss(
     if output.status_code != 0 {
         return Ok(None);
     }
-    let Some(rendered_stdout) = crate::cache_replay::render_search_packet_bytes(&output.stdout)
+    let Some(rendered_stdout) =
+        crate::cache_replay::render_search_packet_bytes(output.stdout.clone())
     else {
         return Ok(None);
     };

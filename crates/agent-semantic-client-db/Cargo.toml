@@ -10,8 +10,13 @@ agent-semantic-client-core = { path = "../agent-semantic-client-core" }
 rusqlite = { workspace = true }
 serde_json = { workspace = true }
 
+[[bench]]
+name = "sqlite_cache_hot_path"
+harness = false
+
 [build-dependencies]
 rust-lang-project-harness = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 rust-lang-project-harness = { workspace = true }

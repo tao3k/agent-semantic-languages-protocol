@@ -54,19 +54,14 @@ pub struct ActivatedProviderConfig {
 }
 
 /// Execution mode used to invoke a provider from ASP.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProviderExecution {
     /// Provider is executed as an external process.
+    #[default]
     ExternalProcess,
     /// Provider is linked into the ASP runtime and dispatched in-process.
     Embedded,
-}
-
-impl Default for ProviderExecution {
-    fn default() -> Self {
-        Self::ExternalProcess
-    }
 }
 
 impl ProviderExecution {

@@ -34,7 +34,7 @@ fn runtime_profiles_for_runtime_resolves_project_bin_without_persisting_file() {
 
     let profiles = runtime_profiles_for_runtime(&root, &runtime);
     let invocation =
-        runtime_profile_invocation(&profiles, &provider, &["search".into(), "prime".into()])
+        runtime_profile_invocation(&profiles, provider, &["search".into(), "prime".into()])
             .expect("provider invocation");
 
     assert_eq!(

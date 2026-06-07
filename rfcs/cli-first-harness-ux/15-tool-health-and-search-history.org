@@ -17,8 +17,8 @@ The protocol responsibility is narrower and stricter:
 - keep =search ingest= stdin-first and typed;
 - preserve command history artifacts so agent command quality can be audited;
 - suggest better search plans from recorded command behavior;
-- compose only high-value multi-step searches that need budgets, fan-out,
-  deduplication, ranking, provenance, and artifact recording.
+- execute high-value ASP-owned candidate pipelines through =search pipe= when
+  the agent has already selected a concrete plan.
 
 ** Required external tool health
 
@@ -116,7 +116,7 @@ same-session prime refreshes, and fewer mixed fan-out bursts before a typed
 frontier is selected.  The audit should therefore rank concrete next actions
 that reduce cascade length, not merely report that a subcommand was frequent.
 
-** Suggest before compose
+** Suggest before pipe
 
 =asp <language> search suggest= is the advisory surface.  It consumes user
 intent plus local history and prints candidate commands; it must not execute
@@ -137,10 +137,18 @@ Suggested commands should prefer existing high-signal surfaces:
 - =query --from-hook direct-source-read --selector <exact-range> --code= only
   after an exact selector exists.
 
-** Compose only high-value searches
+Suggest is intentionally separate from =search pipe=.  =search suggest= can use
+history, tool health, known slow patterns, and user intent to recommend one or
+more concrete commands.  =search pipe= executes a selected ASP-owned candidate
+pipeline.  Keeping them separate prevents an advisory command from silently
+running broad searches, and prevents =search pipe= from becoming an intent
+planner.
 
-=asp <language> search compose= is not a replacement for shell pipes.  It
-exists only when ASP can add value that a raw pipeline does not provide:
+** Pipe only high-value searches
+
+=asp <language> search pipe= is not a replacement for shell pipes.  It executes
+only the high-value ASP-owned search cases where ASP can add value that a raw
+pipeline does not provide:
 
 - multiple independent query terms or owners;
 - bounded fan-out/fan-in with stable ordering;
@@ -151,8 +159,7 @@ exists only when ASP can add value that a raw pipeline does not provide:
 - typed next actions for owner/tests/query/code promotion.
 
 #+begin_src shell
-asp rust search compose \
-  --query 'cacheRoot|ClientReceipt|cacheManifestPath' \
+asp rust search pipe 'cacheRoot|ClientReceipt|cacheManifestPath' \
   --owners crates/agent-semantic-client/src crates/agent-semantic-protocol/src \
   --pipe items,tests \
   --view seeds .
@@ -160,5 +167,5 @@ asp rust search compose \
 
 If a search is a plain one-tool pipeline, agents should write the shell
 pipeline directly and pipe into =search ingest=.  If a search needs history,
-budgets, fan-in, ranking, and artifact provenance, use =search suggest= first
-and =search compose= only after the command plan is clear.
+budgets, fan-in, ranking, and artifact provenance, use =search suggest= first,
+then run the selected =search pipe= command after the command plan is clear.

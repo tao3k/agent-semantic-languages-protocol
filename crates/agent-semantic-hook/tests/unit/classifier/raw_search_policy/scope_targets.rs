@@ -129,7 +129,7 @@ fn git_diff_source_output_routes_to_language_provider() {
 }
 
 #[test]
-fn broad_raw_search_routes_to_provider_query_when_supported() {
+fn broad_raw_search_routes_to_fzf_frontier_when_supported() {
     let decision = classify_hook(
         &polyglot_registry(),
         "codex",
@@ -143,7 +143,19 @@ fn broad_raw_search_routes_to_provider_query_when_supported() {
     assert_eq!(decision.decision, DecisionKind::Deny);
     assert_eq!(decision.reason_kind, ReasonKind::RawBroadSearch);
     assert_eq!(decision.language_ids, vec!["typescript".to_string()]);
-    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Query);
+    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Fzf);
+    assert!(
+        decision.routes[0]
+            .argv
+            .windows(2)
+            .any(|window| window[0] == "search" && window[1] == "fzf")
+    );
+    assert!(
+        !decision.routes[0]
+            .argv
+            .iter()
+            .any(|arg| arg == "direct-source-read")
+    );
 }
 
 #[test]

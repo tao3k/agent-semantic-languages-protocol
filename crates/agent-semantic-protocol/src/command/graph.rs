@@ -62,16 +62,16 @@ impl GraphRenderRequest {
 }
 
 fn read_packet(path: &PathBuf) -> Result<Value, String> {
-    let mut contents = String::new();
+    let mut contents = Vec::new();
     if path.as_os_str() == "-" {
         io::stdin()
-            .read_to_string(&mut contents)
+            .read_to_end(&mut contents)
             .map_err(|error| format!("failed to read graph packet from stdin: {error}"))?;
     } else {
-        contents = fs::read_to_string(path)
+        contents = fs::read(path)
             .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
     }
-    serde_json::from_str(&contents).map_err(|error| format!("invalid graph packet JSON: {error}"))
+    serde_json::from_slice(&contents).map_err(|error| format!("invalid graph packet JSON: {error}"))
 }
 
 fn flag_value(args: &[String], flag: &str) -> Option<String> {

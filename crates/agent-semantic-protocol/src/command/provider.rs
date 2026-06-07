@@ -17,13 +17,17 @@ use super::provider_roots::{
     activation_project_root, activation_storage_root, client_backend_cache_home,
     effective_project_root_and_args,
 };
+use super::query_direct_read::{
+    is_asp_fast_direct_source_read, run_asp_fast_direct_source_read_command,
+};
+use super::search_config::AspConfig;
 use super::search_pipe::{is_asp_fast_search, run_asp_fast_search_command};
 
 const SUPPORTED_LANGUAGES: &[&str] = &["rust", "typescript", "python", "julia", "org", "md"];
 const SUPPORTED_COMMANDS: &[&str] = &["search", "query", "guide", "check", "ast-patch", "evidence"];
 
 macro_rules! restore_env_var {
-    ($name:literal, $previous:expr) => {
+    ($name:expr, $previous:expr) => {
         match $previous {
             Some(value) => unsafe {
                 env::set_var($name, value);
@@ -52,12 +56,17 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         language_id: &str,
         args: &[String],
         project_root: &Path,
+        activation_path: &Path,
         cache_home: &Path,
     ) -> Result<(), String> {
         let client_args = args.to_vec();
         let previous_prj_cache_home = env::var_os("PRJ_CACHE_HOME");
+        let previous_activation_path = env::var_os("ASP_PROVIDER_ACTIVATION_PATH");
         let previous_runtime_bin = env::var_os("ASP_RUNTIME_BIN_DIR");
+        let previous_protocol_bin = env::var_os("SEMANTIC_AGENT_PROTOCOL_BIN");
         let previous_path = env::var_os("PATH");
+        let protocol_bin = env::current_exe()
+            .map_err(|error| format!("failed to resolve current protocol binary: {error}"))?;
         let runtime_bin = cache_home.join("agent-semantic-protocol/runtime/bin");
         let mut path_entries = vec![runtime_bin.clone()];
         if let Some(path) = previous_path.as_deref() {
@@ -66,7 +75,9 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         let runtime_path = env::join_paths(path_entries).ok();
         unsafe {
             env::set_var("PRJ_CACHE_HOME", cache_home);
+            env::set_var("ASP_PROVIDER_ACTIVATION_PATH", activation_path);
             env::set_var("ASP_RUNTIME_BIN_DIR", &runtime_bin);
+            env::set_var("SEMANTIC_AGENT_PROTOCOL_BIN", &protocol_bin);
             if let Some(path) = runtime_path.as_deref() {
                 env::set_var("PATH", path);
             }
@@ -77,7 +88,9 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
             project_root.to_path_buf(),
         );
         restore_env_var!("PRJ_CACHE_HOME", previous_prj_cache_home);
+        restore_env_var!("ASP_PROVIDER_ACTIVATION_PATH", previous_activation_path);
         restore_env_var!("ASP_RUNTIME_BIN_DIR", previous_runtime_bin);
+        restore_env_var!("SEMANTIC_AGENT_PROTOCOL_BIN", previous_protocol_bin);
         restore_env_var!("PATH", previous_path);
         result
     }
@@ -85,12 +98,30 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
     if !is_language_facade(language_id) {
         return Err(language_usage());
     }
-    if document_provider::is_document_language(language_id) {
+    if document_provider::is_document_language(language_id) && is_help(args) {
         return document_provider::run_language_command(language_id, args);
     }
     if is_help(args) {
         println!("{}", provider_usage());
         return Ok(());
+    }
+    let invocation_root =
+        env::current_dir().map_err(|error| format!("failed to read current directory: {error}"))?;
+    let discovered_activation_path = discover_activation_path(&invocation_root);
+    if document_provider::is_document_language(language_id) {
+        let activation_root = discovered_activation_path
+            .as_deref()
+            .and_then(|path| {
+                load_activation(path)
+                    .ok()
+                    .map(|runtime| activation_project_root(path, &runtime.project_root))
+            })
+            .unwrap_or_else(|| invocation_root.clone());
+        let config = AspConfig::load(&invocation_root, &activation_root);
+        if !config.language_enabled(language_id) {
+            return Err(format!("language `{language_id}` is disabled by asp.toml"));
+        }
+        return document_provider::run_language_command_with_config(language_id, args, &config);
     }
     validate_provider_command(args)?;
     if is_guide_help(args) {
@@ -98,18 +129,35 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         return Ok(());
     }
 
-    let invocation_root =
-        env::current_dir().map_err(|error| format!("failed to read current directory: {error}"))?;
-    let activation_path = discover_activation_path(&invocation_root)
-        .unwrap_or_else(|| default_activation_path(&invocation_root));
+    let activation_path =
+        discovered_activation_path.unwrap_or_else(|| default_activation_path(&invocation_root));
     let runtime = load_activation(&activation_path)?;
     let activation_root = activation_project_root(&activation_path, &runtime.project_root);
+    let config = AspConfig::load(&invocation_root, &activation_root);
     let (project_root, provider_args) =
         effective_project_root_and_args(language_id, args, &invocation_root, &activation_root)?;
 
+    if !config.language_enabled(language_id) {
+        return Err(format!("language `{language_id}` is disabled by asp.toml"));
+    }
+
+    if is_asp_fast_direct_source_read(&provider_args) {
+        return run_asp_fast_direct_source_read_command(
+            &provider_args,
+            &project_root,
+            &invocation_root,
+        );
+    }
+
     let cache_home = client_backend_cache_home(&activation_root, &project_root)?;
     if is_asp_fast_search(&provider_args) {
-        return run_asp_fast_search_command(language_id, &provider_args, &project_root);
+        return run_asp_fast_search_command(
+            language_id,
+            &provider_args,
+            &project_root,
+            &invocation_root,
+            &config,
+        );
     }
     let provider = runtime
         .providers
@@ -118,13 +166,19 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         .ok_or_else(|| format!("no activated provider for language {language_id}"))?;
     let runtime_profiles = runtime_profiles_for_runtime(&project_root, &runtime);
     if uses_client_backend(args) {
-        return run_client_backend_command(language_id, &provider_args, &project_root, &cache_home);
+        return run_client_backend_command(
+            language_id,
+            &provider_args,
+            &project_root,
+            &activation_path,
+            &cache_home,
+        );
     }
 
     if is_guide(args) {
         let guide_args = provider_guide_args(language_id, &provider_args);
         let invocation =
-            provider_invocation_with_profile(&runtime_profiles, provider, &guide_args)?;
+            provider_invocation_with_profile(&runtime_profiles, provider, &guide_args, &config)?;
         return run_guide_command(
             language_id,
             provider,
@@ -133,9 +187,13 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
             &cache_home,
         );
     }
-    for invocation in
-        provider_invocations(provider, &provider_args, &project_root, &runtime_profiles)?
-    {
+    for invocation in provider_invocations(
+        provider,
+        &provider_args,
+        &project_root,
+        &runtime_profiles,
+        &config,
+    )? {
         run_provider_command(
             language_id,
             provider,

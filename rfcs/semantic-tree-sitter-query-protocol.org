@@ -155,6 +155,42 @@ tree-sitter runtime compatibility unless the packet uses
 =adapterMode=tree-sitter-runtime= or =adapterMode=hybrid= and the provider
 records that proof.
 
+* Agent command-selection calibration
+
+The syntax ABI is not adopted until real agent command traces use it.  Artifact
+history under each provider root is therefore an acceptance surface, not only a
+debug cache.  A 2026-06-06 audit of
+=languages/*/.cache/agent-semantic-protocol/artifacts= showed the current
+failure mode:
+
+- Rust recorded 90 provider commands: 49 =query/direct-source-read= commands,
+  36 =search/owner= commands, 4 other query commands, 1 =search/prime= command,
+  and only 4 =semantic-tree-sitter-query= packet artifacts.
+- Python recorded 25 provider commands: 8 =query/direct-source-read= commands,
+  15 =search/owner= commands, 2 =search/prime= commands, and no
+  =semantic-tree-sitter-query= packet artifacts.
+- TypeScript recorded owner/search commands but no syntax-query artifacts in
+  the sampled cache.
+
+This is a protocol guidance failure even when each individual direct read is
+bounded and provider-owned.  Agents follow the cheapest executable command in
+hook recovery and skill text; if those surfaces make
+=query --from-hook direct-source-read --code= more prominent than syntax
+locate, owner-local item query, read-plan frontier, or tree-sitter-compatible
+S-expression capture, the public workflow collapses back into manual range
+scanning.
+
+Provider guides, hook recovery text, and the installed =SKILL.md= must therefore
+present direct-source-read as a last-mile source-preserved transport after a
+parser-owned frontier has selected an exact locator.  Discovery should route
+through =search prime=, =search fzf=, =search owner ... items=, normal
+=query --names-only=, or =query --treesitter-query= locator/frontier output.
+Wide direct-source-read recovery should return read-plan or syntax frontier
+refs before any inline code.  The graph-turbo history audit must keep
+=query/direct-source-read= and =query/tree-sitter= as distinct action methods so
+future evidence can detect regressions directly instead of folding both into
+plain =query=.
+
 * Next projection layers
 
 The next layer is not a separate =ts-query= or =syntax-query= family.  It is a
@@ -1154,6 +1190,10 @@ rules before richer v2 projection layers move into default guide output.
 4. At least one real-project benchmark records command count, provider process
    count, cold/warm latency, packet bytes, cache hit rate, and repeated range
    scan reduction before cache benefits are used in marketing or guide text.
+5. Artifact history evidence reports =query/direct-source-read= and
+   =query/tree-sitter= separately.  A native-projection guide is not promoted
+   while real agent traces show direct-read dominating syntax locate for the
+   same language/root without a matching read-plan or syntax-frontier reason.
 
 * Provider conformance lanes
 
@@ -1386,7 +1426,7 @@ Required evidence record:
 [syntax-real-evidence] language=<id> provider=<id> project=<name>
 commands=search-prime,syntax-frontier,exact-selector-code,hook-recovery
 metrics=commandCount=<n>,providerProcessCount=<n>,packetBytes=<n>,coldElapsedMs=<n>,warmElapsedMs=<n>
-metrics=syntaxQueryCount=<n>,exactCodeCount=<n>,manualRangeScanCount=<n>,repeatedTriggerReduction=<n>
+metrics=syntaxQueryCount=<n>,treeSitterArtifactCount=<n>,directReadCount=<n>,exactCodeCount=<n>,manualRangeScanCount=<n>,repeatedTriggerReduction=<n>
 outputs=frontier-no-code,pure-code-stdout,registry-descriptor,query-corpus
 cacheClaim=none|warm-provider|hit
 #+end_example
@@ -1406,7 +1446,11 @@ Evidence rules:
 3. =query --selector <exact> --treesitter-query <pattern> --code= must print only source text for the selected exact or unique match.
 4. Cache speedup may be claimed only when the receipt reports =cacheClaim=hit= or
    a validated normalized-row replay path.  =warm-provider= is not a cache hit.
-5. Julia cache payoff and CodeQL backend execution remain out of scope for this
+5. =directReadCount= must be explained by exact-locator follow-up or
+   source-preserved hook recovery.  It must not exceed syntax locate volume for
+   the same workflow unless the evidence record includes the unsupported syntax
+   pattern, missing catalog, or read-plan reason that forced the fallback.
+6. Julia cache payoff and CodeQL backend execution remain out of scope for this
    native-projection v1 evidence gate.
 
 * Non-goals

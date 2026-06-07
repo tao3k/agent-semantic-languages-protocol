@@ -1,0 +1,10 @@
+[package]
+name = "agent-semantic-config"
+version = "0.1.0"
+edition = "2024"
+description = "Unified project identity, configuration, and state layout for ASP."
+license = "MIT"
+
+[dependencies]
+figment = { version = "0.10.19", features = ["toml"] }
+serde = { workspace = true }

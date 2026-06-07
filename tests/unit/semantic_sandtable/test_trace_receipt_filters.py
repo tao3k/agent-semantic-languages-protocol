@@ -88,13 +88,55 @@ def test_cli_build_receipt_filters_dev_log_root(tmp_path: Path) -> None:
     assert receipt["summary"]["stdoutBytes"] == 202
 
 
-def _write_dev_log_root(tmp_path: Path) -> Path:
+def test_build_receipt_preserves_failure_frontier_metadata(tmp_path: Path) -> None:
+    trace_root = _write_dev_log_root(tmp_path, include_failure_frontier=True)
+
+    receipt = build_receipt_from_trace_path(
+        trace_root,
+        config=_config(),
+        filters=TraceCommandFilter(session_id="session-a"),
+    )
+
+    command = receipt["commands"][0]
+    assert command["next"] == ["src/lib.rs:1-14"]
+    assert command["failureFrontier"] == [
+        {
+            "rule": "RUST-PROJ-R003",
+            "severity": "error",
+            "path": "src/lib.rs",
+            "line": 1,
+            "column": 1,
+            "message": "Rust project check failed",
+            "summary": "cargo check reported an owner failure",
+            "repair": "repair the Rust owner",
+            "hotBlockSelector": "src/lib.rs:1-14",
+            "hotBlockReason": "blocking-finding",
+            "nextAction": "direct-source-read",
+            "nextSelector": "src/lib.rs:1-14",
+            "nextRoot": ".",
+        }
+    ]
+
+
+def _write_dev_log_root(
+    tmp_path: Path,
+    *,
+    include_failure_frontier: bool = False,
+) -> Path:
     command_dir = tmp_path / "semantic_protocol" / "python" / "py-harness" / "commands"
     command_dir.mkdir(parents=True)
     (command_dir / "commands.jsonl").write_text(
         "\n".join(
             [
-                json.dumps(_dev_log_event("event-a", "session-a", 11, 101)),
+                json.dumps(
+                    _dev_log_event(
+                        "event-a",
+                        "session-a",
+                        11,
+                        101,
+                        include_failure_frontier=include_failure_frontier,
+                    )
+                ),
                 json.dumps(_dev_log_event("event-b", "session-b", 22, 202)),
             ]
         )
@@ -113,8 +155,10 @@ def _dev_log_event(
     session_id: str,
     elapsed_ms: int,
     stdout_bytes: int,
+    *,
+    include_failure_frontier: bool = False,
 ) -> dict[str, object]:
-    return {
+    event: dict[str, object] = {
         "schemaId": "agent.semantic-protocols.dev-command-log",
         "schemaVersion": "1",
         "eventId": event_id,
@@ -130,6 +174,27 @@ def _dev_log_event(
             "stderrBytes": 0,
         },
     }
+    if event_id == "event-a":
+        event["next"] = ["src/lib.rs:1-14"]
+    if event_id == "event-a" and include_failure_frontier:
+        event["failureFrontier"] = [
+            {
+                "rule": "RUST-PROJ-R003",
+                "severity": "error",
+                "path": "src/lib.rs",
+                "line": 1,
+                "column": 1,
+                "message": "Rust project check failed",
+                "summary": "cargo check reported an owner failure",
+                "repair": "repair the Rust owner",
+                "hotBlockSelector": "src/lib.rs:1-14",
+                "hotBlockReason": "blocking-finding",
+                "nextAction": "direct-source-read",
+                "nextSelector": "src/lib.rs:1-14",
+                "nextRoot": ".",
+            }
+        ]
+    return event
 
 
 def _config() -> TraceReceiptConfig:

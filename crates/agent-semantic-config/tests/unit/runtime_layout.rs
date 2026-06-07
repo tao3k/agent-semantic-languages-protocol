@@ -113,7 +113,7 @@ fn temp_root(label: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system time")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("agent-semantic-runtime-{label}-{nonce}"));
+    let root = std::env::temp_dir().join(format!("agent-semantic-config-{label}-{nonce}"));
     fs::create_dir_all(&root).expect("create temp root");
     canonical(&root)
 }

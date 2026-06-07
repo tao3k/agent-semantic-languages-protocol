@@ -21,7 +21,7 @@ pub(crate) fn search_query_route(
     terms: &[String],
 ) -> Option<DecisionRoute> {
     let selector = provider_source_selector(provider);
-    search_query_route_for_selector(provider, &selector, ".", terms)
+    search_fzf_route_for_selector(provider, &selector, ".", terms)
 }
 
 pub(crate) fn direct_source_query_route(provider: &ActivatedProvider, path: &str) -> DecisionRoute {
@@ -72,25 +72,59 @@ pub(crate) fn search_query_route_for_selector(
     project_root: &str,
     terms: &[String],
 ) -> Option<DecisionRoute> {
-    let template = provider
-        .routes
-        .query
-        .as_ref()
-        .unwrap_or(&provider.routes.fzf);
+    let (kind, template) = if let Some(template) = provider.routes.query.as_ref() {
+        (DecisionRouteKind::Query, template)
+    } else {
+        (DecisionRouteKind::Fzf, &provider.routes.fzf)
+    };
+    Some(route_from_query_template(
+        provider,
+        kind,
+        template,
+        selector,
+        project_root,
+        terms,
+    ))
+}
+
+fn search_fzf_route_for_selector(
+    provider: &ActivatedProvider,
+    selector: &str,
+    project_root: &str,
+    terms: &[String],
+) -> Option<DecisionRoute> {
+    Some(route_from_query_template(
+        provider,
+        DecisionRouteKind::Fzf,
+        &provider.routes.fzf,
+        selector,
+        project_root,
+        terms,
+    ))
+}
+
+fn route_from_query_template(
+    provider: &ActivatedProvider,
+    kind: DecisionRouteKind,
+    template: &crate::protocol::CommandTemplate,
+    selector: &str,
+    project_root: &str,
+    terms: &[String],
+) -> DecisionRoute {
     let argv = template
         .argv
         .iter()
         .flat_map(|arg| expand_query_arg(arg, selector, project_root, terms))
         .collect();
     let argv = provider.agent_facade_argv_from_provider_argv(argv);
-    Some(DecisionRoute {
+    DecisionRoute {
         language_id: provider.language_id.clone(),
         provider_id: provider.provider_id.clone(),
         binary: "asp".to_string(),
-        kind: DecisionRouteKind::Query,
+        kind,
         argv,
         stdin_mode: template.stdin_mode,
-    })
+    }
 }
 
 fn expand_query_arg(

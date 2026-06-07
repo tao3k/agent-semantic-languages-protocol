@@ -1,29 +1,32 @@
 //! Runtime for the `asp hook` command surface.
 
-use super::hook_enforcement::codex_enforcement_report;
-use super::protocol_binary::{ensure_protocol_binary_installed_for_path, protocol_binary_on_path};
+#[path = "hook_runtime_skill.rs"]
+mod hook_runtime_skill;
+
+use super::{
+    codex_enforcement_report, ensure_protocol_binary_installed_for_path, protocol_binary_on_path,
+};
 use agent_semantic_hook::{
     ActiveContextRecord, DecisionKind, DecisionSubject, HOOK_DECISION_SCHEMA_ID,
-    HOOK_DECISION_SCHEMA_VERSION, HOOK_PROTOCOL_ID, HOOK_PROTOCOL_VERSION, HookActivation,
+    HOOK_DECISION_SCHEMA_VERSION, HOOK_PROTOCOL_ID, HOOK_PROTOCOL_VERSION,
     HookClassificationRequest, HookDecision, ROOT_BLOCK_BEGIN, ROOT_BLOCK_END, ReasonKind,
-    RuntimeProfiles, RuntimeProviderHealthStatus, RuntimeProviderProfile, append_hook_event_state,
-    build_default_activation, classify_hook_with_config, claude_hook_block, codex_hook_block,
-    codex_user_trust_state_status, default_activation_path, default_claude_settings_path,
-    default_client_config_path, default_client_config_template, discover_activation_path,
-    install_codex_user_trust_state, load_activation, load_client_config, load_or_sync_activation,
-    merge_claude_settings, merge_codex_config, parse_payload, project_hook_cache_dir,
-    project_hook_state_dir, record_active_context, remove_incompatible_hook_event_state,
+    RuntimeProviderHealthStatus, append_hook_event_state, build_default_activation,
+    classify_hook_with_config, claude_hook_block, codex_hook_block, codex_user_trust_state_status,
+    default_activation_path, default_claude_settings_path, default_client_config_path,
+    default_client_config_template, discover_activation_path, install_codex_user_trust_state,
+    load_activation, load_client_config, load_or_sync_activation, merge_claude_settings,
+    merge_codex_config, parse_payload, record_active_context, remove_incompatible_hook_event_state,
     remove_legacy_codex_hook_cache_files, render_platform_response,
     runtime_profiles_for_activation, runtime_profiles_for_runtime, validate_claude_settings_json,
     validate_codex_config_toml, write_activation, write_profile_registry,
 };
+use agent_semantic_runtime::{ensure_project_hook_cache_dir, ensure_project_hook_state_dir};
+use hook_runtime_skill::install_agent_semantic_protocols_skill;
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-
-const AGENT_SEMANTIC_PROTOCOLS_SKILL_MD: &str = include_str!("../../../../SKILL.md");
 
 pub(super) fn run_hook_runtime_args<I, S>(args: I) -> Result<(), String>
 where
@@ -61,16 +64,18 @@ fn run_hook(args: &[String]) -> Result<(), String> {
         )?;
         return Ok(());
     }
-    let runtime = match load_activation(&activation_path) {
+    let mut runtime = match load_activation(&activation_path) {
         Ok(registry) => registry,
         Err(error) => {
             emit_activation_load_failure(client, event, emit, &activation_path, &error, &stdin)?;
             return Ok(());
         }
     };
+    let project_root = activation_relative_project_root(&activation_path, &runtime.project_root);
+    runtime.project_root = project_root.display().to_string();
     let config_path = flag_value(args, "--config")
         .map(PathBuf::from)
-        .unwrap_or_else(|| default_client_config_path(&runtime.project_root));
+        .unwrap_or_else(|| default_client_config_path(&project_root.to_string_lossy()));
     let hook_config = match load_client_config(&config_path) {
         Ok(config) => config,
         Err(error) => {
@@ -104,7 +109,7 @@ fn run_hook(args: &[String]) -> Result<(), String> {
         payload: &payload,
         decision: &decision,
     });
-    if let Err(error) = append_hook_event_state(Path::new(&runtime.project_root), &decision) {
+    if let Err(error) = append_hook_event_state(&project_root, &decision) {
         eprintln!("[agent-semantic-hook] failed to update hook state: {error}");
     }
     let output_value = match emit {
@@ -513,15 +518,11 @@ fn run_install(args: &[String]) -> Result<(), String> {
     let project_root = project_root_arg(args);
     let binary_install = ensure_protocol_binary_installed_for_path()?;
     remove_legacy_codex_hook_cache_files(&project_root)?;
-    let activation_path = project_hook_cache_dir(&project_root)?.join("activation.json");
-    if let Some(parent) = activation_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
-    }
+    let activation_path = ensure_project_hook_cache_dir(&project_root)?.join("activation.json");
     let activation = build_default_activation(&project_root)?;
     write_activation(&activation_path, &activation)?;
     let runtime_profiles = runtime_profiles_for_activation(&project_root, &activation)?;
-    let profile_cache_dir = project_hook_state_dir(&project_root)?;
+    let profile_cache_dir = ensure_project_hook_state_dir(&project_root)?;
     remove_incompatible_hook_event_state(&project_root)?;
     let profile_registry_path = write_profile_registry(&profile_cache_dir, &activation)?;
     let client_config_path = default_client_config_path(&project_root.to_string_lossy());
@@ -545,6 +546,19 @@ fn run_install(args: &[String]) -> Result<(), String> {
         binary_install.status,
     );
     Ok(())
+}
+
+fn activation_relative_project_root(activation_path: &Path, project_root: &str) -> PathBuf {
+    let configured = PathBuf::from(project_root);
+    let root = if configured.is_absolute() {
+        configured
+    } else {
+        activation_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(configured)
+    };
+    fs::canonicalize(&root).unwrap_or(root)
 }
 
 fn install_codex_project_hooks(project_root: &Path) -> Result<(PathBuf, String), String> {
@@ -604,167 +618,6 @@ fn install_default_client_config(path: &Path) -> Result<(), String> {
     load_client_config(path)
         .map(|_| ())
         .map_err(|error| format!("generated invalid client hook config: {error}"))
-}
-
-fn default_agent_skill_path(project_root: &Path) -> PathBuf {
-    project_root
-        .join(".agents")
-        .join("skills")
-        .join("agent-semantic-protocols")
-        .join("SKILL.md")
-}
-
-fn install_agent_semantic_protocols_skill(
-    project_root: &Path,
-    activation: &HookActivation,
-    runtime_profiles: &RuntimeProfiles,
-) -> Result<PathBuf, String> {
-    let skill_path = default_agent_skill_path(project_root);
-    if let Some(parent) = skill_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
-    }
-    let rendered_skill = render_agent_semantic_protocols_skill(activation, runtime_profiles);
-    fs::write(&skill_path, format!("{}\n", rendered_skill.trim_end()))
-        .map_err(|error| format!("failed to write {}: {error}", skill_path.display()))?;
-    Ok(skill_path)
-}
-
-fn render_agent_semantic_protocols_skill(
-    activation: &HookActivation,
-    runtime_profiles: &RuntimeProfiles,
-) -> String {
-    AGENT_SEMANTIC_PROTOCOLS_SKILL_MD
-        .replace(
-            "<!-- ASP_INSTALLED_SKILL_NOTICE -->",
-            installed_skill_notice(),
-        )
-        .replace(
-            "<!-- ASP_PROVIDER_SUMMARY -->",
-            &installed_provider_summary(activation, runtime_profiles),
-        )
-}
-
-fn installed_skill_notice() -> &'static str {
-    "> [!IMPORTANT]\n> Generated by `asp hook install` from the repository root `SKILL.md` template and the current provider activation. Do not edit this installed copy. Edit root `SKILL.md` or `asp.toml`, then rerun `asp hook install --client <client> .`."
-}
-
-fn installed_provider_summary(
-    activation: &HookActivation,
-    runtime_profiles: &RuntimeProfiles,
-) -> String {
-    let mut lines = vec![
-        "## Active Providers".to_string(),
-        String::new(),
-        "Detected from provider binaries plus `asp.toml`; only activated languages are listed."
-            .to_string(),
-        String::new(),
-        "| Language | Facade | Provider | Execution | Command |".to_string(),
-        "| --- | --- | --- | --- | --- |".to_string(),
-    ];
-    for provider in &activation.providers {
-        let runtime_provider = runtime_profiles.providers.iter().find(|profile| {
-            profile.manifest_id == provider.manifest_id
-                && profile.language_id == provider.language_id
-                && profile.provider_id == provider.provider_id
-        });
-        lines.push(format!(
-            "| {} | `{}` | {} | {} | `{}` |",
-            markdown_table_cell(&provider.language_id),
-            markdown_table_cell(&format!("asp {}", provider.language_id)),
-            markdown_table_cell(&provider.provider_id),
-            provider.execution.as_str(),
-            markdown_table_cell(&provider_command_display(
-                &activation.project_root,
-                provider,
-                runtime_provider,
-            )),
-        ));
-    }
-    lines.join("\n")
-}
-
-fn provider_command_display(
-    project_root: &str,
-    provider: &agent_semantic_hook::ActivatedProviderConfig,
-    runtime_provider: Option<&RuntimeProviderProfile>,
-) -> String {
-    let argv = runtime_provider
-        .and_then(runtime_provider_command_argv)
-        .or_else(|| {
-            if provider.provider_command_prefix.is_empty() {
-                None
-            } else {
-                Some(provider.provider_command_prefix.clone())
-            }
-        })
-        .unwrap_or_else(|| vec![provider_display_binary(project_root, &provider.binary)]);
-    argv.iter()
-        .map(|arg| {
-            shell_display_word(&installed_skill_display_arg(
-                project_root,
-                &provider.binary,
-                arg,
-            ))
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn runtime_provider_command_argv(profile: &RuntimeProviderProfile) -> Option<Vec<String>> {
-    if !profile.argv.is_empty() {
-        return Some(profile.argv.clone());
-    }
-    profile
-        .resolved_binary
-        .as_ref()
-        .map(|binary| vec![binary.clone()])
-}
-
-fn provider_display_binary(project_root: &str, binary: &str) -> String {
-    let project_bin = Path::new(project_root).join(".bin").join(binary);
-    if project_bin.is_file() {
-        return format!(".bin/{binary}");
-    }
-    Path::new(binary)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(binary)
-        .to_string()
-}
-
-fn installed_skill_display_arg(project_root: &str, provider_binary: &str, arg: &str) -> String {
-    let path = Path::new(arg);
-    if !path.is_absolute() {
-        return arg.to_string();
-    }
-    let project_bin = Path::new(project_root).join(".bin").join(provider_binary);
-    if project_bin.is_file()
-        && path.file_name().and_then(|name| name.to_str()) == Some(provider_binary)
-    {
-        return format!(".bin/{provider_binary}");
-    }
-    if let Ok(relative) = path.strip_prefix(project_root) {
-        return relative.to_string_lossy().replace('\\', "/");
-    }
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(arg)
-        .to_string()
-}
-
-fn shell_display_word(arg: &str) -> String {
-    if arg
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '='))
-    {
-        return arg.to_string();
-    }
-    format!("'{}'", arg.replace('\'', "'\\''"))
-}
-
-fn markdown_table_cell(value: &str) -> String {
-    value.replace('|', "\\|")
 }
 
 fn project_root_arg(args: &[String]) -> PathBuf {

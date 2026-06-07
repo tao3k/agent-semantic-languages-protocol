@@ -27,7 +27,19 @@ fn claude_grep_tool_routes_as_raw_search() {
 
     assert_eq!(decision.decision, DecisionKind::Deny);
     assert_eq!(decision.reason_kind, ReasonKind::RawBroadSearch);
-    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Query);
+    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Fzf);
+    assert!(
+        decision.routes[0]
+            .argv
+            .windows(2)
+            .any(|window| window[0] == "search" && window[1] == "fzf")
+    );
+    assert!(
+        !decision.routes[0]
+            .argv
+            .iter()
+            .any(|arg| arg == "direct-source-read")
+    );
     assert!(
         decision
             .subject
@@ -68,7 +80,19 @@ fn codex_search_command_action_routes_as_raw_search() {
 
     assert_eq!(decision.decision, DecisionKind::Deny);
     assert_eq!(decision.reason_kind, ReasonKind::RawBroadSearch);
-    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Query);
+    assert_eq!(decision.routes[0].kind, DecisionRouteKind::Fzf);
+    assert!(
+        decision.routes[0]
+            .argv
+            .windows(2)
+            .any(|window| window[0] == "search" && window[1] == "fzf")
+    );
+    assert!(
+        !decision.routes[0]
+            .argv
+            .iter()
+            .any(|arg| arg == "direct-source-read")
+    );
 }
 
 #[test]

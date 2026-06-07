@@ -1,39 +1,39 @@
 //! Cache artifact replay implementation.
 
-use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_semantic_client_core::{
     ByteCount, CacheArtifactId, ClientCacheFileHash, ClientMethod, ClientRequest, LanguageId,
     ProviderId, syntax_query_ast_abi_fingerprint,
 };
 use agent_semantic_client_db::{ClientDb, ClientDbGenerationHit, ClientDbSyntaxQueryLookup};
+use bytes::Bytes;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-const SEMANTIC_AGENT_PROTOCOL_BIN_ENV: &str = "SEMANTIC_AGENT_PROTOCOL_BIN";
 const SEMANTIC_TREE_SITTER_QUERY_SCHEMA_ID: &str =
     "agent.semantic-protocols.semantic-tree-sitter-query";
-pub(crate) const MAX_CACHE_REPLAY_ARTIFACT_BYTES: u64 = 1_048_576;
 
+use super::limits::MAX_CACHE_REPLAY_ARTIFACT_BYTES;
+use super::search_packet::{
+    render_search_packet_artifact_stdout, search_output_artifact_replay_safe,
+};
 use super::syntax_query::{
     render_semantic_tree_sitter_query_rows_stdout, render_semantic_tree_sitter_query_stdout,
 };
 
 pub(crate) struct ProviderCacheReplay {
-    pub(crate) stdout: Vec<u8>,
+    pub(crate) stdout: Bytes,
     pub(crate) syntax_artifact_id: Option<CacheArtifactId>,
     pub(crate) packet_bytes: Option<ByteCount>,
     pub(crate) sqlite_read_count: u64,
 }
 
 impl ProviderCacheReplay {
-    fn stdout(stdout: Vec<u8>) -> Self {
+    pub(crate) fn stdout(stdout: impl Into<Bytes>) -> Self {
         Self {
-            stdout,
+            stdout: stdout.into(),
             syntax_artifact_id: None,
             packet_bytes: None,
             sqlite_read_count: 0,
@@ -41,12 +41,12 @@ impl ProviderCacheReplay {
     }
 
     fn syntax_packet(
-        stdout: Vec<u8>,
+        stdout: impl Into<Bytes>,
         syntax_artifact_id: CacheArtifactId,
         packet_bytes: usize,
     ) -> Self {
         Self {
-            stdout,
+            stdout: stdout.into(),
             syntax_artifact_id: Some(syntax_artifact_id),
             packet_bytes: Some(ByteCount::from_len(packet_bytes)),
             sqlite_read_count: 0,
@@ -54,12 +54,12 @@ impl ProviderCacheReplay {
     }
 
     fn syntax_rows(
-        stdout: Vec<u8>,
+        stdout: impl Into<Bytes>,
         syntax_artifact_id: Option<CacheArtifactId>,
         packet_bytes: Option<u64>,
     ) -> Self {
         Self {
-            stdout,
+            stdout: stdout.into(),
             syntax_artifact_id,
             packet_bytes: packet_bytes.map(ByteCount::new),
             sqlite_read_count: 1,
@@ -242,63 +242,12 @@ fn load_search_output_artifact(
     Some(ProviderCacheReplay::stdout(stdout))
 }
 
-pub(crate) fn search_output_artifact_replay_safe(stdout: &[u8]) -> bool {
-    let Ok(stdout) = std::str::from_utf8(stdout) else {
-        return false;
-    };
-    stdout.contains("[search-")
-        && stdout.contains("legend: ID=kind:role(value)!next;")
-        && stdout.contains("frontier ID.next")
-        && stdout.contains("aliases: graph:{")
-        && !stdout.contains('\0')
-}
-
-pub(crate) fn render_search_packet_bytes(packet_bytes: &[u8]) -> Option<Vec<u8>> {
-    if packet_bytes.is_empty() || packet_bytes.len() as u64 > MAX_CACHE_REPLAY_ARTIFACT_BYTES {
-        return None;
-    }
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()?
-        .as_nanos();
-    let packet_path = env::temp_dir().join(format!(
-        "agent-semantic-search-packet-{}-{unique}.json",
-        std::process::id()
-    ));
-    fs::write(&packet_path, packet_bytes).ok()?;
-    let output = Command::new(protocol_graph_renderer_binary())
-        .args(["graph", "render", "--packet"])
-        .arg(&packet_path)
-        .args(["--view", "seeds"])
-        .output()
-        .ok();
-    let _ = fs::remove_file(&packet_path);
-    let output = output?;
-    if !output.status.success() || !search_output_artifact_replay_safe(&output.stdout) {
-        return None;
-    }
-    Some(output.stdout)
-}
-
 fn render_search_packet_artifact(
     cache_root: &Path,
     artifact_id: &CacheArtifactId,
 ) -> Option<ProviderCacheReplay> {
     let artifact_path = replay_artifact_path(cache_root, artifact_id, "search/", ".json")?;
-    let metadata = fs::metadata(&artifact_path).ok()?;
-    if !metadata.is_file() || metadata.len() > MAX_CACHE_REPLAY_ARTIFACT_BYTES {
-        return None;
-    }
-    let output = Command::new(protocol_graph_renderer_binary())
-        .args(["graph", "render", "--packet"])
-        .arg(&artifact_path)
-        .args(["--view", "seeds"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(ProviderCacheReplay::stdout(output.stdout))
+    render_search_packet_artifact_stdout(&artifact_path).map(ProviderCacheReplay::stdout)
 }
 
 fn load_query_packet_artifact(
@@ -653,11 +602,4 @@ fn string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
 
 fn bool_field(value: &Value, field: &str) -> Option<bool> {
     value.get(field).and_then(Value::as_bool)
-}
-
-fn protocol_graph_renderer_binary() -> PathBuf {
-    env::var_os(SEMANTIC_AGENT_PROTOCOL_BIN_ENV)
-        .map(PathBuf::from)
-        .or_else(|| env::current_exe().ok())
-        .unwrap_or_else(|| PathBuf::from("asp"))
 }

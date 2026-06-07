@@ -1,9 +1,9 @@
 //! Runtime healthcheck for project-local ASP state.
 
 use super::protocol_binary::protocol_binary_on_path;
+use agent_semantic_config::{PRJ_CACHE_HOME_ENV, ProjectRuntimeLayout, project_runtime_layout};
 use agent_semantic_hook::{
-    PRJ_CACHE_HOME_ENV, ProjectRuntimeLayout, RuntimeProfiles, RuntimeProviderHealthStatus,
-    load_activation, project_runtime_layout, runtime_profiles_for_runtime,
+    RuntimeProfiles, RuntimeProviderHealthStatus, load_activation, runtime_profiles_for_runtime,
 };
 use serde::Serialize;
 use serde_json::{Value, json};

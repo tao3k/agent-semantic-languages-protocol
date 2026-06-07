@@ -492,6 +492,7 @@
       "displayName": "Org Document Provider",
       "methods": [
         "search/prime",
+        "search/toc",
         "search/fzf",
         "query/document",
         "guide"
@@ -509,6 +510,22 @@
             "agent.semantic-protocols.semantic-document-search-packet"
           ],
           "view": "prime",
+          "requiresQuery": false,
+          "acceptsStdin": false,
+          "supportsPackageScope": true
+        },
+        {
+          "method": "search/toc",
+          "command": "search",
+          "supportsJson": true,
+          "supportsCompact": true,
+          "packetSchemas": [
+            "semantic-document-search-packet.v1"
+          ],
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-document-search-packet"
+          ],
+          "view": "toc",
           "requiresQuery": false,
           "acceptsStdin": false,
           "supportsPackageScope": true
@@ -578,6 +595,7 @@
       "displayName": "Markdown Document Provider",
       "methods": [
         "search/prime",
+        "search/toc",
         "search/fzf",
         "query/document",
         "guide"
@@ -595,6 +613,22 @@
             "agent.semantic-protocols.semantic-document-search-packet"
           ],
           "view": "prime",
+          "requiresQuery": false,
+          "acceptsStdin": false,
+          "supportsPackageScope": true
+        },
+        {
+          "method": "search/toc",
+          "command": "search",
+          "supportsJson": true,
+          "supportsCompact": true,
+          "packetSchemas": [
+            "semantic-document-search-packet.v1"
+          ],
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-document-search-packet"
+          ],
+          "view": "toc",
           "requiresQuery": false,
           "acceptsStdin": false,
           "supportsPackageScope": true

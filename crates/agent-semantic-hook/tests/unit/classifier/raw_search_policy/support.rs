@@ -30,6 +30,11 @@ pub(super) fn assert_raw_search_denied(command: &str, provider_id: &str) {
             "{command}: {:?}",
             route.argv
         );
+        assert!(
+            !route.argv.iter().any(|arg| arg == "direct-source-read"),
+            "{command}: {:?}",
+            route.argv
+        );
         if let Some(surface_index) = route.argv.iter().position(|arg| arg == "--surface") {
             assert_eq!(
                 route.argv.get(surface_index + 1).map(String::as_str),
@@ -39,6 +44,11 @@ pub(super) fn assert_raw_search_denied(command: &str, provider_id: &str) {
             );
         }
     }
+    assert!(
+        !decision.message.contains("direct-source-read"),
+        "{command}: {}",
+        decision.message
+    );
 }
 
 pub(super) fn assert_bulk_source_dump_denied(command: &str, provider_id: &str) {

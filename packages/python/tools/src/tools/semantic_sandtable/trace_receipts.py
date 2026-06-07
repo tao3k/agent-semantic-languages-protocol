@@ -78,6 +78,12 @@ def _summary(commands: list[dict[str, Any]]) -> dict[str, int]:
         "stdoutBytes": sum(_metric(command, "stdoutBytes") for command in commands),
         "stderrBytes": sum(_metric(command, "stderrBytes") for command in commands),
         "elapsedMs": sum(_metric(command, "elapsedMs") for command in commands),
+        "aspCommands": _semantic_command_count(commands),
+        "searchCommands": _semantic_command_count(commands, verb="search"),
+        "queryCommands": _semantic_command_count(commands, verb="query"),
+        "directReadCommands": _direct_read_command_count(commands),
+        "repeatedCommands": _repeated_semantic_command_count(commands),
+        "repeatedSearches": _repeated_semantic_command_count(commands, verb="search"),
         "jsonSearches": _search_output_mode_count(commands, "json"),
         "compactSearches": _search_output_mode_count(commands, "compact"),
     }
@@ -94,6 +100,54 @@ def _search_output_mode_count(commands: list[dict[str, Any]], output_mode: str) 
         if command.get("kind") in SEARCH_COMMAND_KINDS
         and receipt_command_output_mode(command) == output_mode
     )
+
+
+def _semantic_command_count(
+    commands: list[dict[str, Any]], *, verb: str | None = None
+) -> int:
+    return sum(
+        1
+        for command in commands
+        if _is_semantic_command(command) and (verb is None or verb in _argv(command))
+    )
+
+
+def _direct_read_command_count(commands: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for command in commands
+        if _is_semantic_command(command)
+        and "--from-hook" in _argv(command)
+        and "direct-source-read" in _argv(command)
+    )
+
+
+def _repeated_semantic_command_count(
+    commands: list[dict[str, Any]], *, verb: str | None = None
+) -> int:
+    counts: dict[tuple[str, ...], int] = {}
+    for command in commands:
+        argv = _argv(command)
+        if not _is_semantic_command(command) or (verb is not None and verb not in argv):
+            continue
+        key = tuple(argv)
+        counts[key] = counts.get(key, 0) + 1
+    return sum(count - 1 for count in counts.values() if count > 1)
+
+
+def _is_semantic_command(command: dict[str, Any]) -> bool:
+    argv = _argv(command)
+    if not argv:
+        return False
+    binary = Path(argv[0]).name
+    return binary == "asp" or binary.endswith("-harness")
+
+
+def _argv(command: dict[str, Any]) -> list[str]:
+    argv = command.get("argv")
+    if not isinstance(argv, list):
+        return []
+    return [str(part) for part in argv]
 
 
 def _project_source(value: str) -> str:

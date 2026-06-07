@@ -284,6 +284,28 @@
           "type": "integer",
           "minimum": 0
         },
+        "stdoutSha256": {
+          "description": "SHA-256 digest of full provider stdout bytes before retained-buffer truncation.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stderrSha256": {
+          "description": "SHA-256 digest of full provider stderr bytes before retained-buffer truncation.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stdoutTruncated": {
+          "description": "Whether provider stdout was truncated in the retained buffer.",
+          "type": "boolean"
+        },
+        "stderrTruncated": {
+          "description": "Whether provider stderr was truncated in the retained buffer.",
+          "type": "boolean"
+        },
+        "timedOut": {
+          "description": "Whether the provider process exceeded its configured timeout and was killed.",
+          "type": "boolean"
+        },
         "elapsedMs": {
           "type": "integer",
           "minimum": 0

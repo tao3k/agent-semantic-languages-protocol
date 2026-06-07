@@ -49,6 +49,16 @@ pub struct ProviderCommandReceipt {
     pub exit_code: i32,
     pub stdout_bytes: ByteCount,
     pub stderr_bytes: ByteCount,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stdout_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stderr_sha256: Option<String>,
+    #[serde(skip_serializing_if = "is_false")]
+    pub stdout_truncated: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub stderr_truncated: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub timed_out: bool,
     pub elapsed_ms: ElapsedMillis,
 }
 
@@ -119,6 +129,10 @@ pub struct ClientReceipt {
     pub client_db_busy_timeout_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_db_foreign_keys: Option<bool>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl ClientReceipt {

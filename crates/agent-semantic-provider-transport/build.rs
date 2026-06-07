@@ -1,0 +1,26 @@
+use rust_lang_project_harness::{
+    assert_rust_project_harness_cargo_check_clean_from_env_with_config,
+    assert_rust_project_harness_performance_verification_from_env, default_rust_harness_config,
+};
+
+fn main() {
+    let config = default_rust_harness_config()
+        .with_cargo_check_advice_allow_explanation(
+            "provider transport keeps process orchestration in one async entrypoint while the crate stabilizes",
+        )
+        .with_criterion_performance_verification()
+        .with_latency_sensitive_performance_owner(
+            "src/capture.rs",
+            "provider stdout/stderr capture is a hot path for every native provider command",
+        )
+        .with_latency_sensitive_performance_owner(
+            "src/transport.rs",
+            "provider process orchestration controls command latency and timeout behavior",
+        )
+        .with_latency_sensitive_performance_owner(
+            "src/byte_text.rs",
+            "byte-text projection is reused by compact search and provider output rendering",
+        );
+    assert_rust_project_harness_cargo_check_clean_from_env_with_config(&config);
+    assert_rust_project_harness_performance_verification_from_env(&config, "provider transport");
+}

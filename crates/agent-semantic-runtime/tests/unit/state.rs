@@ -1,0 +1,74 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use super::{
+    ensure_project_client_cache_dir, ensure_project_hook_cache_dir, ensure_project_runtime_home,
+    project_runtime_state,
+};
+
+#[test]
+fn runtime_state_materializes_config_layout_under_git_toplevel() {
+    let root = temp_root("runtime-state-git");
+    let package_root = root.join("crates/example");
+    fs::create_dir_all(&package_root).expect("create package root");
+    fs::create_dir_all(root.join(".git")).expect("create git marker");
+
+    let state = project_runtime_state(&package_root).expect("runtime state");
+
+    assert_eq!(state.layout.git_toplevel.as_deref(), Some(root.as_path()));
+    assert_eq!(
+        state.hook_cache_dir,
+        root.join(".cache/agent-semantic-protocol/hooks")
+    );
+    assert_eq!(
+        state.client_cache_dir,
+        root.join(".cache/agent-semantic-protocol/client")
+    );
+    assert_eq!(
+        state.artifacts_dir,
+        root.join(".cache/agent-semantic-protocol/artifacts")
+    );
+    assert_eq!(
+        state.runtime_home,
+        root.join(".cache/agent-semantic-protocol/runtime")
+    );
+    assert!(state.hook_cache_dir.is_dir());
+    assert!(state.client_cache_dir.is_dir());
+    assert!(state.artifacts_dir.is_dir());
+    assert!(state.runtime_home.is_dir());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn ensure_helpers_create_only_the_requested_runtime_dir() {
+    let root = temp_root("runtime-state-single-dir");
+    let package_root = root.join("crates/example");
+    fs::create_dir_all(&package_root).expect("create package root");
+    fs::create_dir_all(root.join(".git")).expect("create git marker");
+
+    let hook_dir = ensure_project_hook_cache_dir(&package_root).expect("hook cache dir");
+
+    assert!(hook_dir.is_dir());
+    assert!(!root.join(".cache/agent-semantic-protocol/client").exists());
+
+    let client_dir = ensure_project_client_cache_dir(&package_root).expect("client cache dir");
+    let runtime_home = ensure_project_runtime_home(&package_root).expect("runtime home");
+
+    assert!(client_dir.is_dir());
+    assert!(runtime_home.is_dir());
+    let _ = fs::remove_dir_all(root);
+}
+
+fn temp_root(label: &str) -> PathBuf {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("agent-semantic-runtime-{label}-{nonce}"));
+    fs::create_dir_all(&root).expect("create temp root");
+    canonical(&root)
+}
+
+fn canonical(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}

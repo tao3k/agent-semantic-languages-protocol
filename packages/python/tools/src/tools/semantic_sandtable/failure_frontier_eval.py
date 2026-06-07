@@ -49,7 +49,33 @@ def compare_failure_frontier_receipts(
 ) -> dict[str, Any]:
     baseline_metrics = _receipt_metrics(baseline)
     candidate_metrics = _receipt_metrics(candidate)
-    declared_hot_blocks = _declared_hot_blocks(candidate)
+    frontier = _comparison_frontier(candidate, expected_hot_blocks)
+    delta = _comparison_delta(baseline_metrics, candidate_metrics)
+    failures = _comparison_failures(
+        command_reduction_ratio=delta["commandReductionRatio"],
+        candidate_metrics=candidate_metrics,
+        missing_hot_blocks=frontier["missingHotBlocks"],
+        thresholds=thresholds,
+    )
+    return _comparison_payload(
+        baseline_metrics=baseline_metrics,
+        candidate_metrics=candidate_metrics,
+        delta=delta,
+        frontier=frontier,
+        thresholds=thresholds,
+        failures=failures,
+    )
+
+
+def _comparison_frontier(
+    candidate: dict[str, Any],
+    expected_hot_blocks: list[str],
+) -> dict[str, Any]:
+    declared_failure_frontier = _declared_failure_frontier(candidate)
+    declared_hot_blocks = _declared_hot_blocks(
+        candidate,
+        declared_failure_frontier=declared_failure_frontier,
+    )
     expected_hot_blocks = expected_hot_blocks or declared_hot_blocks
     read_targets = _read_targets(candidate)
     covered = [
@@ -58,26 +84,50 @@ def compare_failure_frontier_receipts(
         if _target_covered(target, read_targets)
     ]
     missing = [target for target in expected_hot_blocks if target not in covered]
+    return {
+        "expectedHotBlocks": expected_hot_blocks,
+        "declaredFailureFrontier": declared_failure_frontier,
+        "declaredHotBlocks": declared_hot_blocks,
+        "readHotBlocks": sorted(read_targets),
+        "coveredHotBlocks": covered,
+        "missingHotBlocks": missing,
+        "coverageRatio": _coverage_ratio(covered, expected_hot_blocks),
+    }
+
+
+def _comparison_delta(
+    baseline_metrics: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+) -> dict[str, Any]:
     command_reduction = (
         baseline_metrics["commandCount"] - candidate_metrics["commandCount"]
-    )
-    command_reduction_ratio = _ratio_reduction(
-        baseline_metrics["commandCount"],
-        candidate_metrics["commandCount"],
     )
     stdout_reduction = (
         baseline_metrics["stdoutBytes"] - candidate_metrics["stdoutBytes"]
     )
-    stdout_reduction_ratio = _ratio_reduction(
-        baseline_metrics["stdoutBytes"],
-        candidate_metrics["stdoutBytes"],
-    )
-    failures = _comparison_failures(
-        command_reduction_ratio=command_reduction_ratio,
-        candidate_metrics=candidate_metrics,
-        missing_hot_blocks=missing,
-        thresholds=thresholds,
-    )
+    return {
+        "commandReduction": command_reduction,
+        "commandReductionRatio": _ratio_reduction(
+            baseline_metrics["commandCount"],
+            candidate_metrics["commandCount"],
+        ),
+        "stdoutBytesReduction": stdout_reduction,
+        "stdoutBytesReductionRatio": _ratio_reduction(
+            baseline_metrics["stdoutBytes"],
+            candidate_metrics["stdoutBytes"],
+        ),
+    }
+
+
+def _comparison_payload(
+    *,
+    baseline_metrics: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+    delta: dict[str, Any],
+    frontier: dict[str, Any],
+    thresholds: FailureFrontierThresholds,
+    failures: list[str],
+) -> dict[str, Any]:
     return {
         "schemaId": (
             "agent.semantic-protocols.semantic-sandtable-failure-frontier-comparison"
@@ -86,27 +136,19 @@ def compare_failure_frontier_receipts(
         "status": "fail" if failures else "pass",
         "baseline": baseline_metrics,
         "candidate": candidate_metrics,
-        "delta": {
-            "commandReduction": command_reduction,
-            "commandReductionRatio": command_reduction_ratio,
-            "stdoutBytesReduction": stdout_reduction,
-            "stdoutBytesReductionRatio": stdout_reduction_ratio,
-        },
-        "frontier": {
-            "expectedHotBlocks": expected_hot_blocks,
-            "declaredHotBlocks": declared_hot_blocks,
-            "readHotBlocks": sorted(read_targets),
-            "coveredHotBlocks": covered,
-            "missingHotBlocks": missing,
-            "coverageRatio": _coverage_ratio(covered, expected_hot_blocks),
-        },
-        "thresholds": {
-            "minCommandReduction": thresholds.min_command_reduction,
-            "maxDirectSourceReadCode": thresholds.max_direct_source_read_code,
-            "maxDuplicateSelectors": thresholds.max_duplicate_selectors,
-            "maxSameFileWindowFanout": thresholds.max_same_file_window_fanout,
-        },
+        "delta": delta,
+        "frontier": frontier,
+        "thresholds": _threshold_payload(thresholds),
         "failures": failures,
+    }
+
+
+def _threshold_payload(thresholds: FailureFrontierThresholds) -> dict[str, Any]:
+    return {
+        "minCommandReduction": thresholds.min_command_reduction,
+        "maxDirectSourceReadCode": thresholds.max_direct_source_read_code,
+        "maxDuplicateSelectors": thresholds.max_duplicate_selectors,
+        "maxSameFileWindowFanout": thresholds.max_same_file_window_fanout,
     }
 
 
@@ -143,7 +185,9 @@ def print_failure_frontier_comparison(comparison: dict[str, Any]) -> None:
         "|frontier "
         f"coveredHotBlocks={len(covered)} "
         f"expectedHotBlocks={len(string_list(frontier.get('expectedHotBlocks')))} "
-        f"missingHotBlocks={len(missing)}"
+        f"missingHotBlocks={len(missing)} "
+        "declaredFailureFrontier="
+        f"{len(list_value(frontier.get('declaredFailureFrontier')))}"
     )
     for target in missing:
         emit(f"|missingHotBlock target={quote_value(target)}")
@@ -257,9 +301,32 @@ def _selector_file(selector: str) -> str:
     return head if tail.replace("-", "").isdigit() else selector
 
 
-def _declared_hot_blocks(receipt: dict[str, Any]) -> list[str]:
+def _declared_failure_frontier(receipt: dict[str, Any]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for command in list_value(receipt.get("commands")):
+        if not isinstance(command, dict):
+            continue
+        if not _is_check_command(command):
+            continue
+        for item in list_value(command.get("failureFrontier")):
+            if isinstance(item, dict):
+                entries.append(dict(item))
+    return entries
+
+
+def _declared_hot_blocks(
+    receipt: dict[str, Any],
+    *,
+    declared_failure_frontier: list[dict[str, Any]],
+) -> list[str]:
     targets: list[str] = []
     seen: set[str] = set()
+    for entry in declared_failure_frontier:
+        for field in ("hotBlockSelector", "nextSelector"):
+            target = require_str(entry, field, "")
+            if target and target not in seen:
+                targets.append(target)
+                seen.add(target)
     for command in list_value(receipt.get("commands")):
         if not isinstance(command, dict):
             continue

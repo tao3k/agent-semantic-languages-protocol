@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -103,14 +104,17 @@ def _resolve_step_execution(
 ) -> tuple[list[str], dict[str, str]] | StepResult:
     has_command = "command" in step
     has_agent_cli = "agentCli" in step
-    if has_command and has_agent_cli:
+    has_agent_sdk = "agentSdk" in step
+    if sum([has_command, has_agent_cli, has_agent_sdk]) != 1:
         return empty_step_error(
             scenario_id,
             step_id,
-            "step must define exactly one of command or agentCli",
+            "step must define exactly one of command, agentCli, or agentSdk",
         )
     if has_agent_cli:
         return _resolve_agent_cli_step(step, scenario_id, step_id, env, captures)
+    if has_agent_sdk:
+        return _resolve_agent_sdk_step(step, scenario_id, step_id, env, captures)
 
     command = _resolve_step_command(step, scenario_id, step_id, captures)
     if isinstance(command, StepResult):
@@ -139,6 +143,38 @@ def _resolve_agent_cli_step(
     if isinstance(resolved, StepResult):
         return resolved
     step_env = _resolve_agent_cli_env(spec, scenario_id, step_id, env)
+    if isinstance(step_env, StepResult):
+        return step_env
+    return resolved, step_env
+
+
+def _resolve_agent_sdk_step(
+    step: dict[str, Any],
+    scenario_id: str,
+    step_id: str,
+    env: dict[str, str],
+    captures: dict[str, str],
+) -> tuple[list[str], dict[str, str]] | StepResult:
+    spec = step.get("agentSdk")
+    if not isinstance(spec, dict):
+        return empty_step_error(scenario_id, step_id, "step.agentSdk must be an object")
+    if require_str(spec, "client", "") != "claude":
+        return empty_step_error(
+            scenario_id,
+            step_id,
+            "step.agentSdk.client must be 'claude'",
+        )
+
+    resolved = _resolve_claude_sdk_command(spec, scenario_id, step_id, captures)
+    if isinstance(resolved, StepResult):
+        return resolved
+    step_env = _resolve_agent_env(
+        spec,
+        scenario_id,
+        step_id,
+        env,
+        "agentSdk",
+    )
     if isinstance(step_env, StepResult):
         return step_env
     return resolved, step_env
@@ -205,6 +241,95 @@ def _resolve_claude_cli_command(
     return command
 
 
+def _resolve_claude_sdk_command(
+    spec: dict[str, Any],
+    scenario_id: str,
+    step_id: str,
+    captures: dict[str, str],
+) -> list[str] | StepResult:
+    prompt = _required_agent_string(
+        spec,
+        "prompt",
+        scenario_id,
+        step_id,
+        captures,
+        "agentSdk",
+    )
+    output_format = _required_agent_string(
+        spec,
+        "outputFormat",
+        scenario_id,
+        step_id,
+        captures,
+        "agentSdk",
+    )
+    if isinstance(prompt, StepResult):
+        return prompt
+    if isinstance(output_format, StepResult):
+        return output_format
+    if output_format not in {"text", "json", "stream-json"}:
+        return empty_step_error(
+            scenario_id,
+            step_id,
+            "step.agentSdk.outputFormat must be text, json, or stream-json",
+        )
+
+    command = [
+        sys.executable,
+        "-m",
+        "tools.semantic_sandtable.claude_sdk_runner",
+        "--prompt",
+        prompt,
+        "--output-format",
+        output_format,
+    ]
+    if bool(spec.get("includePartialMessages", False)):
+        command.append("--include-partial-messages")
+    if bool(spec.get("includeHookEvents", False)):
+        command.append("--include-hook-events")
+    if bool(spec.get("verbose", False)):
+        command.append("--verbose")
+
+    model = _optional_agent_string(
+        spec,
+        "model",
+        scenario_id,
+        step_id,
+        captures,
+        "agentSdk",
+    )
+    if isinstance(model, StepResult):
+        return model
+    if model:
+        command.extend(["--model", model])
+    return command
+
+
+def _required_agent_string(
+    spec: dict[str, Any],
+    key: str,
+    scenario_id: str,
+    step_id: str,
+    captures: dict[str, str],
+    field_name: str,
+) -> str | StepResult:
+    value = spec.get(key)
+    if not isinstance(value, str) or not value:
+        return empty_step_error(
+            scenario_id,
+            step_id,
+            f"step.{field_name}.{key} must be a non-empty string",
+        )
+    try:
+        return expand_tokens(value, captures)
+    except KeyError as error:
+        return empty_step_error(
+            scenario_id,
+            step_id,
+            f"missing capture {error.args[0]!r}",
+        )
+
+
 def _required_agent_cli_string(
     spec: dict[str, Any],
     key: str,
@@ -255,11 +380,48 @@ def _optional_agent_cli_string(
         )
 
 
+def _optional_agent_string(
+    spec: dict[str, Any],
+    key: str,
+    scenario_id: str,
+    step_id: str,
+    captures: dict[str, str],
+    field_name: str,
+) -> str | StepResult | None:
+    value = spec.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return empty_step_error(
+            scenario_id,
+            step_id,
+            f"step.{field_name}.{key} must be a string",
+        )
+    try:
+        return expand_tokens(value, captures)
+    except KeyError as error:
+        return empty_step_error(
+            scenario_id,
+            step_id,
+            f"missing capture {error.args[0]!r}",
+        )
+
+
 def _resolve_agent_cli_env(
     spec: dict[str, Any],
     scenario_id: str,
     step_id: str,
     env: dict[str, str],
+) -> dict[str, str] | StepResult:
+    return _resolve_agent_env(spec, scenario_id, step_id, env, "agentCli")
+
+
+def _resolve_agent_env(
+    spec: dict[str, Any],
+    scenario_id: str,
+    step_id: str,
+    env: dict[str, str],
+    field_name: str,
 ) -> dict[str, str] | StepResult:
     step_env = env.copy()
     overrides = spec.get("env", {})
@@ -267,14 +429,14 @@ def _resolve_agent_cli_env(
         return empty_step_error(
             scenario_id,
             step_id,
-            "step.agentCli.env must be an object",
+            f"step.{field_name}.env must be an object",
         )
     for key, value in overrides.items():
         if not isinstance(key, str) or not isinstance(value, str):
             return empty_step_error(
                 scenario_id,
                 step_id,
-                "step.agentCli.env entries must be string to string",
+                f"step.{field_name}.env entries must be string to string",
             )
         step_env[key] = _expand_env_references(value, step_env)
 
@@ -287,7 +449,7 @@ def _resolve_agent_cli_env(
         return empty_step_error(
             scenario_id,
             step_id,
-            "step.agentCli.requiredEnv unresolved: " + ", ".join(missing),
+            f"step.{field_name}.requiredEnv unresolved: " + ", ".join(missing),
         )
     return step_env
 
@@ -341,6 +503,9 @@ def _resolve_step_command(
 def _workspace_dev_command(repo_root: Path, command: list[str]) -> list[str]:
     if command[0] != "asp":
         return command
+    if protocol_bin := _workspace_protocol_bin(repo_root):
+        rewritten = [str(protocol_bin), *command[1:]]
+        return _append_default_hook_activation(repo_root, command, rewritten)
     rewritten = [
         "cargo",
         "run",
@@ -350,6 +515,12 @@ def _workspace_dev_command(repo_root: Path, command: list[str]) -> list[str]:
         "--",
         *command[1:],
     ]
+    return _append_default_hook_activation(repo_root, command, rewritten)
+
+
+def _append_default_hook_activation(
+    repo_root: Path, command: list[str], rewritten: list[str]
+) -> list[str]:
     if _is_hook_command(command) and "--activation" not in command:
         rewritten.extend(
             [
@@ -364,6 +535,14 @@ def _workspace_dev_command(repo_root: Path, command: list[str]) -> list[str]:
             ]
         )
     return rewritten
+
+
+def _workspace_protocol_bin(repo_root: Path) -> Path | None:
+    for relative in ("target/debug/asp", ".bin/asp"):
+        candidate = repo_root / relative
+        if candidate.exists():
+            return candidate.resolve()
+    return None
 
 
 def _is_hook_command(command: list[str]) -> bool:

@@ -51,7 +51,7 @@ fn semantic_tree_sitter_query_replay_falls_back_to_rows_when_artifact_is_missing
     .expect("row replay");
 
     assert_eq!(
-        String::from_utf8(replay.stdout).expect("utf8"),
+        std::str::from_utf8(replay.stdout.as_ref()).expect("utf8"),
         expected_stdout()
     );
     assert_eq!(
@@ -231,7 +231,10 @@ rank=Q frontier=Q.fzf\n";
 
     let replay = load_replay_artifact(&cache_root, &hit, &request).expect("search stdout replay");
 
-    assert_eq!(String::from_utf8(replay.stdout).expect("utf8"), stdout);
+    assert_eq!(
+        std::str::from_utf8(replay.stdout.as_ref()).expect("utf8"),
+        stdout
+    );
     assert_eq!(replay.sqlite_read_count, 0);
     let _ = std::fs::remove_dir_all(root);
 }

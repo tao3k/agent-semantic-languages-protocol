@@ -9,6 +9,8 @@ mod hook_runtime;
 #[path = "../../src/command/protocol_binary.rs"]
 mod protocol_binary;
 
+use hook_enforcement::codex_enforcement_report;
+use protocol_binary::{ensure_protocol_binary_installed_for_path, protocol_binary_on_path};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -267,3 +267,23 @@ profile names.
   registry.
 - Python fast prime removed the obsolete =owner-items= entry; owner-only seed
   frontiers now use the shared =owner-tests= return contract.
+
+* 2026-06-06 TypeScript graph reasoning entry alignment
+
+TypeScript now has the same executable typed reasoning entry surface as Python,
+and the root ASP fast path returns a single selected profile entry.
+
+- =ts-harness search reasoning owner-tests --owner <owner-path> --view seeds .=
+  returns =owner-tests(O=>covering-tests+test-entrypoints+fixtures)=.
+- =ts-harness search reasoning owner-query --owner <owner-path> --query
+  <symbol> --view seeds .= returns only
+  =owner-query(O,Q=>items+tests+dependency-usage)=.  The root facade fast path
+  no longer appends =owner-tests= merely because an =O= alias is present.
+- =ts-harness search reasoning query-deps --query <symbol> --dependency <pkg>
+  --view seeds .= returns =query-deps(Q,D=>owners+imports+usage-tests)=.
+- =ts-harness guide= prints the three concrete reasoning commands, and
+  =agent doctor --json= advertises =search/reasoning= in the TypeScript
+  provider registry.
+- The ASP-owned fast frontier code is split so candidate collection and graph
+  rendering live in separate modules.  This keeps the drift fix at the protocol
+  boundary instead of preserving a compatibility alias in the output.

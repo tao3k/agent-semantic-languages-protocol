@@ -94,7 +94,7 @@ fn provider_language_required(command: &str) -> String {
 }
 
 fn run_providers(parsed: ParsedArgs) -> Result<(), String> {
-    match ProviderRegistrySnapshot::load(&parsed.project_root) {
+    match ProviderRegistrySnapshot::load(&parsed.activation_root) {
         Ok(snapshot) => {
             println!(
                 "[asp-providers] activation={} providers={}",
@@ -124,7 +124,7 @@ fn run_providers(parsed: ParsedArgs) -> Result<(), String> {
 }
 
 fn run_doctor(parsed: ParsedArgs) -> Result<(), String> {
-    match ProviderRegistrySnapshot::load(&parsed.project_root) {
+    match ProviderRegistrySnapshot::load(&parsed.activation_root) {
         Ok(snapshot) => println!(
             "[asp-doctor] status=ok backend=local activation={} providers={} server=not-required",
             snapshot.activation_path.display(),

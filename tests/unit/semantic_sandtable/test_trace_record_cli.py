@@ -72,13 +72,39 @@ def test_cli_records_failure_frontier_next_from_stdout(tmp_path: Path) -> None:
                 "--record-command",
                 sys.executable,
                 "-c",
-                "print('|hotBlock selector=src/lib.rs:1-14 source=finding rule=RUST-PROJ-R003 line=2')",
+                "\n".join(
+                    [
+                        "print('|failureFrontier rule=RUST-PROJ-R003 severity=error path=src/lib.rs line=1 column=1')",
+                        "print('|message Rust project check failed')",
+                        "print('|summary cargo check reported an owner failure')",
+                        "print('|repair repair the Rust owner')",
+                        "print('|hotBlock selector=src/lib.rs:1-14 reason=blocking-finding')",
+                        "print('|next action=direct-source-read selector=src/lib.rs:1-14 root=.')",
+                    ]
+                ),
             ]
         )
 
     assert exit_code == 0
     command_event = _recorded_event(trace_root)
     assert command_event["next"] == ["src/lib.rs:1-14"]
+    assert command_event["failureFrontier"] == [
+        {
+            "rule": "RUST-PROJ-R003",
+            "severity": "error",
+            "path": "src/lib.rs",
+            "line": 1,
+            "column": 1,
+            "message": "Rust project check failed",
+            "summary": "cargo check reported an owner failure",
+            "repair": "repair the Rust owner",
+            "hotBlockSelector": "src/lib.rs:1-14",
+            "hotBlockReason": "blocking-finding",
+            "nextAction": "direct-source-read",
+            "nextSelector": "src/lib.rs:1-14",
+            "nextRoot": ".",
+        }
+    ]
     assert command_event["result"]["stdoutPath"].startswith("outputs/")
     assert (trace_root / command_event["result"]["stdoutPath"]).is_file()
 

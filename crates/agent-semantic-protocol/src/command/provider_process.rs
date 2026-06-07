@@ -1,10 +1,16 @@
 use agent_semantic_hook::{
     ActivatedProvider, RuntimeProfiles, RuntimeProviderHealthStatus, runtime_profile_invocation,
 };
+use agent_semantic_provider_transport::{
+    OutputMode, ProviderProcessLimits, ProviderProcessOutput, ProviderProcessSpec, StdinMode,
+    run_provider_process as run_transport_process,
+};
+use std::collections::BTreeMap;
 use std::env;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+
+use super::search_config::AspConfig;
 
 pub(super) fn run_provider_command(
     language_id: &str,
@@ -16,29 +22,16 @@ pub(super) fn run_provider_command(
     let (program, forwarded) = invocation
         .split_first()
         .ok_or_else(|| format!("language `{language_id}` has an empty provider command"))?;
-    let runtime_bin = cache_home.join("agent-semantic-protocol/runtime/bin");
-    let mut command = Command::new(program);
-    command
-        .args(forwarded)
-        .current_dir(project_root)
-        .env("PRJ_CACHE_HOME", cache_home)
-        .env("ASP_RUNTIME_BIN_DIR", &runtime_bin)
-        .stdin(Stdio::inherit());
-    let mut path_entries = vec![runtime_bin];
-    if let Some(path) = env::var_os("PATH") {
-        path_entries.extend(env::split_paths(&path));
-    }
-    if let Ok(path) = env::join_paths(path_entries) {
-        command.env("PATH", path);
-    }
-    let output = command.output().map_err(|error| {
-        format!(
-            "failed to spawn provider `{}` for language `{language_id}`: {error}",
-            provider.provider_id
-        )
-    })?;
-    write_facade_stream(language_id, provider, output.stderr, io::stderr())?;
-    write_facade_stream(language_id, provider, output.stdout, io::stdout())?;
+    let output = run_provider_process(
+        language_id,
+        provider,
+        program,
+        forwarded,
+        project_root,
+        cache_home,
+    )?;
+    write_facade_stream(language_id, provider, output.stderr.as_ref(), io::stderr())?;
+    write_facade_stream(language_id, provider, output.stdout.as_ref(), io::stdout())?;
     if !output.status.success() {
         std::process::exit(output.status.code().unwrap_or(1));
     }
@@ -55,45 +48,87 @@ pub(super) fn run_guide_command(
     let (program, forwarded) = invocation
         .split_first()
         .ok_or_else(|| format!("language `{language_id}` has an empty provider command"))?;
-    let runtime_bin = cache_home.join("agent-semantic-protocol/runtime/bin");
-    let mut command = Command::new(program);
-    command
-        .args(forwarded)
-        .current_dir(project_root)
-        .env("PRJ_CACHE_HOME", cache_home)
-        .env("ASP_RUNTIME_BIN_DIR", &runtime_bin);
-    let mut path_entries = vec![runtime_bin];
-    if let Some(path) = env::var_os("PATH") {
-        path_entries.extend(env::split_paths(&path));
-    }
-    if let Ok(path) = env::join_paths(path_entries) {
-        command.env("PATH", path);
-    }
-    let output = command.output().map_err(|error| {
-        format!(
-            "failed to spawn provider `{}` for language `{language_id}`: {error}",
-            provider.provider_id
-        )
-    })?;
+    let output = run_provider_process(
+        language_id,
+        provider,
+        program,
+        forwarded,
+        project_root,
+        cache_home,
+    )?;
     io::stderr()
         .write_all(&output.stderr)
         .map_err(|error| format!("failed to write provider stderr: {error}"))?;
     if !output.status.success() {
         std::process::exit(output.status.code().unwrap_or(1));
     }
-    let stdout = String::from_utf8(output.stdout)
+    let stdout = std::str::from_utf8(output.stdout.as_ref())
         .map_err(|error| format!("provider guide emitted invalid UTF-8: {error}"))?;
-    let stdout = render_facade_guide(language_id, provider, &stdout);
+    let stdout = render_facade_guide(language_id, provider, stdout);
     io::stdout()
         .write_all(stdout.as_bytes())
         .map_err(|error| format!("failed to write provider stdout: {error}"))
+}
+
+fn run_provider_process(
+    language_id: &str,
+    provider: &ActivatedProvider,
+    program: &str,
+    forwarded: &[String],
+    project_root: &Path,
+    cache_home: &Path,
+) -> Result<ProviderProcessOutput, String> {
+    let runtime_bin = cache_home.join("agent-semantic-protocol/runtime/bin");
+    let mut envs = BTreeMap::new();
+    envs.insert(
+        "PRJ_CACHE_HOME".to_string(),
+        cache_home.to_string_lossy().to_string(),
+    );
+    envs.insert(
+        "ASP_RUNTIME_BIN_DIR".to_string(),
+        runtime_bin.to_string_lossy().to_string(),
+    );
+    if let Ok(protocol_bin) = env::current_exe() {
+        envs.insert(
+            "SEMANTIC_AGENT_PROTOCOL_BIN".to_string(),
+            protocol_bin.to_string_lossy().to_string(),
+        );
+    }
+    let mut path_entries = vec![runtime_bin];
+    if let Some(path) = env::var_os("PATH") {
+        path_entries.extend(env::split_paths(&path));
+    }
+    if let Ok(path) = env::join_paths(path_entries) {
+        envs.insert("PATH".to_string(), path.to_string_lossy().to_string());
+    }
+
+    run_transport_process(ProviderProcessSpec {
+        program: program.to_string(),
+        args: forwarded.to_vec(),
+        cwd: project_root.to_path_buf(),
+        env: envs,
+        stdin: StdinMode::Inherit,
+        stdout: OutputMode::Capture,
+        stderr: OutputMode::Capture,
+        limits: ProviderProcessLimits::default(),
+    })
+    .map_err(|error| {
+        format!(
+            "failed to run provider `{}` for language `{language_id}`: {error}",
+            provider.provider_id
+        )
+    })
 }
 
 pub(super) fn provider_invocation_with_profile(
     profiles: &RuntimeProfiles,
     provider: &ActivatedProvider,
     args: &[String],
+    config: &AspConfig,
 ) -> Result<Vec<String>, String> {
+    if let Some(binary) = config.provider_bin(&provider.language_id) {
+        return Ok(provider_invocation_with_binary(provider, args, binary));
+    }
     if let Some(invocation) = runtime_profile_invocation(profiles, provider, args) {
         return Ok(invocation);
     }
@@ -118,18 +153,31 @@ pub(super) fn provider_invocations(
     args: &[String],
     project_root: &Path,
     profiles: &RuntimeProfiles,
+    config: &AspConfig,
 ) -> Result<Vec<Vec<String>>, String> {
     search_scope_arg_sets(args, project_root)
         .into_iter()
-        .map(|args| provider_invocation_with_profile(profiles, provider, &args))
+        .map(|args| provider_invocation_with_profile(profiles, provider, &args, config))
         .collect()
 }
 
 fn provider_invocation(provider: &ActivatedProvider, args: &[String]) -> Vec<String> {
+    provider_invocation_with_binary(provider, args, &provider.binary)
+}
+
+fn provider_invocation_with_binary(
+    provider: &ActivatedProvider,
+    args: &[String],
+    binary: &str,
+) -> Vec<String> {
     let mut invocation = if provider.provider_command_prefix.is_empty() {
-        vec![provider.binary.clone()]
+        vec![binary.to_string()]
     } else {
-        provider.provider_command_prefix.clone()
+        let mut prefix = provider.provider_command_prefix.clone();
+        if let Some(program) = prefix.first_mut() {
+            *program = binary.to_string();
+        }
+        prefix
     };
     invocation.extend(args.iter().cloned());
     invocation
@@ -242,15 +290,15 @@ fn render_facade_guide(
 fn write_facade_stream(
     language_id: &str,
     provider: &ActivatedProvider,
-    bytes: Vec<u8>,
+    bytes: &[u8],
     mut stream: impl Write,
 ) -> Result<(), String> {
-    match String::from_utf8(bytes) {
+    match std::str::from_utf8(bytes) {
         Ok(text) => stream
             .write_all(rewrite_provider_command_mentions(language_id, provider, &text).as_bytes())
             .map_err(|error| format!("failed to write provider output: {error}")),
-        Err(error) => stream
-            .write_all(&error.into_bytes())
+        Err(_) => stream
+            .write_all(bytes)
             .map_err(|error| format!("failed to write provider output: {error}")),
     }
 }

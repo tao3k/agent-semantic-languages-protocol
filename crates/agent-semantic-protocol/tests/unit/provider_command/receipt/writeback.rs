@@ -53,7 +53,21 @@ fn client_search_miss_writes_prompt_output_cache_for_next_hit() {
     assert_eq!(first_receipt["clientDbGenerationCount"], 1);
     assert_eq!(first_receipt["providerCommandCount"], 1);
     assert_eq!(first_receipt["sqliteReadCount"], 2);
-    assert_eq!(first_receipt["sqliteWriteCount"], 1);
+    assert_eq!(first_receipt["sqliteWriteCount"], 2);
+    assert_eq!(
+        first_receipt["providerCommands"][0]["stdoutBytes"].as_u64(),
+        Some(stdout_text.len() as u64)
+    );
+    assert!(
+        first_receipt["providerCommands"][0]["stdoutSha256"]
+            .as_str()
+            .is_some()
+    );
+    assert!(
+        first_receipt["providerCommands"][0]["stderrSha256"]
+            .as_str()
+            .is_some()
+    );
 
     let manifest_text = std::fs::read_to_string(cache_root(&root).join("cache-manifest.json"))
         .expect("read manifest");
@@ -406,7 +420,7 @@ esac
     assert_eq!(first_search_receipt["providerCommandCount"], 1);
     assert_eq!(first_search_receipt["providerProcessesSpawned"], 1);
     assert_eq!(first_search_receipt["sqliteReadCount"], 2);
-    assert_eq!(first_search_receipt["sqliteWriteCount"], 1);
+    assert_eq!(first_search_receipt["sqliteWriteCount"], 2);
     let search_provider_args =
         std::fs::read_to_string(&search_provider_args_log).expect("read search provider args");
     assert!(
@@ -537,7 +551,7 @@ esac
     assert_eq!(first_receipt["providerCommandCount"], 1);
     assert_eq!(first_receipt["providerProcessesSpawned"], 1);
     assert_eq!(first_receipt["sqliteReadCount"], 2);
-    assert_eq!(first_receipt["sqliteWriteCount"], 1);
+    assert_eq!(first_receipt["sqliteWriteCount"], 2);
     let provider_args =
         std::fs::read_to_string(&provider_args_log).expect("read provider args log");
     assert!(
@@ -711,7 +725,7 @@ esac
     assert_eq!(first_receipt["providerCommandCount"], 1);
     assert_eq!(first_receipt["providerProcessesSpawned"], 1);
     assert_eq!(first_receipt["sqliteReadCount"], 2);
-    assert_eq!(first_receipt["sqliteWriteCount"], 2);
+    assert_eq!(first_receipt["sqliteWriteCount"], 3);
     assert_eq!(first_receipt["clientDbSyntaxRowGenerationCount"], 1);
     assert_eq!(first_receipt["clientDbSyntaxRowMatchCount"], 1);
     assert_eq!(first_receipt["clientDbSyntaxRowCaptureCount"], 1);

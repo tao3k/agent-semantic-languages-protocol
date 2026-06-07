@@ -2,5 +2,14 @@
 name = "agent-semantic-runtime"
 version = "0.1.0"
 edition = "2024"
+description = "Runtime state materialization for ASP project-local storage."
+license = "MIT"
 
 [dependencies]
+agent-semantic-config = { path = "../agent-semantic-config" }
+
+[build-dependencies]
+rust-lang-project-harness = { workspace = true }
+
+[dev-dependencies]
+rust-lang-project-harness = { workspace = true }

@@ -85,6 +85,14 @@ parser/compiler/static-analysis facts
   -> executable next action
 #+end_src
 
+Terminology is deliberately narrow:
+
+- =frontier= means locator/next-action candidates selected from typed facts.
+- =compact graph render= means the prompt-facing serialization format for those
+  facts; it is not a second kind of frontier.
+- =code compact= means parser/format-aware code projection used by query/code
+  surfaces.  Search/frontier output must not pretend to be code compact.
+
 LLMs may infer structure, but the protocol must not depend on inference for
 grammar.  Compact graph output therefore follows six invariants:
 
@@ -786,6 +794,10 @@ Completed:
   packets from typed graph facts, and a Python sandtable validates the package
   CLI through schema-owned stdout instead of treating compact debug text as the
   source of truth.
+- [X] ASP fast search can emit =semantic-graph-turbo-request.v1= packets for
+  live candidate frontiers through =--view graph-turbo-request=.  This keeps
+  ASP's Rust layer at candidate collection and schema request construction,
+  while typed ranking remains owned by =graph-turbo rank=.
 - [X] Python graph turbo has an offline artifact evaluator that converts cached
   =semantic-search-packet= artifacts under
   =.cache/agent-semantic-protocol/artifacts/search= into schema-owned graph
@@ -998,11 +1010,31 @@ Completed:
   =owner-tests(O=>covering-tests+test-entrypoints+fixtures)= when an owner
   selector exists, matching the shared profile catalog instead of preserving a
   compatibility alias.
+- [X] TypeScript now exposes executable =search reasoning= entries for
+  =owner-tests=, =owner-query=, and =query-deps=.  The provider registry and
+  guide advertise the concrete selector-bearing commands, =feature-cfg= is in
+  the shared profile catalog, and the root ASP fast path renders only the
+  selected reasoning entry.  In particular, =owner-query= returns
+  =entries=owner-query(O,Q=>items+tests+dependency-usage)= without also
+  inferring =owner-tests= from the presence of an owner alias.
+- [X] ASP-owned fast reasoning frontiers no longer carry profile compatibility
+  drift.  The cheap =owner-query= path is split into parser/candidate and graph
+  render modules, and the render output is selected-profile only rather than
+  alias-presence based.
 
-In progress:
+Completed:
 
-- [ ] Record real-trigger metrics: command count, packet size, latency,
-  repeated-search rate, and whether frontier actions were sufficient.
+- [X] Real-trigger metrics are recorded for the live graph turbo boundary.
+  The fixture
+  =sandtables/fixtures/asp/graph-turbo-real-trigger-metrics.json= records a
+  2026-06-07 run of
+  =asp rust search fzf graph_turbo owner tests --view graph-turbo-request .=
+  piped into =graph-turbo rank - --format compact=: ~commandCount=2~,
+  ~packetBytes=22359~, ~resultBytes=1181~, ~latencyMs=811~,
+  ~repeatedTriggerPatterns=0~, ~missingFacts=0~, and
+  ~confusingNextActions=0~.  The packaged =graph-turbo metrics= command owns
+  the stable text/JSON record shape so future live runs can refresh the same
+  evidence without hand-written prose.
 
 * Acceptance criteria
 

@@ -8,7 +8,8 @@ use agent_semantic_client_core::ClientRequest;
 use agent_semantic_client_db::ClientDbGenerationHit;
 use serde_json::Value;
 
-use super::artifact::{MAX_CACHE_REPLAY_ARTIFACT_BYTES, replay_artifact_path};
+use super::artifact::replay_artifact_path;
+use super::limits::MAX_CACHE_REPLAY_ARTIFACT_BYTES;
 
 pub(crate) fn search_fzf_generation_matches_request(
     cache_root: &Path,

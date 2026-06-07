@@ -23,19 +23,49 @@ class TraceRecordConfig:
 def record_command(argv: list[str], *, config: TraceRecordConfig) -> dict[str, Any]:
     started = time.time()
     started_at = _utc_timestamp(started)
-    completed = subprocess.run(
+    completed = _run_command(argv, config)
+    finished = time.time()
+    event_id = _event_id(config.session_id, finished)
+    event = _base_event(
+        argv=argv,
+        config=config,
+        completed=completed,
+        event_id=event_id,
+        started_at=started_at,
+        finished=finished,
+        elapsed_ms=max(0, int((finished - started) * 1000)),
+    )
+    _attach_stdout_annotations(event, completed.stdout)
+    _append_event(config.trace_root, config.language_id, config.provider_id, event)
+    return event
+
+
+def _run_command(
+    argv: list[str],
+    config: TraceRecordConfig,
+) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
         argv,
         cwd=config.cwd,
         capture_output=True,
         text=False,
         check=False,
     )
-    finished = time.time()
-    event_id = _event_id(config.session_id, finished)
+
+
+def _base_event(
+    *,
+    argv: list[str],
+    config: TraceRecordConfig,
+    completed: subprocess.CompletedProcess[bytes],
+    event_id: str,
+    started_at: str,
+    finished: float,
+    elapsed_ms: int,
+) -> dict[str, Any]:
     stdout_path = _write_output(config.trace_root, event_id, "stdout", completed.stdout)
     stderr_path = _write_output(config.trace_root, event_id, "stderr", completed.stderr)
-    next_items = _hot_block_selectors(completed.stdout)
-    event = {
+    return {
         "schemaId": "agent.semantic-protocols.dev-command-log",
         "schemaVersion": "1",
         "eventId": event_id,
@@ -51,7 +81,7 @@ def record_command(argv: list[str], *, config: TraceRecordConfig) -> dict[str, A
         },
         "result": {
             "exitCode": completed.returncode,
-            "elapsedMs": max(0, int((finished - started) * 1000)),
+            "elapsedMs": elapsed_ms,
             "stdoutBytes": len(completed.stdout),
             "stderrBytes": len(completed.stderr),
             "stdoutPath": str(stdout_path),
@@ -59,10 +89,15 @@ def record_command(argv: list[str], *, config: TraceRecordConfig) -> dict[str, A
             "status": "success" if completed.returncode == 0 else "fail",
         },
     }
+
+
+def _attach_stdout_annotations(event: dict[str, Any], stdout: bytes) -> None:
+    frontier_entries = _failure_frontier_entries(stdout)
+    next_items = _hot_block_selectors(stdout)
+    if frontier_entries:
+        event["failureFrontier"] = frontier_entries
     if next_items:
         event["next"] = next_items
-    _append_event(config.trace_root, config.language_id, config.provider_id, event)
-    return event
 
 
 def _append_event(
@@ -102,6 +137,71 @@ def _hot_block_selectors(stdout: bytes) -> list[str]:
         if selector:
             selectors.append(selector)
     return selectors
+
+
+def _failure_frontier_entries(stdout: bytes) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    text = stdout.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        if line.startswith("|failureFrontier "):
+            if current is not None:
+                entries.append(current)
+            fields = _line_fields(line)
+            current = {
+                key: value
+                for key, value in fields.items()
+                if key in {"rule", "severity", "path"}
+            }
+            for field in ("line", "column"):
+                value = _int_field(fields.get(field, ""))
+                if value is not None:
+                    current[field] = value
+            continue
+        if current is None:
+            continue
+        if line.startswith("|message "):
+            current["message"] = line.removeprefix("|message ").strip()
+        elif line.startswith("|summary "):
+            current["summary"] = line.removeprefix("|summary ").strip()
+        elif line.startswith("|repair "):
+            current["repair"] = line.removeprefix("|repair ").strip()
+        elif line.startswith("|hotBlock "):
+            fields = _line_fields(line)
+            if selector := fields.get("selector"):
+                current["hotBlockSelector"] = selector
+            if reason := fields.get("reason"):
+                current["hotBlockReason"] = reason
+        elif line.startswith("|next "):
+            fields = _line_fields(line)
+            if action := fields.get("action"):
+                current["nextAction"] = action
+            if selector := fields.get("selector"):
+                current["nextSelector"] = selector
+            if root := fields.get("root"):
+                current["nextRoot"] = root
+    if current is not None:
+        entries.append(current)
+    return entries
+
+
+def _line_fields(line: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for part in shlex.split(line):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        fields[key.removeprefix("|")] = value
+    return fields
+
+
+def _int_field(value: str) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 def _line_field(line: str, field: str) -> str:

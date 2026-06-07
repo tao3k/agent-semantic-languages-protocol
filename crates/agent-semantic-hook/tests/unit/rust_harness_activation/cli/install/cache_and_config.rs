@@ -5,7 +5,7 @@ use crate::rust_harness_activation::support::write_fake_provider_binary;
 use super::support::{assert_installed_hook_state, git_project_root, protocol_command};
 
 #[test]
-fn cli_install_writes_profile_registry_to_prj_cache_home() {
+fn cli_install_prefers_git_toplevel_cache_over_prj_cache_home() {
     let root = git_project_root("install-prj-cache-home");
     let codex_home = root.join(".codex-home");
     let provider_path = write_fake_provider_binary(&root, "rs-harness");
@@ -35,13 +35,13 @@ fn cli_install_writes_profile_registry_to_prj_cache_home() {
     assert!(stdout.contains("profileCache="));
     assert!(stdout.contains("agent-semantic-protocol/hooks/profiles.json"));
     assert!(
-        prj_cache_home
+        root.join(".cache")
             .join("agent-semantic-protocol/hooks/profiles.json")
             .is_file()
     );
     assert!(
-        !root
-            .join(".cache/agent-semantic-protocol/hooks/profiles.json")
+        !prj_cache_home
+            .join("agent-semantic-protocol/hooks/profiles.json")
             .exists()
     );
 }

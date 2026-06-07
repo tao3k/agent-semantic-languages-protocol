@@ -94,7 +94,9 @@ pub(crate) fn run_cache(
             let db_path = ClientDb::default_path(cache_root);
             let mut db = ClientDb::open_or_create(db_path.clone())?;
             db.import_manifest(&manifest)?;
-            let db_report = ClientDb::inspect(db_path);
+            let db_report = db
+                .inspect_open()
+                .unwrap_or_else(|_| ClientDb::inspect(db_path));
             let mut receipt =
                 ClientReceipt::cache_report(ClientMethod::CacheImport, provenance, &cache_report);
             apply_db_report_to_receipt(&mut receipt, &db_report);

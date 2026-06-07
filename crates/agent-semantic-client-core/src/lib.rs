@@ -9,7 +9,10 @@ pub mod receipt;
 pub mod request;
 pub mod types;
 
-pub use activation::{ProviderRegistrySnapshot, ResolvedProvider, RuntimeProfileStatus};
+pub use activation::{
+    ASP_PROVIDER_ACTIVATION_PATH_ENV, ProviderRegistrySnapshot, ResolvedProvider,
+    RuntimeProfileStatus,
+};
 pub use agent_semantic_hook::ProviderExecution;
 pub use cache_manifest::{
     AGENT_SEMANTIC_CLIENT_CACHE_MANIFEST_FILE, AGENT_SEMANTIC_CLIENT_CACHE_MANIFEST_PROTOCOL_ID,

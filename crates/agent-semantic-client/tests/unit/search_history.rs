@@ -26,6 +26,34 @@ fn search_history_backfills_artifacts_and_passes_rust_sqlite_events() {
         "[search-prime] rust\n",
     )
     .expect("write artifact");
+    std::fs::write(
+        artifact_dir.join("prompt-output/rust-query-direct-source-read-abc123.command.json"),
+        r#"{
+  "providerCommands": [
+    {
+      "argv": ["rs-harness", "query", "--from-hook", "direct-source-read", "--selector", "src/lib.rs:1-10", "--code"],
+      "languageId": "rust"
+    }
+  ]
+}"#,
+    )
+    .expect("write direct-read command artifact");
+    std::fs::create_dir_all(artifact_dir.join("semantic-tree-sitter-query"))
+        .expect("create syntax query artifact dir");
+    std::fs::write(
+        artifact_dir.join("semantic-tree-sitter-query/rust-query-tree-sitter-abc123.json"),
+        r#"{
+  "schemaId": "semantic-tree-sitter-query",
+  "schemaVersion": "1",
+  "languageId": "rust",
+  "method": "query",
+  "query": {
+    "input": "(function_item) @item",
+    "inputForm": "s-expression"
+  }
+}"#,
+    )
+    .expect("write tree-sitter query artifact");
     let bin_dir = root.join(".bin");
     std::fs::create_dir_all(&bin_dir).expect("create bin dir");
     let stdin_path = root.join("graph-turbo-stdin.json");
@@ -95,6 +123,22 @@ fn search_history_backfills_artifacts_and_passes_rust_sqlite_events() {
         events
             .iter()
             .any(|event| event.artifact_path == "prompt-output/rust-search-prime-abc123.txt"),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|event| {
+            event.artifact_path == "prompt-output/rust-query-direct-source-read-abc123.command.json"
+                && event.method == "query/direct-source-read"
+                && event.target == "src/lib.rs:1-10"
+        }),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|event| {
+            event.artifact_path == "semantic-tree-sitter-query/rust-query-tree-sitter-abc123.json"
+                && event.method == "query/tree-sitter"
+                && event.query == "(function_item) @item"
+        }),
         "{events:?}"
     );
     let _ = std::fs::remove_dir_all(root);

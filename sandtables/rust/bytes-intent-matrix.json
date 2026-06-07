@@ -56,6 +56,74 @@
           "BufMut"
         ]
       }
+    ],
+    "deepQuestionCases": [
+      {
+        "id": "bytes-bytesmut-reserve-growth",
+        "question": "BytesMut reserve/capacity 增长策略的关键 owner 在哪里？为什么不能只看 public API 文档下结论？",
+        "stepIds": [
+          "prime",
+          "intent-query-set"
+        ],
+        "queryTerms": [
+          "BytesMut",
+          "reserve",
+          "capacity"
+        ],
+        "audit": {
+          "maxAspCommands": 7,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 3,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      },
+      {
+        "id": "bytes-bufmut-unsafely-advance",
+        "question": "BufMut 的 advance_mut/unsafe 写入边界如何被组织？先找 trait 和实现 owner。",
+        "stepIds": [
+          "prime",
+          "intent-query-set"
+        ],
+        "queryTerms": [
+          "BufMut",
+          "advance_mut",
+          "unsafe"
+        ],
+        "audit": {
+          "maxAspCommands": 7,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 3,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      },
+      {
+        "id": "bytes-split-freeze-sharing",
+        "question": "BytesMut split/freeze 之后共享底层存储的语义是什么？需要定位实现路径和测试入口。",
+        "stepIds": [
+          "prime",
+          "intent-query-set"
+        ],
+        "queryTerms": [
+          "split",
+          "freeze",
+          "shared"
+        ],
+        "audit": {
+          "maxAspCommands": 7,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 3,
+          "maxRepeatedCommands": 0,
+          "requiresGraphSignals": true,
+          "requiresQuerySet": true,
+          "requiresHookEvents": true
+        }
+      }
     ]
   },
   "workdir": {

@@ -14,6 +14,11 @@ fn inspect_reports_missing_without_creating_db() {
     let report = ClientDb::inspect(&db_path);
 
     assert_eq!(report.status, ClientDbStatus::Missing);
+    assert!(
+        ClientDb::open_read_only_existing(&db_path)
+            .expect("open missing read-only db")
+            .is_none()
+    );
     assert_eq!(report.generation_count, 0);
     assert_eq!(report.syntax_row_generation_count, 0);
     assert_eq!(report.syntax_row_match_count, 0);
@@ -43,6 +48,10 @@ fn open_creates_schema_and_imports_manifest_generations() {
     .expect("lookup generation")
     .expect("generation hit");
     let report = ClientDb::inspect(&db_path);
+    let read_db = ClientDb::open_read_only_existing(&db_path)
+        .expect("open read-only db")
+        .expect("db exists");
+    let open_report = read_db.inspect_open().expect("inspect open db");
     let stored_schema_version: String = rusqlite::Connection::open(&db_path)
         .expect("open sqlite")
         .query_row(
@@ -67,6 +76,7 @@ fn open_creates_schema_and_imports_manifest_generations() {
     assert_eq!(report.syntax_row_match_count, 0);
     assert_eq!(report.syntax_row_capture_count, 0);
     assert!(!report.raw_source_stored);
+    assert_eq!(open_report, report);
     let runtime_pragmas = report.runtime_pragmas.expect("runtime pragmas");
     assert_eq!(runtime_pragmas.journal_mode.as_str(), "wal");
     assert_eq!(runtime_pragmas.busy_timeout_ms, 5000);

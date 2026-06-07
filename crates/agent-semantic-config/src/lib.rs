@@ -1,0 +1,20 @@
+#![deny(dead_code)]
+
+//! Unified project identity, configuration, and local state layout for ASP.
+
+mod hook_client_config;
+mod layout;
+
+pub use hook_client_config::{
+    CLIENT_HOOK_CONFIG_SCHEMA_ID, CLIENT_HOOK_CONFIG_SCHEMA_VERSION, HookClientConfigDecision,
+    HookClientConfigFile, HookClientConfigReasonKind, HookClientConfigRouteKind,
+    HookClientConfigStdinMode, HookClientRuleConfig, HookClientRuleMatchConfig,
+    HookClientRuleRouteConfig, default_hook_client_config_path,
+    default_hook_client_config_template, load_hook_client_config_file,
+};
+pub use layout::{
+    PRJ_CACHE_HOME_ENV, ProjectCacheSource, ProjectRuntimeEnv, ProjectRuntimeLayout,
+    project_artifacts_dir, project_cache_root, project_cache_root_with_env,
+    project_client_cache_dir, project_hook_cache_dir, project_hook_state_dir,
+    project_runtime_layout, project_runtime_layout_with_env,
+};

@@ -49,7 +49,7 @@ asp rust search pipe "cacheRoot|ClientReceipt|cacheManifestPath" \
 Contract:
 
 #+begin_src text
-search pipe <query> [--owners <path>...] [--pipe items,tests] [--view seeds|commands]
+search pipe <query> [--owners <path>...] [--pipe items,tests] [--view seeds|graph-turbo-request]
 #+end_src
 
 - =search pipe= owns cheap candidate generation: lexical/file/path search,
@@ -58,13 +58,77 @@ search pipe <query> [--owners <path>...] [--pipe items,tests] [--view seeds|comm
   path normalize, owner grouping, optional item/test frontier, compact render.
 - =--view seeds= returns compact frontier and must avoid full project parser
   construction before candidate bounds are known.
-- =--view commands= returns replacement command templates and slow-pattern
-  advice; it does not execute shell commands and does not spawn providers.
-- =--pipe= is the only new composition knob.  Do not add separate public
-  =suggest=, =wrap=, or =compose= command families.
+- =--view graph-turbo-request= returns a schema-owned graph request for the
+  graph-turbo ranking boundary.
+- =search suggest=, not =search pipe --view commands=, returns replacement
+  command templates and slow-pattern advice.  It does not execute shell
+  commands and does not spawn providers.
+- =--pipe= is the only pipeline composition knob.  Do not add another public
+  command family for pipeline execution.  =search suggest= is a separate
+  advisory command, not a composition knob.
 - Provider-native semantic enrichment may run after the bounded candidate set
   exists, but direct source reads and cheap lexical discovery must not pay a
   project-wide semantic parse cost first.
+
+** Search fast path boundary
+
+The cheap search surface is ASP-owned across all language facades.  This is not
+a Python-specific optimization: Rust, TypeScript, Python, Julia, and future
+providers share the same failure mode if =search= discovery falls through to a
+provider's check-grade project report before candidate bounds are known.
+
+ASP owns the first-pass frontier for these shapes:
+
+#+begin_src text
+search ingest [items|owner|tests...] --view seeds
+search pipe <query> --pipe items,tests --view seeds
+search fzf <query> [owner|tests|items...] --view seeds
+search reasoning owner-query --owner <path> --query <term> --view seeds
+search reasoning owner-tests --owner <path> --view seeds
+search owner <path> items --query <term> --view seeds
+#+end_src
+
+These commands return compact locator/frontier output without spawning the
+language provider.  They may read bounded candidate stdin, bounded owner files,
+or bounded lexical matches under the selected root.  They must not construct a
+language provider's full project report, policy/check result, verification
+reasoning tree, package graph, or native parser fact index as a prerequisite.
+All emitted locators are relative to the agent invocation workspace, not to a
+scoped search root.  A locator printed from =asp rust search fzf ... crates/foo=
+must therefore replay as =asp rust query --selector crates/foo/... --code .=
+without requiring the agent to remember the original scoped root.
+
+Provider binaries remain the authority for native facts.  They are invoked for:
+
+- =check= and policy/report commands.
+- =query --code=, exact native reads, and tree-sitter/native syntax projection.
+- JSON/schema integrations that explicitly require provider packets.
+- Provider-advertised semantic enrichment after ASP has already produced a
+  bounded candidate frontier.
+
+The ASP facade also owns the cheap-search configuration surface.  =asp.toml=
+may declare ignored search directories, hidden-directory allowlists, language
+enable/disable flags, and provider binary overrides:
+
+#+begin_src toml
+[search]
+ignoreDirs = ["generated"]
+includeHiddenDirs = [".github"]
+
+[languages.rust]
+enabled = true
+bin = "/path/to/rs-harness"
+#+end_src
+
+This configuration is applied before provider spawn.  It does not move parser
+facts into ASP: it only controls the facade's routing, discovery bounds, and
+provider process selection.
+
+If a provider keeps a local =search ingest= or =search reasoning= command for
+debugging or direct package use, that implementation must obey the same
+boundary: no check-grade full project report before a cheap candidate frontier
+exists.  The public =asp <language>= facade enforces this invariant first so
+agent-facing latency and command behavior are language-neutral.
 
 The target invariant is that the following slow pattern:
 
@@ -78,8 +142,10 @@ can be replaced by:
 asp rust search pipe owner-items --pipe items,tests --view seeds crates/agent-semantic-protocol
 #+end_src
 
-without increasing the public command surface beyond =search pipe= and without
-requiring the agent to paste raw =rg= or =fd= output into the prompt.
+without increasing the executable public command surface beyond =search pipe=
+and without requiring the agent to paste raw =rg= or =fd= output into the
+prompt.  Advisory planning remains =search suggest= and must not execute the
+candidate pipeline.
 
 ** Auto-detection
 

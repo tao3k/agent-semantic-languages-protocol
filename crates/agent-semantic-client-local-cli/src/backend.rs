@@ -1,8 +1,7 @@
 //! Local native-provider process execution for `agent-semantic-client`.
 
-use std::io::Write;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Instant;
 
 use agent_semantic_client_core::{
@@ -10,6 +9,11 @@ use agent_semantic_client_core::{
     ProviderCommandReceipt, ProviderRegistrySnapshot, ResolvedProvider,
     append_syntax_query_plan_args,
 };
+use agent_semantic_provider_transport::{
+    OutputMode, ProviderProcessLimits, ProviderProcessSpec, StdinMode,
+    run_provider_process as run_transport_process,
+};
+use bytes::{Bytes, BytesMut};
 
 const SEMANTIC_AGENT_PROTOCOL_BIN_ENV: &str = "SEMANTIC_AGENT_PROTOCOL_BIN";
 
@@ -25,16 +29,16 @@ pub struct LocalNativeCommand {
 /// Captured output and receipt metadata for a provider command.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalNativeOutput {
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
+    pub stdout: Bytes,
+    pub stderr: Bytes,
     pub status_code: i32,
     pub receipt: ClientReceipt,
 }
 
 type ProviderCommandOutputs = (
     ResolvedProvider,
-    Vec<u8>,
-    Vec<u8>,
+    Bytes,
+    Bytes,
     i32,
     Vec<ProviderCommandReceipt>,
     ElapsedMillis,
@@ -74,7 +78,9 @@ impl LocalNativeCliBackend {
         provider: &ResolvedProvider,
         forwarded_args: Vec<String>,
     ) -> Result<LocalNativeCommand, String> {
-        let mut invocation = if let Some(runtime_command) = provider.runtime_command_prefix() {
+        let mut invocation = if !provider.provider_command_prefix.is_empty() {
+            provider.command_prefix()
+        } else if let Some(runtime_command) = provider.runtime_command_prefix() {
             runtime_command
         } else if let Some(status) = provider.runtime_profile_status {
             let status = status.as_str();
@@ -178,7 +184,7 @@ impl LocalNativeCliBackend {
     pub fn execute(&self, request: &ClientRequest) -> Result<LocalNativeOutput, String> {
         let prepared_commands = self.prepare_all(request)?;
         let (provider, stdout, stderr, status_code, provider_commands, elapsed_ms) =
-            Self::run_provider_commands(prepared_commands, request.stdin.as_deref())?;
+            Self::run_provider_commands(prepared_commands, request.stdin.clone())?;
         let receipt = Self::receipt_for_run(
             request,
             &provider,
@@ -198,71 +204,55 @@ impl LocalNativeCliBackend {
 
     fn run_provider_commands(
         prepared_commands: Vec<LocalNativeCommand>,
-        stdin: Option<&[u8]>,
+        stdin: Option<Bytes>,
     ) -> Result<ProviderCommandOutputs, String> {
         let provider = prepared_commands
             .first()
             .map(|prepared| prepared.provider.clone())
             .ok_or_else(|| "empty provider invocation set".to_string())?;
         let started_all = Instant::now();
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
+        let mut stdout = BytesMut::new();
+        let mut stderr = BytesMut::new();
         let mut status_code = 0;
         let mut provider_commands = Vec::new();
 
         for prepared in prepared_commands {
-            let started = Instant::now();
-            let mut command = Command::new(&prepared.program);
-            command
-                .args(&prepared.args)
-                .current_dir(&prepared.project_root);
-            if stdin.is_some() {
-                command.stdin(std::process::Stdio::piped());
-            } else {
-                command.stdin(std::process::Stdio::inherit());
-            }
-            Self::set_protocol_renderer_env(&mut command);
-            let output = if let Some(stdin) = stdin {
-                let mut child = command.spawn().map_err(|error| {
-                    format!(
-                        "failed to execute provider `{}` for language `{}`: {error}",
-                        prepared.provider.provider_id, prepared.provider.language_id
-                    )
-                })?;
-                if let Some(mut child_stdin) = child.stdin.take() {
-                    child_stdin.write_all(stdin).map_err(|error| {
-                        format!(
-                            "failed to write provider stdin for `{}` language `{}`: {error}",
-                            prepared.provider.provider_id, prepared.provider.language_id
-                        )
-                    })?;
-                }
-                child.wait_with_output().map_err(|error| {
-                    format!(
-                        "failed to wait for provider `{}` language `{}`: {error}",
-                        prepared.provider.provider_id, prepared.provider.language_id
-                    )
-                })?
-            } else {
-                command.output().map_err(|error| {
-                    format!(
-                        "failed to execute provider `{}` for language `{}`: {error}",
-                        prepared.provider.provider_id, prepared.provider.language_id
-                    )
-                })?
-            };
+            let output = run_transport_process(ProviderProcessSpec {
+                program: prepared.program.clone(),
+                args: prepared.args.clone(),
+                cwd: prepared.project_root.clone(),
+                env: Self::protocol_renderer_env(),
+                stdin: stdin
+                    .clone()
+                    .map(StdinMode::bytes)
+                    .unwrap_or(StdinMode::Inherit),
+                stdout: OutputMode::Capture,
+                stderr: OutputMode::Capture,
+                limits: ProviderProcessLimits::default(),
+            })
+            .map_err(|error| {
+                format!(
+                    "failed to execute provider `{}` for language `{}`: {error}",
+                    prepared.provider.provider_id, prepared.provider.language_id
+                )
+            })?;
             let command_status = output.status.code().unwrap_or(1);
             provider_commands.push(ProviderCommandReceipt {
                 language_id: prepared.provider.language_id.clone(),
                 provider_id: prepared.provider.provider_id.clone(),
                 argv: prepared.argv(),
                 exit_code: command_status,
-                stdout_bytes: ByteCount::from_len(output.stdout.len()),
-                stderr_bytes: ByteCount::from_len(output.stderr.len()),
-                elapsed_ms: ElapsedMillis::from_duration(started.elapsed()),
+                stdout_bytes: ByteCount::from_len(output.receipt.stdout_bytes),
+                stderr_bytes: ByteCount::from_len(output.receipt.stderr_bytes),
+                stdout_sha256: output.receipt.stdout_sha256.clone(),
+                stderr_sha256: output.receipt.stderr_sha256.clone(),
+                stdout_truncated: output.receipt.stdout_truncated,
+                stderr_truncated: output.receipt.stderr_truncated,
+                timed_out: output.receipt.timed_out,
+                elapsed_ms: ElapsedMillis::from_duration(output.receipt.elapsed),
             });
-            stdout.extend(output.stdout);
-            stderr.extend(output.stderr);
+            stdout.extend_from_slice(output.stdout.as_ref());
+            stderr.extend_from_slice(output.stderr.as_ref());
             if command_status != 0 {
                 status_code = command_status;
                 break;
@@ -271,21 +261,26 @@ impl LocalNativeCliBackend {
 
         Ok((
             provider,
-            stdout,
-            stderr,
+            stdout.freeze(),
+            stderr.freeze(),
             status_code,
             provider_commands,
             ElapsedMillis::from_duration(started_all.elapsed()),
         ))
     }
 
-    fn set_protocol_renderer_env(command: &mut Command) {
+    fn protocol_renderer_env() -> BTreeMap<String, String> {
+        let mut envs = BTreeMap::new();
         if std::env::var_os(SEMANTIC_AGENT_PROTOCOL_BIN_ENV).is_some() {
-            return;
+            return envs;
         }
         if let Ok(current_exe) = std::env::current_exe() {
-            command.env(SEMANTIC_AGENT_PROTOCOL_BIN_ENV, current_exe);
+            envs.insert(
+                SEMANTIC_AGENT_PROTOCOL_BIN_ENV.to_string(),
+                current_exe.to_string_lossy().to_string(),
+            );
         }
+        envs
     }
 
     fn receipt_for_run(

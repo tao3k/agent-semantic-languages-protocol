@@ -54,6 +54,77 @@ fn selector_dot_does_not_count_as_extra_project_root() {
     let _ = fs::remove_dir_all(cwd);
 }
 
+#[test]
+fn workspace_flag_is_forwarded_to_language_provider() {
+    let cwd = temp_dir("workspace-flag");
+
+    let parsed = parse_client_args(
+        vec![
+            "query".to_string(),
+            "--from-hook".to_string(),
+            "direct-source-read".to_string(),
+            "--workspace".to_string(),
+            "--selector".to_string(),
+            "crates/example/src/lib.rs:1:20".to_string(),
+            "--source".to_string(),
+            "worktree".to_string(),
+            "--code".to_string(),
+            ".".to_string(),
+        ],
+        cwd.clone(),
+        Some("rust"),
+    )
+    .expect("workspace flag is a provider query option");
+
+    assert_eq!(
+        parsed.forwarded_args,
+        vec![
+            "--from-hook",
+            "direct-source-read",
+            "--workspace",
+            "--selector",
+            "crates/example/src/lib.rs:1:20",
+            "--source",
+            "worktree",
+            "--code",
+        ]
+    );
+    let _ = fs::remove_dir_all(cwd);
+}
+
+#[test]
+fn positional_project_root_preserves_activation_root() {
+    let cwd = temp_dir("positional-root-activation");
+    let provider_root = cwd.join("languages/rust-lang-project-harness");
+    fs::create_dir_all(&provider_root).expect("create provider root");
+    fs::write(
+        provider_root.join("Cargo.toml"),
+        "[package]\nname = \"rust-lang-project-harness\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("write manifest");
+
+    let parsed = parse_client_args(
+        vec![
+            "search".to_string(),
+            "workspace".to_string(),
+            "--view".to_string(),
+            "seeds".to_string(),
+            provider_root.display().to_string(),
+        ],
+        cwd.clone(),
+        Some("rust"),
+    )
+    .expect("positional project root");
+
+    assert_eq!(parsed.activation_root, cwd);
+    assert_eq!(
+        parsed.project_root,
+        std::fs::canonicalize(&provider_root).expect("canonical provider root")
+    );
+    assert_eq!(parsed.forwarded_args, vec!["workspace", "--view", "seeds"]);
+    let _ = fs::remove_dir_all(parsed.activation_root);
+}
+
 fn temp_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("asp-cli-args-{}-{name}", process::id()));
     let _ = fs::remove_dir_all(&path);
