@@ -32,12 +32,17 @@ fn cli_install_prefers_git_toplevel_cache_over_prj_cache_home() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).expect("install stdout");
-    assert!(stdout.contains("profileCache="));
-    assert!(stdout.contains("agent-semantic-protocol/hooks/profiles.json"));
     assert!(
         root.join(".cache")
-            .join("agent-semantic-protocol/hooks/profiles.json")
+            .join("agent-semantic-protocol/hooks/activation.json")
             .is_file()
+    );
+    assert!(!stdout.contains("profileCache="));
+    assert!(
+        !root
+            .join(".cache")
+            .join("agent-semantic-protocol/hooks/profiles.json")
+            .exists()
     );
     assert!(
         !prj_cache_home

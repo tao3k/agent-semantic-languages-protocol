@@ -43,7 +43,7 @@ fn cli_install_writes_root_owned_codex_hook_config() {
     assert_install_stdout(&stdout);
     assert!(protocol_bin_dir.join("asp").is_file());
     assert_installed_skill(&root);
-    assert_profile_registry(&root);
+    assert_no_profile_registry(&root);
     let config =
         std::fs::read_to_string(root.join(".codex/config.toml")).expect("installed config");
     assert_codex_config(&config);
@@ -92,6 +92,15 @@ trusted_hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 }
 
 fn write_legacy_hook_cache(root: &std::path::Path) {
+    let current_cache_dir = root.join(".cache/agent-semantic-protocol/hooks");
+    std::fs::create_dir_all(&current_cache_dir).expect("create current hook cache dir");
+    std::fs::write(current_cache_dir.join("profiles.json"), r#"{"stale":true}"#)
+        .expect("write stale current profile registry");
+    std::fs::write(
+        current_cache_dir.join("profiles.ts-harness.json"),
+        r#"{"stale":true}"#,
+    )
+    .expect("write stale current provider profile shard");
     let legacy_profiles_dir = root.join(".codex/agent-semantic-hook");
     std::fs::create_dir_all(&legacy_profiles_dir).expect("create legacy profiles dir");
     std::fs::write(
@@ -153,8 +162,8 @@ fn assert_install_stdout(stdout: &str) {
     assert!(stdout.contains("activation="));
     assert!(stdout.contains("agent-semantic-protocol/hooks/activation.json"));
     assert!(stdout.contains("clientConfig=.codex/agent-semantic-protocol/hooks/config.toml"));
-    assert!(stdout.contains("profileCache="));
-    assert!(stdout.contains("agent-semantic-protocol/hooks/profiles.json"));
+    assert!(!stdout.contains("profileCache="));
+    assert!(!stdout.contains("agent-semantic-protocol/hooks/profiles.json"));
     assert!(stdout.contains("skill=.agents/skills/agent-semantic-protocols/SKILL.md"));
     assert!(stdout.contains("trustConfig="));
     assert!(stdout.contains("binary=asp"));
@@ -187,48 +196,16 @@ fn assert_installed_skill(root: &std::path::Path) {
     assert!(skill.contains("### Hook Recovery"));
 }
 
-fn assert_profile_registry(root: &std::path::Path) {
-    let profiles_text =
-        std::fs::read_to_string(root.join(".cache/agent-semantic-protocol/hooks/profiles.json"))
-            .expect("installed profile registry");
-    let profiles: serde_json::Value =
-        serde_json::from_str(&profiles_text).expect("profile registry JSON");
-    assert_eq!(
-        profiles["schemaId"],
-        "agent.semantic-protocols.hook.profile-registry"
-    );
-    assert_eq!(profiles["projectRoot"], ".");
-    let profile_entries = profiles["profiles"].as_array().expect("profile entries");
-    let rust_profile = profile_entries
-        .iter()
-        .find(|entry| entry["providerId"] == "rs-harness")
-        .expect("rs-harness hook profile");
-    let query_argv = rust_profile["commands"]["query"]["argv"]
-        .as_array()
-        .expect("query argv");
+fn assert_no_profile_registry(root: &std::path::Path) {
     assert!(
-        query_argv[0]
-            .as_str()
-            .is_some_and(|program| program.ends_with("/.bin/rs-harness")),
-        "{query_argv:?}"
+        !root
+            .join(".cache/agent-semantic-protocol/hooks/profiles.json")
+            .exists()
     );
-    assert_eq!(
-        &query_argv[1..],
-        serde_json::json!([
-            "query",
-            "--from-hook",
-            "direct-source-read",
-            "--selector",
-            "{selector}",
-            "{termArgs}",
-            "--surface",
-            "owners,tests",
-            "--view",
-            "seeds",
-            "."
-        ])
-        .as_array()
-        .expect("expected query argv tail")
+    assert!(
+        !root
+            .join(".cache/agent-semantic-protocol/hooks/profiles.ts-harness.json")
+            .exists()
     );
     assert!(
         !root

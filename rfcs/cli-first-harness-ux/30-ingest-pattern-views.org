@@ -56,10 +56,27 @@ search pipe <query> [--owners <path>...] [--pipe items,tests] [--view seeds|grap
   bounded roots, hidden/build/cache ignore policy, and deterministic caps.
 - Candidate output is immediately routed through the same ingest semantics:
   path normalize, owner grouping, optional item/test frontier, compact render.
-- =--view seeds= returns compact frontier and must avoid full project parser
-  construction before candidate bounds are known.
+- =--view seeds= returns the graph-turbo ranked compact frontier and must avoid
+  full project parser construction before candidate bounds are known.  Omitted
+  =--view= defaults to this same compact frontier.
+- For deep question and feature flows, =search pipe= must not replace the
+  project graph context from =search prime=.  The expected agent flow is:
+  =search prime= once, =search pipe <query>= once, one or more explicit
+  =search reasoning ...= profiles selected from the pipe/frontier facts, then
+  exact =query --selector= reads.  The compact seeds view may append a
+  composable pipe expression, for example =pipeExpr=prime |> search(...) |>
+  rank(...) |> filter(...) |> project(...) |> choose(...)=, plus
+  =pipeProjections=, =frontierActions=, =pipeCommands=, =pipeChoice=, =stop=,
+  and =avoid= lines.  =frontierActions= and =pipeCommands= are projections of
+  the pipe result, not the pipe definition.
+- Branch choice must stay bounded.  The default agent-facing projection should
+  expose at most the graph-ranked top 3 branches, selected by graph-turbo's
+  sparse ranking/path policy rather than raw lexical traversal order.  A larger
+  branch fanout turns pipe composition back into broad search and should require
+  an explicit debug/schema view rather than the default =--view seeds= output.
 - =--view graph-turbo-request= returns a schema-owned graph request for the
-  graph-turbo ranking boundary.
+  graph-turbo ranking boundary.  It is a validation/debug view, not the default
+  agent-facing output.
 - =search suggest=, not =search pipe --view commands=, returns replacement
   command templates and slow-pattern advice.  It does not execute shell
   commands and does not spawn providers.
@@ -68,7 +85,14 @@ search pipe <query> [--owners <path>...] [--pipe items,tests] [--view seeds|grap
   advisory command, not a composition knob.
 - Provider-native semantic enrichment may run after the bounded candidate set
   exists, but direct source reads and cheap lexical discovery must not pay a
-  project-wide semantic parse cost first.
+  project-wide semantic parse cost first.  When the query names data-shape
+  concepts such as fields, types, collections, maps, sets, lists, or concrete
+  collection APIs such as =Vec=, the bounded enrichment should project typed
+  =field=, =type=, and =collection= facts into the graph-turbo request.  The
+  default seeds view should then expose field-level selectors through
+  =frontierActions= and =pipeCommands= instead of asking the agent to run
+  another owner search, broad fzf, or tree-sitter guide probe after graph-turbo
+  already selected the top branches.
 
 ** Search fast path boundary
 

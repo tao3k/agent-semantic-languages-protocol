@@ -82,6 +82,34 @@ def _print_step_report(step: StepResult) -> None:
         emit(f"|warn step={step.step_id} {warning}")
     for error in step.errors:
         emit(f"|error step={step.step_id} {error}")
+    _print_step_observations(step)
+
+
+def _print_step_observations(step: StepResult) -> None:
+    token_cost = dict_value(step.observations.get("tokenCost"))
+    if token_cost:
+        emit(
+            f"|tokens step={step.step_id} "
+            f"input={optional_int(token_cost.get('inputTokens')) or 0} "
+            f"output={optional_int(token_cost.get('outputTokens')) or 0} "
+            f"cacheRead={optional_int(token_cost.get('cacheReadInputTokens')) or 0} "
+            f"total={optional_int(token_cost.get('totalTokens')) or 0} "
+            f"costUsd={quote_value(str(token_cost.get('costUsd', 'unknown')))}"
+        )
+    pipe_flow = dict_value(step.observations.get("pipeFlow"))
+    if not pipe_flow:
+        return
+    missing = list_value(pipe_flow.get("missingComplexPipeStages"))
+    emit(
+        f"|pipeFlow step={step.step_id} "
+        f"asp={optional_int(pipe_flow.get('aspCommands')) or 0} "
+        f"search={optional_int(pipe_flow.get('searchCommands')) or 0} "
+        f"query={optional_int(pipe_flow.get('queryCommands')) or 0} "
+        f"directRead={optional_int(pipe_flow.get('directReadCommands')) or 0} "
+        f"repeated={optional_int(pipe_flow.get('repeatedCommands')) or 0} "
+        f"complex={str(bool(pipe_flow.get('complexPipeFlow'))).lower()} "
+        f"missing={quote_value(','.join(str(item) for item in missing) or '-')}"
+    )
 
 
 def _print_runtime_audit(results: list[ScenarioResult]) -> None:

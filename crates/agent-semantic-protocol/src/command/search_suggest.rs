@@ -12,7 +12,7 @@ pub(super) fn is_search_suggest(args: &[String]) -> bool {
         && matches!(args.get(1).map(String::as_str), Some("suggest"))
 }
 
-pub(super) fn is_unsupported_pipeline_alias(args: &[String]) -> bool {
+pub(super) fn is_unsupported_search_pipeline_command(args: &[String]) -> bool {
     matches!(args.first().map(String::as_str), Some("search"))
         && matches!(args.get(1).map(String::as_str), Some("compose"))
 }
@@ -26,9 +26,9 @@ pub(super) fn run_search_suggest_command(language_id: &str, args: &[String]) -> 
     Ok(())
 }
 
-pub(super) fn reject_unsupported_pipeline_alias() -> Result<(), String> {
+pub(super) fn reject_unsupported_search_pipeline_command() -> Result<(), String> {
     Err(
-        "unknown search view: compose; use `search pipe` for ASP-owned candidate pipelines"
+        "unsupported search pipeline command; use `search pipe` for ASP-owned candidate pipelines"
             .to_string(),
     )
 }

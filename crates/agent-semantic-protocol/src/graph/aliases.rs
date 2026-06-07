@@ -13,6 +13,7 @@ pub(super) struct GraphAlias {
     target: String,
     locator: Option<String>,
     pub(super) action: String,
+    syntax_query: Option<String>,
 }
 
 impl GraphAlias {
@@ -72,6 +73,7 @@ pub(super) fn graph_aliases(packet: &Value, limit: usize) -> Vec<GraphAlias> {
             target: target.to_string(),
             locator: action.locator.clone(),
             action: action_name,
+            syntax_query: action.syntax_query.clone(),
         });
         if aliases.len() >= limit {
             break;
@@ -176,6 +178,21 @@ pub(super) fn graph_legend_line(aliases: &[GraphAlias]) -> String {
         }
     }
     format!("aliases: graph:{{{}}}", entries.join(","))
+}
+
+pub(super) fn graph_syntax_lines(aliases: &[GraphAlias]) -> Vec<String> {
+    aliases
+        .iter()
+        .filter(|alias| alias.action == "syntax")
+        .filter_map(|alias| {
+            let selector = alias.locator.as_deref()?;
+            let pattern = alias.syntax_query.as_deref()?;
+            Some(format!(
+                "syntax {} selector={} pattern='{}'",
+                alias.id, selector, pattern
+            ))
+        })
+        .collect()
 }
 
 pub(super) fn is_owner_item_query(packet: &Value, mode: &str, aliases: &[GraphAlias]) -> bool {

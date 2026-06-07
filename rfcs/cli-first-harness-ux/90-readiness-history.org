@@ -236,6 +236,14 @@ ABI instead of separate compatibility hints.
 - =rs-harness guide= and =rs-harness search guide= both expose the shared
   =reasoningProfiles= catalog as =owner-query=, =query-deps=, =owner-tests=,
   =finding-frontier=, and =feature-cfg=.
+- =rs-harness search guide= prints concrete selector-bearing commands for each
+  reasoning profile, including =search reasoning owner-query --owner
+  <owner-path> --query <term> --view seeds .=, so agents do not infer
+  positional selector arguments from =entries= rows.
+- Live sandtable prompts do not carry scenario-specific command tutoring for
+  reasoning profiles. The root =SKILL.md= template and its installed hook skill
+  copy own the optimization rule: use =search guide='s =command= rows, pass
+  profile selectors as explicit flags, and keep =search reasoning= enabled.
 - =search prime --view seeds= emits =entries=profile(selectors=>returns)= rows
   instead of the retired =profiles=profile(args)= line.
 - Non-reasoning actions such as =path= and =read-frontier= stay under routes,

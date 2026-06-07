@@ -18,11 +18,22 @@ EDGE_WEIGHT_BY_RELATION: Mapping[str, float] = {
     "depends_on": 0.9,
     "flows-to": 1.6,
     "split": 0.7,
+    "fails": 1.7,
+    "explains": 1.5,
+    "checks": 1.4,
+    "gates": 1.3,
+    "relates": 1.1,
+    "validates": 1.2,
+    "has_type": 1.35,
+    "collection_of": 1.3,
 }
 
 NODE_KIND_BONUS_BY_PROFILE: Mapping[str, Mapping[str, float]] = {
     "owner-query": {
-        "hot": 0.3,
+        "field": 0.4,
+        "hot": 0.35,
+        "collection": 0.3,
+        "type": 0.28,
         "item": 0.25,
         "test": 0.15,
         "owner": 0.1,
@@ -37,6 +48,14 @@ NODE_KIND_BONUS_BY_PROFILE: Mapping[str, Mapping[str, float]] = {
         "window": 0.4,
         "symbol": 0.3,
         "range": -0.2,
+    },
+    "failure-frontier": {
+        "assert": 0.4,
+        "hot": 0.35,
+        "evidence": 0.22,
+        "key": 0.2,
+        "test": 0.12,
+        "owner": 0.05,
     },
 }
 

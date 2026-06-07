@@ -6,11 +6,12 @@ use std::path::Path;
 
 use agent_semantic_provider_transport::byte_text;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct Candidate {
     pub(super) path: String,
     pub(super) line: usize,
     pub(super) symbol: String,
+    pub(super) text: String,
 }
 
 pub(super) fn render_ingest_frontier(candidates: &[Candidate], pipes: &[String]) -> String {
@@ -50,6 +51,7 @@ pub(super) fn render_empty_ingest_diagnostic(language_id: &str) -> String {
 }
 
 pub(super) fn render_owner_query_frontier(
+    language_id: &str,
     project_root: &Path,
     locator_root: &Path,
     owner: &Path,
@@ -61,7 +63,14 @@ pub(super) fn render_owner_query_frontier(
         project_root.join(owner)
     };
     let display_owner = display_path(locator_root, &owner_path);
-    let (item_start, item_end) = find_first_term_range(&owner_path, query).unwrap_or((1, 1));
+    let item_match = find_first_term_match(&owner_path, query).unwrap_or(OwnerQueryMatch {
+        start: 1,
+        end: 1,
+        kind: default_item_kind(language_id),
+    });
+    let (item_start, item_end) = (item_match.start, item_match.end);
+    let selector = format!("{display_owner}:{item_start}:{item_end}");
+    let syntax_pattern = owner_query_tree_sitter_pattern(language_id, item_match.kind, query);
     let mut rendered = String::from(
         "[search-reasoning] q=owner-query alg=asp-fast-owner-query-v1\n\
 legend: ID=kind:role(value)!next; edge SRC>{DST:rel}; frontier ID.next\n\
@@ -69,12 +78,57 @@ aliases: graph:{G=search,Q=query,T=test,O=owner,I=item}\n",
     );
     let _ = writeln!(
         rendered,
-        "Q=query:term({query})!query;T=test:path({display_owner})!tests;O=owner:path({display_owner})!owner;I=item:symbol({query})@{display_owner}:{item_start}:{item_end}!code",
+        "Q=query:term({query})!query;T=test:path({display_owner})!tests;O=owner:path({display_owner})!owner;I=item:symbol({query})@{selector}!syntax",
     );
+    if let Some(pattern) = syntax_pattern {
+        let _ = writeln!(rendered, "syntax I selector={selector} pattern='{pattern}'");
+    }
     rendered.push_str("G>{Q:matches,T:covers,O:selects,I:contains}\n");
-    rendered.push_str("rank=Q,T,O,I frontier=Q.query,T.tests,O.owner,I.code\n");
+    rendered.push_str("rank=Q,T,O,I frontier=Q.query,T.tests,O.owner,I.syntax\n");
     rendered.push_str("entries=owner-query(O,Q=>items+tests+dependency-usage)\n");
     rendered
+}
+
+fn owner_query_tree_sitter_pattern(language_id: &str, kind: &str, query: &str) -> Option<String> {
+    let escaped_query = query.replace('\\', "\\\\").replace('"', "\\\"");
+    match language_id {
+        "rust" => rust_tree_sitter_pattern(kind, &escaped_query),
+        "python" => python_tree_sitter_pattern(kind, &escaped_query),
+        _ => None,
+    }
+}
+
+fn rust_tree_sitter_pattern(kind: &str, escaped_query: &str) -> Option<String> {
+    let (node, capture) = match kind {
+        "struct" => ("struct_item", "type.name"),
+        "enum" => ("enum_item", "type.name"),
+        "trait" => ("trait_item", "type.name"),
+        "type" => ("type_item", "type.name"),
+        "mod" => ("mod_item", "module.name"),
+        "const" => ("const_item", "constant.name"),
+        "static" => ("static_item", "constant.name"),
+        _ => ("function_item", "function.name"),
+    };
+    Some(format!(
+        "(({node} name: (_) @{capture}) (#eq? @{capture} \"{escaped_query}\"))"
+    ))
+}
+
+fn python_tree_sitter_pattern(kind: &str, escaped_query: &str) -> Option<String> {
+    let (node, capture) = match kind {
+        "class" => ("class_definition", "class.name"),
+        _ => ("function_definition", "function.name"),
+    };
+    Some(format!(
+        "(({node} name: (identifier) @{capture}) (#eq? @{capture} \"{escaped_query}\"))"
+    ))
+}
+
+fn default_item_kind(language_id: &str) -> &'static str {
+    match language_id {
+        "python" => "function",
+        _ => "fn",
+    }
 }
 
 pub(super) fn render_owner_tests_frontier(
@@ -238,22 +292,66 @@ fn ingest_entries_for_pipes(pipes: &[String]) -> String {
     entries.join(",")
 }
 
-fn find_first_term_range(path: &Path, query: &str) -> Option<(usize, usize)> {
+struct OwnerQueryMatch {
+    start: usize,
+    end: usize,
+    kind: &'static str,
+}
+
+fn find_first_term_match(path: &Path, query: &str) -> Option<OwnerQueryMatch> {
     let bytes = fs::read(path).ok()?;
     let terms = query_terms(query);
     let lines = byte_text::line_slices(&bytes);
     for (index, line) in lines.iter().enumerate() {
         if line_matches_terms(line, &terms) {
             let start = index + 1;
-            return Some((
+            return Some(OwnerQueryMatch {
                 start,
-                rust_block_end(path, &lines, index)
+                end: rust_block_end(path, &lines, index)
                     .or_else(|| python_block_end(path, &lines, index))
                     .unwrap_or(start + 1),
-            ));
+                kind: item_kind_for_line(path, line),
+            });
         }
     }
     None
+}
+
+fn item_kind_for_line(path: &Path, line: &[u8]) -> &'static str {
+    let lower = byte_text::lowercase_lossy_string(line);
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("rs") => rust_item_kind_for_line(&lower),
+        Some("py") => python_item_kind_for_line(&lower),
+        _ => "fn",
+    }
+}
+
+fn rust_item_kind_for_line(line: &str) -> &'static str {
+    if line.contains(" struct ") || line.trim_start().starts_with("struct ") {
+        "struct"
+    } else if line.contains(" enum ") || line.trim_start().starts_with("enum ") {
+        "enum"
+    } else if line.contains(" trait ") || line.trim_start().starts_with("trait ") {
+        "trait"
+    } else if line.contains(" type ") || line.trim_start().starts_with("type ") {
+        "type"
+    } else if line.contains(" mod ") || line.trim_start().starts_with("mod ") {
+        "mod"
+    } else if line.contains(" const ") || line.trim_start().starts_with("const ") {
+        "const"
+    } else if line.contains(" static ") || line.trim_start().starts_with("static ") {
+        "static"
+    } else {
+        "fn"
+    }
+}
+
+fn python_item_kind_for_line(line: &str) -> &'static str {
+    if line.trim_start().starts_with("class ") {
+        "class"
+    } else {
+        "function"
+    }
 }
 
 fn rust_block_end(path: &Path, lines: &[&[u8]], start_index: usize) -> Option<usize> {

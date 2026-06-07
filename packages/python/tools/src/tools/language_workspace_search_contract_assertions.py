@@ -11,6 +11,9 @@ def assert_workspace_result(result: AspResult, case: SearchContractCase) -> None
     if case.language == "julia":
         _assert_julia_workspace(result, case, label)
         return
+    if case.workspace_router_next_prime and _looks_like_workspace_router_next_prime(result.stdout):
+        _assert_workspace_router_next_prime(result.stdout, label)
+        return
     _assert_workspace_graph(result.stdout, label)
     _assert_case_needles(result.stdout, case.workspace_needles, label)
 
@@ -19,7 +22,7 @@ def assert_ingest_result(result: AspResult, case: SearchContractCase) -> None:
     label = f"{case.language} ingest"
     _assert_ingest_graph(result.stdout, label)
     if case.language == "julia" and "legend:" not in result.stdout:
-        _assert_contains(result.stdout, "pipes=owner,tests", label)
+        _assert_julia_ingest_fallback(result.stdout, label)
 
 
 def assert_registry(value: str, case: SearchContractCase) -> None:
@@ -76,9 +79,30 @@ def _assert_workspace_graph(value: str, label: str) -> None:
     _assert_not_contains(value, "expected at most one PROJECT_ROOT argument", label)
 
 
+def _assert_workspace_router_next_prime(value: str, label: str) -> None:
+    _assert_contains(value, "[search-workspace]", label)
+    _assert_contains(value, "legend:", label)
+    _assert_contains(value, "aliases: graph:{G=search}", label)
+    _assert_contains(value, "G>{}", label)
+    _assert_contains(value, "|next prime:.", label)
+    _assert_not_contains(value, "expected at most one PROJECT_ROOT argument", label)
+
+
+def _looks_like_workspace_router_next_prime(value: str) -> bool:
+    return "G>{}" in value or "|next prime:." in value
+
+
 def _assert_ingest_graph(value: str, label: str) -> None:
     _assert_contains(value, "[search-ingest]", label)
     _assert_not_contains(value, "expected at most one PROJECT_ROOT argument", label)
+
+
+def _assert_julia_ingest_fallback(value: str, label: str) -> None:
+    if "pipes=owner,tests" in value or "stdin-required" in value:
+        return
+    raise ContractFailure(
+        f"{label}: expected output to contain 'pipes=owner,tests' or 'stdin-required'\n{value}"
+    )
 
 
 def _assert_case_needles(

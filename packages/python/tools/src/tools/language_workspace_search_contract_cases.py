@@ -12,6 +12,7 @@ class SearchContractCase:
     ingest_pipes: tuple[str, ...]
     accepted_pipes_json: str
     workspace_needles: tuple[str, ...] = ()
+    workspace_router_next_prime: bool = False
 
 
 CONTRACT_CASES: tuple[SearchContractCase, ...] = (
@@ -38,6 +39,7 @@ CONTRACT_CASES: tuple[SearchContractCase, ...] = (
         ingest_pipes=("items", "tests"),
         accepted_pipes_json='"acceptedPipes":["items","tests"]',
         workspace_needles=("O=owner:path(.)!owner",),
+        workspace_router_next_prime=True,
     ),
     SearchContractCase(
         language="julia",

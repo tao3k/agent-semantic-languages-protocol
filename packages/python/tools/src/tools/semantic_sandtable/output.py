@@ -14,7 +14,25 @@ def emit(line: str = "", *, file: TextIO | None = None) -> None:
     output.write(f"{line}\n")
 
 
+def emit_text(text: str, *, file: TextIO | None = None, flush: bool = False) -> None:
+    """Write exact CLI output text through an explicit reporting surface."""
+
+    output = sys.stdout if file is None else file
+    output.write(text)
+    if flush:
+        output.flush()
+
+
 def emit_json(payload: Any) -> None:
     """Write JSON CLI output through the shared reporting surface."""
 
     emit(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def emit_json_line(payload: Any, *, flush: bool = False) -> None:
+    """Write compact JSON-line output through the shared reporting surface."""
+
+    emit_text(
+        f"{json.dumps(payload, ensure_ascii=False, sort_keys=True)}\n",
+        flush=flush,
+    )

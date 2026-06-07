@@ -28,6 +28,11 @@ _COMMANDS: dict[str, tuple[str, str, str]] = {
         "main",
         "Render real-trigger metrics for graph turbo RFC validation.",
     ),
+    "cache": (
+        "asp_graph_turbo.cache_cli",
+        "main",
+        "Inspect, prune, or invalidate the graph turbo backend cache.",
+    ),
 }
 
 

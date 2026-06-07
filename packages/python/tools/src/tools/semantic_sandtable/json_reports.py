@@ -100,6 +100,7 @@ def _scenario_json(result: ScenarioResult) -> dict[str, Any]:
                 "stderrLines": step.stderr_lines,
                 "stdoutBytes": step.stdout_bytes,
                 "stderrBytes": step.stderr_bytes,
+                "observations": step.observations,
                 "warnings": step.warnings,
                 "errors": step.errors,
             }

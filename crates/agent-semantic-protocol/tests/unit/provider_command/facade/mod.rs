@@ -50,4 +50,5 @@ mod guide;
 mod pipe;
 mod provider_invocation;
 mod rewrite;
+mod root_language;
 mod roots;

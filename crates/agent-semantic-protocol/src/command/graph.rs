@@ -1,12 +1,18 @@
 //! `asp graph` command adapter.
 
+use std::collections::BTreeMap;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
+use agent_semantic_provider_transport::{
+    OutputMode, ProviderProcessLimits, ProviderProcessSpec, StdinMode, run_provider_process,
+};
 use serde_json::Value;
 
 use crate::graph::{GraphRenderOptions, render_search_graph_packet};
+
+const GRAPH_TURBO_REQUEST_SCHEMA_ID: &str = "agent.semantic-protocols.semantic-graph-turbo-request";
 
 pub(crate) fn run_graph_command(args: &[String]) -> Result<(), String> {
     let Some(command) = args.first().map(String::as_str) else {
@@ -24,7 +30,16 @@ fn run_graph_render_command(args: &[String]) -> Result<(), String> {
     if request.view != "seeds" {
         return Err("graph render currently supports only --view seeds".to_string());
     }
-    let packet = read_packet(&request.packet_path)?;
+    let packet_bytes = read_packet_bytes(&request.packet_path)?;
+    let packet = parse_packet(&packet_bytes)?;
+    if is_graph_turbo_request(&packet)
+        && let Some(output) = render_graph_turbo_packet(&packet_bytes)?
+    {
+        io::stdout()
+            .write_all(output.as_ref())
+            .map_err(|error| format!("failed to write asp-graph-turbo stdout: {error}"))?;
+        return Ok(());
+    }
     let output = render_search_graph_packet(
         &packet,
         GraphRenderOptions {
@@ -61,7 +76,7 @@ impl GraphRenderRequest {
     }
 }
 
-fn read_packet(path: &PathBuf) -> Result<Value, String> {
+fn read_packet_bytes(path: &PathBuf) -> Result<Vec<u8>, String> {
     let mut contents = Vec::new();
     if path.as_os_str() == "-" {
         io::stdin()
@@ -71,7 +86,57 @@ fn read_packet(path: &PathBuf) -> Result<Value, String> {
         contents = fs::read(path)
             .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
     }
-    serde_json::from_slice(&contents).map_err(|error| format!("invalid graph packet JSON: {error}"))
+    Ok(contents)
+}
+
+fn parse_packet(contents: &[u8]) -> Result<Value, String> {
+    serde_json::from_slice(contents).map_err(|error| format!("invalid graph packet JSON: {error}"))
+}
+
+fn is_graph_turbo_request(packet: &Value) -> bool {
+    packet.get("schemaId").and_then(Value::as_str) == Some(GRAPH_TURBO_REQUEST_SCHEMA_ID)
+        || packet.get("packetKind").and_then(Value::as_str) == Some("graph-turbo-request")
+}
+
+pub(super) fn render_graph_turbo_packet(packet_bytes: &[u8]) -> Result<Option<Vec<u8>>, String> {
+    let cwd = std::env::current_dir()
+        .map_err(|error| format!("failed to resolve current directory: {error}"))?;
+    let output = match run_provider_process(ProviderProcessSpec {
+        program: "asp-graph-turbo".to_string(),
+        args: vec![
+            "rank".to_string(),
+            "-".to_string(),
+            "--format".to_string(),
+            "compact".to_string(),
+        ],
+        cwd,
+        env: BTreeMap::new(),
+        stdin: StdinMode::bytes(packet_bytes.to_vec()),
+        stdout: OutputMode::Capture,
+        stderr: OutputMode::Capture,
+        limits: ProviderProcessLimits::default(),
+    }) {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!(
+                "[asp-graph] fallback=rust-render reason=asp-graph-turbo-unavailable detail={error}"
+            );
+            return Ok(None);
+        }
+    };
+    if !output.stderr.is_empty() {
+        io::stderr()
+            .write_all(output.stderr.as_ref())
+            .map_err(|error| format!("failed to write asp-graph-turbo stderr: {error}"))?;
+    }
+    if !output.status.success() {
+        eprintln!(
+            "[asp-graph] fallback=rust-render reason=asp-graph-turbo-exit status={}",
+            output.status.code().unwrap_or(1)
+        );
+        return Ok(None);
+    }
+    Ok(Some(output.stdout.to_vec()))
 }
 
 fn flag_value(args: &[String], flag: &str) -> Option<String> {

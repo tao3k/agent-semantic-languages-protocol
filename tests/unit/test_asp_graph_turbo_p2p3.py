@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from asp_graph_turbo import TypedGraph, rank_frontier
+from asp_graph_turbo.cache import _BACKEND_CACHE
 
 
 def _sample_path_packet() -> dict[str, object]:
@@ -93,7 +94,12 @@ def test_typed_paths_and_flow_lite_rank_source_sink_frontier() -> None:
     assert result.flow_lite.ranked_path_ids == tuple(path.id for path in result.typed_paths)
 
 
-def test_packet_fingerprint_cache_trace_and_explanations_are_response_evidence() -> None:
+def test_packet_fingerprint_cache_trace_and_explanations_are_response_evidence(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    _BACKEND_CACHE.clear()
+    monkeypatch.setenv("PRJ_CACHE_HOME", str(tmp_path))
     graph = TypedGraph.from_packet(
         {
             "nodes": [

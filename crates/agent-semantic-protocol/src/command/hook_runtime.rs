@@ -18,9 +18,9 @@ use agent_semantic_hook::{
     merge_codex_config, parse_payload, record_active_context, remove_incompatible_hook_event_state,
     remove_legacy_codex_hook_cache_files, render_platform_response,
     runtime_profiles_for_activation, runtime_profiles_for_runtime, validate_claude_settings_json,
-    validate_codex_config_toml, write_activation, write_profile_registry,
+    validate_codex_config_toml, write_activation,
 };
-use agent_semantic_runtime::{ensure_project_hook_cache_dir, ensure_project_hook_state_dir};
+use agent_semantic_runtime::ensure_project_hook_cache_dir;
 use hook_runtime_skill::install_agent_semantic_protocols_skill;
 use std::collections::BTreeMap;
 use std::env;
@@ -522,9 +522,7 @@ fn run_install(args: &[String]) -> Result<(), String> {
     let activation = build_default_activation(&project_root)?;
     write_activation(&activation_path, &activation)?;
     let runtime_profiles = runtime_profiles_for_activation(&project_root, &activation)?;
-    let profile_cache_dir = ensure_project_hook_state_dir(&project_root)?;
     remove_incompatible_hook_event_state(&project_root)?;
-    let profile_registry_path = write_profile_registry(&profile_cache_dir, &activation)?;
     let client_config_path = default_client_config_path(&project_root.to_string_lossy());
     install_default_client_config(&client_config_path)?;
     let skill_path =
@@ -535,10 +533,9 @@ fn run_install(args: &[String]) -> Result<(), String> {
         _ => unreachable!("client support checked before install"),
     };
     println!(
-        "[agent-install] client={client} activation={} activationRuntime=derived clientConfig={} profileCache={} config={}{} skill={} binary=asp binaryPath={} binaryInstall={} mode=updated",
+        "[agent-install] client={client} activation={} activationRuntime=derived clientConfig={} config={}{} skill={} binary=asp binaryPath={} binaryInstall={} mode=updated",
         display_path(&project_root, &activation_path),
         display_path(&project_root, &client_config_path),
-        display_path(&project_root, &profile_registry_path),
         display_path(&project_root, &config_path),
         extra_config_receipt,
         display_path(&project_root, &skill_path),

@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping
 from .backend import multi_source_hop_lengths, reachable_edges, typed_personalized_pagerank
 from .cache import cached_sparse_backend, packet_fingerprint
 from .compatibility import profile_compatibility
-from .constants import COMPACT_AVOID_ACTIONS, COMPACT_OMISSIONS
+from .constants import compact_avoid_actions_for_profile, compact_omissions_for_profile
 from .diversity import normalize_kind_budgets, rank_nodes
 from .evidence import algorithm_metrics, algorithm_trace, rank_explanations
 from .model import (
@@ -22,6 +22,7 @@ from .model import (
 from .paths import flow_lite, source_sink_frontier, typed_paths
 from .policy import node_kind_bonus
 from .profiles import DEFAULT_PROFILES, frontier_action, resolve_profile
+from .query_weights import query_node_match_bonus, query_token_weights
 from .windows import merge_ranked_windows
 
 
@@ -180,8 +181,8 @@ def _build_graph_result(
         explanations,
         metrics,
         tuple(DEFAULT_PROFILES),
-        COMPACT_OMISSIONS,
-        COMPACT_AVOID_ACTIONS,
+        compact_omissions_for_profile(selected_profile.name),
+        compact_avoid_actions_for_profile(selected_profile.name),
     )
 
 
@@ -220,7 +221,7 @@ def _collect_scores(
     )
     best_depth = multi_source_hop_lengths(backend, seed_ids, profile.max_depth)
     pagerank = typed_personalized_pagerank(backend, seed_ids)
-    scores = _score_nodes(graph, profile, best_depth, pagerank)
+    scores = _score_nodes(graph, profile, seed_ids, best_depth, pagerank)
     selected_edges = reachable_edges(backend, best_depth)
     return scores, best_depth, selected_edges, graph_cache
 
@@ -228,12 +229,18 @@ def _collect_scores(
 def _score_nodes(
     graph: TypedGraph,
     profile: GraphProfile,
+    seed_ids: Iterable[str],
     best_depth: Mapping[str, int],
     pagerank: Mapping[str, float],
 ) -> dict[str, float]:
     max_pagerank = max(
         (pagerank.get(node_id, 0.0) for node_id in best_depth),
         default=0.0,
+    )
+    token_weights = query_token_weights(
+        graph,
+        profile_name=profile.name,
+        seed_ids=seed_ids,
     )
     return {
         node_id: graph.nodes[node_id].weight
@@ -244,6 +251,11 @@ def _score_nodes(
             else 0.0
         )
         + node_kind_bonus(profile.name, graph.nodes[node_id].kind)
+        + query_node_match_bonus(
+            profile_name=profile.name,
+            token_weights=token_weights,
+            node=graph.nodes[node_id],
+        )
         for node_id, depth in best_depth.items()
     }
 

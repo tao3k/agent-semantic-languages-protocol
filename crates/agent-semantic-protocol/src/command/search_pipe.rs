@@ -1,19 +1,24 @@
 //! ASP-owned search pipeline wrapper.
 
+use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use super::graph::render_graph_turbo_packet;
 use super::search_config::AspConfig;
+use super::search_failure_render::{render_failure_frontier, render_failure_graph_turbo_request};
 use super::search_pipe_candidates::{
     collect_candidates, parse_ingest_candidates, read_piped_stdin,
 };
 use super::search_pipe_graph_turbo::render_graph_turbo_request;
+use super::search_pipe_plan::render_search_pipe_plan;
 use super::search_pipe_render::{
-    render_empty_ingest_diagnostic, render_ingest_frontier, render_owner_query_frontier,
+    Candidate, render_empty_ingest_diagnostic, render_ingest_frontier, render_owner_query_frontier,
     render_owner_tests_frontier,
 };
 use super::search_suggest::{
-    is_search_suggest, is_unsupported_pipeline_alias, reject_unsupported_pipeline_alias,
-    run_search_suggest_command,
+    is_search_suggest, is_unsupported_search_pipeline_command,
+    reject_unsupported_search_pipeline_command, run_search_suggest_command,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -43,12 +48,20 @@ struct IngestArgs {
     view: String,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct FailureArgs {
+    message: Option<String>,
+    from_last_check: bool,
+    view: String,
+}
+
 pub(super) fn is_asp_fast_search(args: &[String]) -> bool {
     is_search_pipe(args)
         || is_search_suggest(args)
-        || is_unsupported_pipeline_alias(args)
+        || is_unsupported_search_pipeline_command(args)
         || is_search_ingest(args)
         || is_search_fzf(args)
+        || is_search_failure(args)
         || is_reasoning_owner_query(args)
         || is_reasoning_owner_tests(args)
         || is_search_owner_items_query(args)
@@ -59,6 +72,7 @@ pub(super) fn run_asp_fast_search_command(
     args: &[String],
     project_root: &Path,
     locator_root: &Path,
+    cache_home: &Path,
     config: &AspConfig,
 ) -> Result<(), String> {
     if is_search_pipe(args) {
@@ -67,8 +81,8 @@ pub(super) fn run_asp_fast_search_command(
     if is_search_suggest(args) {
         return run_search_suggest_command(language_id, args);
     }
-    if is_unsupported_pipeline_alias(args) {
-        return reject_unsupported_pipeline_alias();
+    if is_unsupported_search_pipeline_command(args) {
+        return reject_unsupported_search_pipeline_command();
     }
     if is_search_ingest(args) {
         return run_search_ingest_command(language_id, args, project_root, locator_root);
@@ -76,14 +90,24 @@ pub(super) fn run_asp_fast_search_command(
     if is_search_fzf(args) {
         return run_search_fzf_command(language_id, args, project_root, locator_root, config);
     }
+    if is_search_failure(args) {
+        return run_search_failure_command(
+            language_id,
+            args,
+            project_root,
+            locator_root,
+            cache_home,
+            config,
+        );
+    }
     if is_reasoning_owner_query(args) {
-        return run_reasoning_owner_query_command(args, project_root, locator_root);
+        return run_reasoning_owner_query_command(language_id, args, project_root, locator_root);
     }
     if is_reasoning_owner_tests(args) {
         return run_reasoning_owner_tests_command(args, project_root, locator_root);
     }
     if is_search_owner_items_query(args) {
-        return run_search_owner_items_query_command(args, project_root, locator_root);
+        return run_search_owner_items_query_command(language_id, args, project_root, locator_root);
     }
     Err("unsupported ASP fast search command".to_string())
 }
@@ -96,7 +120,7 @@ fn is_search_pipe(args: &[String]) -> bool {
 fn is_search_ingest(args: &[String]) -> bool {
     matches!(args.first().map(String::as_str), Some("search"))
         && matches!(args.get(1).map(String::as_str), Some("ingest"))
-        && has_explicit_fast_search_view(args)
+        && has_supported_fast_search_view(args)
         && !args.iter().any(|arg| arg == "--json")
 }
 
@@ -104,11 +128,18 @@ fn is_search_fzf(args: &[String]) -> bool {
     matches!(args.first().map(String::as_str), Some("search"))
         && matches!(args.get(1).map(String::as_str), Some("fzf"))
         && args.get(2).is_some_and(|query| !query.starts_with('-'))
-        && has_explicit_fast_search_view(args)
+        && has_supported_fast_search_view(args)
         && !args.iter().any(|arg| arg == "--json")
         && !args
             .iter()
             .any(|arg| matches!(arg.as_str(), "--query-set" | "--owner" | "--dependency"))
+}
+
+fn is_search_failure(args: &[String]) -> bool {
+    matches!(args.first().map(String::as_str), Some("search"))
+        && matches!(args.get(1).map(String::as_str), Some("failure"))
+        && explicit_view(args).is_some_and(|view| matches!(view, "seeds" | "graph-turbo-request"))
+        && !args.iter().any(|arg| arg == "--json" || arg == "--code")
 }
 
 fn is_reasoning_owner_query(args: &[String]) -> bool {
@@ -140,8 +171,11 @@ fn has_explicit_seed_view(args: &[String]) -> bool {
     explicit_view(args).is_some_and(|view| view == "seeds")
 }
 
-fn has_explicit_fast_search_view(args: &[String]) -> bool {
-    explicit_view(args).is_some_and(|view| matches!(view, "seeds" | "graph-turbo-request"))
+fn has_supported_fast_search_view(args: &[String]) -> bool {
+    match explicit_view(args) {
+        Some(view) => matches!(view, "seeds" | "graph-turbo-request"),
+        None => true,
+    }
 }
 
 fn explicit_view(args: &[String]) -> Option<&str> {
@@ -171,18 +205,19 @@ fn run_search_pipe_command(
         &pipe_args.owners,
         config,
     )?;
-    if pipe_args.view == "graph-turbo-request" {
-        print!(
-            "{}",
-            render_graph_turbo_request(Some(&pipe_args.query), &candidates, &pipe_args.pipes)?
-        );
-    } else {
-        print!("{}", render_ingest_frontier(&candidates, &pipe_args.pipes));
-    }
+    print_search_pipe_view(
+        language_id,
+        Some(&pipe_args.query),
+        &candidates,
+        &pipe_args.pipes,
+        &pipe_args.view,
+        true,
+    )?;
     Ok(())
 }
 
 fn run_reasoning_owner_query_command(
+    language_id: &str,
     args: &[String],
     project_root: &Path,
     locator_root: &Path,
@@ -194,6 +229,7 @@ fn run_reasoning_owner_query_command(
     print!(
         "{}",
         render_owner_query_frontier(
+            language_id,
             project_root,
             locator_root,
             &owner_query_args.owner,
@@ -220,6 +256,7 @@ fn run_reasoning_owner_tests_command(
 }
 
 fn run_search_owner_items_query_command(
+    language_id: &str,
     args: &[String],
     project_root: &Path,
     locator_root: &Path,
@@ -231,6 +268,7 @@ fn run_search_owner_items_query_command(
     print!(
         "{}",
         render_owner_query_frontier(
+            language_id,
             project_root,
             locator_root,
             &owner_query_args.owner,
@@ -262,17 +300,14 @@ fn run_search_ingest_command(
         return Ok(());
     }
     let candidates = parse_ingest_candidates(project_root, locator_root, stdin.as_slice());
-    if ingest_args.view == "graph-turbo-request" {
-        print!(
-            "{}",
-            render_graph_turbo_request(None, &candidates, &ingest_args.pipes)?
-        );
-    } else {
-        print!(
-            "{}",
-            render_ingest_frontier(&candidates, &ingest_args.pipes)
-        );
-    }
+    print_search_pipe_view(
+        language_id,
+        None,
+        &candidates,
+        &ingest_args.pipes,
+        &ingest_args.view,
+        false,
+    )?;
     Ok(())
 }
 
@@ -297,13 +332,125 @@ fn run_search_fzf_command(
         &pipe_args.owners,
         config,
     )?;
-    if pipe_args.view == "graph-turbo-request" {
-        print!(
-            "{}",
-            render_graph_turbo_request(Some(&pipe_args.query), &candidates, &pipe_args.pipes)?
+    print_search_pipe_view(
+        language_id,
+        Some(&pipe_args.query),
+        &candidates,
+        &pipe_args.pipes,
+        &pipe_args.view,
+        false,
+    )?;
+    Ok(())
+}
+
+fn run_search_failure_command(
+    language_id: &str,
+    args: &[String],
+    project_root: &Path,
+    locator_root: &Path,
+    cache_home: &Path,
+    config: &AspConfig,
+) -> Result<(), String> {
+    let failure_args = parse_failure_args(args)?;
+    if !matches!(failure_args.view.as_str(), "seeds" | "graph-turbo-request") {
+        return Err(
+            "search failure fast path supports --view seeds or --view graph-turbo-request"
+                .to_string(),
         );
+    }
+    let message = if failure_args.from_last_check {
+        read_last_check_output(cache_home)?
     } else {
-        print!("{}", render_ingest_frontier(&candidates, &pipe_args.pipes));
+        failure_args
+            .message
+            .ok_or_else(|| "search failure requires --message or --from-last-check".to_string())?
+    };
+    if message.trim().is_empty() {
+        return Err("search failure requires non-empty failure text".to_string());
+    }
+    let candidate_query = failure_candidate_query(&message);
+    let candidates = collect_candidates(
+        language_id,
+        project_root,
+        locator_root,
+        &candidate_query,
+        &[],
+        config,
+    )?;
+    let rendered = if failure_args.view == "graph-turbo-request" {
+        render_failure_graph_turbo_request(
+            language_id,
+            project_root,
+            locator_root,
+            &message,
+            &candidates,
+        )?
+    } else {
+        render_failure_frontier(
+            language_id,
+            project_root,
+            locator_root,
+            &message,
+            &candidates,
+        )?
+    };
+    print!("{rendered}");
+    Ok(())
+}
+
+fn print_search_pipe_view(
+    language_id: &str,
+    query: Option<&str>,
+    candidates: &[Candidate],
+    pipes: &[String],
+    view: &str,
+    include_pipe_plan: bool,
+) -> Result<(), String> {
+    match view {
+        "graph-turbo-request" => {
+            print!(
+                "{}",
+                render_graph_turbo_request(language_id, query, candidates, pipes)?
+            );
+        }
+        "seeds" => {
+            let request = render_graph_turbo_request(language_id, query, candidates, pipes)?;
+            let mut ranked_compact = None;
+            if let Some(output) = render_graph_turbo_packet(request.as_bytes())? {
+                ranked_compact = std::str::from_utf8(output.as_ref())
+                    .ok()
+                    .map(str::to_string);
+                io::stdout()
+                    .write_all(output.as_ref())
+                    .map_err(|error| format!("failed to write asp-graph-turbo stdout: {error}"))?;
+            } else {
+                print!("{}", render_ingest_frontier(candidates, pipes));
+            }
+            if include_pipe_plan {
+                if let Some(query) = query {
+                    print!(
+                        "{}",
+                        render_search_pipe_plan(
+                            language_id,
+                            query,
+                            candidates,
+                            ranked_compact.as_deref(),
+                        )
+                    );
+                }
+            }
+        }
+        _ => {
+            print!("{}", render_ingest_frontier(candidates, pipes));
+            if include_pipe_plan {
+                if let Some(query) = query {
+                    print!(
+                        "{}",
+                        render_search_pipe_plan(language_id, query, candidates, None)
+                    );
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -570,6 +717,141 @@ fn parse_fzf_args(args: &[String]) -> Result<SearchPipeArgs, String> {
         owners: Vec::new(),
         view,
     })
+}
+
+fn parse_failure_args(args: &[String]) -> Result<FailureArgs, String> {
+    if !is_search_failure(args) {
+        return Err("expected search failure command".to_string());
+    }
+    let mut message = None;
+    let mut positional = Vec::new();
+    let mut from_last_check = false;
+    let mut view = "seeds".to_string();
+    let mut index = 2;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--from-last-check" => {
+                from_last_check = true;
+                index += 1;
+            }
+            "--message" => {
+                message = Some(
+                    args.get(index + 1)
+                        .ok_or_else(|| "--message requires a value".to_string())?
+                        .clone(),
+                );
+                index += 2;
+            }
+            "--view" => {
+                view = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--view requires a value".to_string())?
+                    .clone();
+                index += 2;
+            }
+            value if value.starts_with('-') => {
+                return Err(format!("unknown search failure option: {value}"));
+            }
+            "." => {
+                index += 1;
+            }
+            value => {
+                positional.push(value.to_string());
+                index += 1;
+            }
+        }
+    }
+    if message.is_none() && !positional.is_empty() {
+        message = Some(positional.join(" "));
+    }
+    if from_last_check && message.is_some() {
+        return Err(
+            "search failure accepts either --from-last-check or failure text, not both".to_string(),
+        );
+    }
+    if !from_last_check && message.is_none() {
+        return Err("search failure requires --message or --from-last-check".to_string());
+    }
+    Ok(FailureArgs {
+        message,
+        from_last_check,
+        view,
+    })
+}
+
+fn read_last_check_output(cache_home: &Path) -> Result<String, String> {
+    let path = cache_home
+        .join("agent-semantic-protocol")
+        .join("last-check-output.txt");
+    fs::read_to_string(&path).map_err(|error| {
+        format!(
+            "search failure --from-last-check could not read {}: {error}",
+            path.display()
+        )
+    })
+}
+
+fn failure_candidate_query(message: &str) -> String {
+    let mut terms = Vec::new();
+    for token in message
+        .split(|character: char| !failure_token_character(character))
+        .filter(|token| !token.is_empty())
+    {
+        if token.contains("::") {
+            if let Some(last) = token.rsplit("::").find(|part| !part.is_empty()) {
+                push_failure_candidate_term(&mut terms, last);
+            }
+        } else {
+            push_failure_candidate_term(&mut terms, token);
+        }
+    }
+    if terms.is_empty() {
+        return message.to_string();
+    }
+    terms.join(" ")
+}
+
+fn push_failure_candidate_term(terms: &mut Vec<String>, token: &str) {
+    let token = token.trim_matches([':', '.', ',', ';', '(', ')', '[', ']']);
+    let lower = token.to_ascii_lowercase();
+    if token.len() < 4
+        || failure_candidate_stop_word(&lower)
+        || !(token.contains('_') || token.contains('-'))
+    {
+        return;
+    }
+    if !terms.iter().any(|term| term == token) {
+        terms.push(token.to_string());
+    }
+}
+
+fn failure_candidate_stop_word(token: &str) -> bool {
+    matches!(
+        token,
+        "expected"
+            | "actual"
+            | "failure"
+            | "failed"
+            | "panic"
+            | "error"
+            | "status"
+            | "stdout"
+            | "stderr"
+            | "left"
+            | "right"
+            | "pass"
+            | "fail"
+            | "hit"
+            | "miss"
+            | "observed"
+            | "unknown"
+            | "request_fingerprint"
+            | "file_hash"
+    )
+}
+
+fn failure_token_character(character: char) -> bool {
+    character == '_' || character == '-' || character == ':' || character.is_ascii_alphanumeric()
 }
 
 fn split_csv(value: &str) -> Vec<String> {

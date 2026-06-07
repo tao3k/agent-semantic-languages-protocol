@@ -1,14 +1,13 @@
 {
   "algorithm": "typed-ppr-diverse",
   "commands": [
-    "asp rust search fzf graph_turbo owner tests --view graph-turbo-request .",
-    "graph-turbo rank - --format compact"
+    "asp rust search fzf graph_turbo owner tests ."
   ],
   "measuredAt": "2026-06-07T00:50:24Z",
   "metrics": {
-    "commandCount": 2,
+    "commandCount": 1,
     "latencyMs": 811,
-    "packetBytes": 22359,
+    "packetBytes": 0,
     "resultBytes": 1181
   },
   "observations": {
@@ -20,7 +19,7 @@
   "profile": "owner-query",
   "protocolId": "agent.semantic-protocols.semantic-language",
   "protocolVersion": "1",
-  "scenario": "rust-fzf-request-rank",
+  "scenario": "rust-fzf-default-rank",
   "schemaId": "agent.semantic-protocols.graph-turbo-real-trigger-metrics",
   "schemaVersion": "1",
   "source": "live-cli"

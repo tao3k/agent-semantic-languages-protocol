@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -40,10 +41,19 @@ def _run_loaded_scenario(
     prepared = _prepare_loaded_scenario(repo_root, path, scenario)
     if isinstance(prepared, ScenarioResult):
         return prepared
-    scenario_id, workdir, result, steps, budgets = prepared
+    scenario_id, workdir, result, steps, budgets, execution = prepared
     env = build_env(scenario.get("env", {}), repo_root=repo_root)
     captures: dict[str, str] = {}
-    totals = _run_scenario_steps(repo_root, workdir, scenario_id, steps, env, captures, result)
+    totals = _run_scenario_steps(
+        repo_root,
+        workdir,
+        scenario_id,
+        steps,
+        env,
+        captures,
+        result,
+        execution,
+    )
     _apply_scenario_budget_warnings(result, budgets, totals)
     _finalize_scenario_status(result)
     return result
@@ -53,7 +63,10 @@ def _prepare_loaded_scenario(
     repo_root: Path,
     path: Path,
     scenario: dict[str, Any],
-) -> tuple[str, Path, ScenarioResult, list[Any], dict[str, Any]] | ScenarioResult:
+) -> (
+    tuple[str, Path, ScenarioResult, list[Any], dict[str, Any], dict[str, Any]]
+    | ScenarioResult
+):
     scenario_id = require_str(scenario, "id", path.stem)
     language = require_str(scenario, "language", "unknown")
     workdir = resolve_workdir(repo_root, scenario.get("workdir"))
@@ -76,8 +89,9 @@ def _prepare_loaded_scenario(
         result.status = "fail"
         result.errors.append("scenario.steps must be an array")
         return result
+    execution = dict_value(scenario.get("execution"))
     _warn_on_command_budget(result, steps, max_commands)
-    return scenario_id, workdir, result, steps, budgets
+    return scenario_id, workdir, result, steps, budgets, execution
 
 
 def _finalize_scenario_status(result: ScenarioResult) -> None:
@@ -186,8 +200,22 @@ def _run_scenario_steps(
     env: dict[str, str],
     captures: dict[str, str],
     result: ScenarioResult,
+    execution: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     totals = {"lines": 0, "elapsedMs": 0, "stdoutBytes": 0, "stderrBytes": 0}
+    max_concurrent_steps = _max_concurrent_steps(execution)
+    if max_concurrent_steps > 1:
+        return _run_scenario_steps_parallel(
+            repo_root,
+            workdir,
+            scenario_id,
+            steps,
+            env,
+            captures,
+            result,
+            totals,
+            max_concurrent_steps,
+        )
     for index, step in enumerate(steps, start=1):
         step_result = run_step(
             repo_root=repo_root,
@@ -200,6 +228,49 @@ def _run_scenario_steps(
         )
         _record_step_result(result, step_result, totals)
     return totals
+
+
+def _run_scenario_steps_parallel(
+    repo_root: Path,
+    workdir: Path,
+    scenario_id: str,
+    steps: list[Any],
+    env: dict[str, str],
+    captures: dict[str, str],
+    result: ScenarioResult,
+    totals: dict[str, int],
+    max_concurrent_steps: int,
+) -> dict[str, int]:
+    indexed_results: list[tuple[int, StepResult]] = []
+    with ThreadPoolExecutor(max_workers=max_concurrent_steps) as executor:
+        futures = {
+            executor.submit(
+                run_step,
+                repo_root=repo_root,
+                workdir=workdir,
+                scenario_id=scenario_id,
+                step=step,
+                index=index,
+                env=env,
+                captures=captures.copy(),
+            ): index
+            for index, step in enumerate(steps, start=1)
+        }
+        for future in as_completed(futures):
+            indexed_results.append((futures[future], future.result()))
+    for _index, step_result in sorted(indexed_results, key=lambda item: item[0]):
+        _record_step_result(result, step_result, totals)
+    return totals
+
+
+def _max_concurrent_steps(execution: dict[str, Any] | None) -> int:
+    if not execution:
+        return 1
+    mode = execution.get("mode")
+    raw_value = optional_int(execution.get("maxConcurrentSteps"))
+    if mode == "sequential":
+        return 1
+    return max(1, raw_value or 1)
 
 
 def _record_step_result(

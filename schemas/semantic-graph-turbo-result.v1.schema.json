@@ -57,7 +57,8 @@
         "query-deps",
         "owner-tests",
         "prime",
-        "read-frontier"
+        "read-frontier",
+        "failure-frontier"
       ]
     },
     "algorithm": {
@@ -89,7 +90,8 @@
           "query-deps",
           "owner-tests",
           "prime",
-          "read-frontier"
+          "read-frontier",
+          "failure-frontier"
         ]
       },
       "uniqueItems": true
@@ -177,7 +179,10 @@
         "enum": [
           "code",
           "full-score-vector",
-          "full-graph"
+          "full-graph",
+          "full-source",
+          "unrelated-functions",
+          "wide-windows"
         ]
       },
       "uniqueItems": true
@@ -188,7 +193,9 @@
         "enum": [
           "raw-read",
           "repeat-owner",
-          "broad-fzf"
+          "broad-fzf",
+          "manual-window-scan",
+          "duplicate-read"
         ]
       },
       "uniqueItems": true
@@ -331,7 +338,8 @@
             "query-deps",
             "owner-tests",
             "prime",
-            "read-frontier"
+            "read-frontier",
+            "failure-frontier"
           ]
         },
         "compatible": {

@@ -102,6 +102,7 @@ fn parse_ingest_candidate_line(
         symbol: symbol_from_text(&display),
         path: display,
         line: 1,
+        text: String::new(),
     })
 }
 
@@ -131,6 +132,7 @@ fn parse_line_candidate(
         path: display_path(locator_root, &absolute),
         line: line_number,
         symbol: symbol_from_bytes(text),
+        text: byte_text::lossy_string(text),
     })
 }
 
@@ -175,21 +177,25 @@ fn append_candidates(
         append_file_candidates(locator_root, root, extensions, terms, candidates, remaining)?;
         return Ok(());
     }
-    for entry in fs::read_dir(root).map_err(|error| {
-        format!(
-            "failed to read search pipe root {}: {error}",
-            root.display()
-        )
-    })? {
-        if *remaining == 0 {
-            break;
-        }
-        let entry = entry.map_err(|error| {
+    let mut entries = fs::read_dir(root)
+        .map_err(|error| {
+            format!(
+                "failed to read search pipe root {}: {error}",
+                root.display()
+            )
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
             format!(
                 "failed to read search pipe entry under {}: {error}",
                 root.display()
             )
         })?;
+    entries.sort_by_key(|entry| path_search_priority(&entry.path()));
+    for entry in entries {
+        if *remaining == 0 {
+            break;
+        }
         let path = entry.path();
         let file_type = entry.file_type().map_err(|error| {
             format!(
@@ -222,6 +228,24 @@ fn append_candidates(
         }
     }
     Ok(())
+}
+
+fn path_search_priority(path: &Path) -> (u8, String) {
+    let display = path.to_string_lossy().replace('\\', "/");
+    let priority = if display.ends_with("/src") || display.contains("/src/") {
+        0
+    } else if display.contains("/tests/")
+        || display.ends_with("/tests")
+        || display.contains("/benches/")
+        || display.ends_with("/benches")
+        || display.contains("/examples/")
+        || display.ends_with("/examples")
+    {
+        2
+    } else {
+        1
+    };
+    (priority, display)
 }
 
 fn should_skip_dir(path: &Path, config: &AspConfig) -> bool {
@@ -283,6 +307,7 @@ fn line_candidate(
         path: display_path(locator_root, path),
         line: line_number,
         symbol,
+        text: byte_text::lossy_string(line),
     })
 }
 

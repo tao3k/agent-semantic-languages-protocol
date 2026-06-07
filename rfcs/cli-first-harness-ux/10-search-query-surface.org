@@ -21,6 +21,29 @@ asp <language> check ...                 # policy / style / changed / full
 asp <language> agent doctor --json ...   # registry/diagnostic packet
 #+end_src
 
+The root =asp search= and =asp query= surfaces are thin language-facade
+routers, not a second provider grammar.  They may remove an explicit
+=--language <id>= or infer one language from the active provider activation:
+=coverage.sourceExtensions= may match an unambiguous path/selector suffix such
+as =src/lib.rs=, and =coverage.configFiles= may match an unambiguous project
+root.  The root facade must not keep a hard-coded Cargo/tsconfig/pyproject
+language table, and it must not parse Cargo workspaces, TypeScript project
+references, Python virtual environments, Julia project layout, or package
+membership; those remain provider responsibilities.  When a root command cannot
+infer one language from activation facts, it must fail with a compact diagnostic
+that asks for =--language= or the explicit =asp <language>= facade.
+
+#+begin_src shell
+asp search --language rust prime --view seeds .
+asp query --language typescript --treesitter-query '<pattern>' .
+asp query crates/agent-semantic-protocol/src/lib.rs --query run --code .
+#+end_src
+
+The root facade is intentionally additive.  Existing provider-owned guide text,
+registry descriptors, cache receipts, and hook recovery routes continue to use
+the language facade as the canonical shape whenever the active language is
+known.
+
 Document languages are a separate facade class.  =asp org= and =asp md= expose
 parser-owned document structure, not code harness policy.  The executable
 runtime is =asp= with a native =orgize= dependency.  The =orgize= binary remains
@@ -77,6 +100,17 @@ repo documentation structure, README sections, design docs, RFC outlines, or
 Org task hierarchies.  =search toc --json= emits the normal
 =semantic-document-search-packet.v1= shape with =method=search/toc= and
 =view=toc=, while compact output stays optimized for prompt navigation.
+
+=search fzf <term...> --view toc= is the document keyword-to-outline
+composition view.  It uses the same provider-owned document walk as =search
+toc=, applies fzf-style keyword discovery to document facts, then renders the
+TOC only for documents that contain all supplied keywords somewhere in that
+document.  The keywords are document-level selectors for this view, not a
+request to dump matching paragraphs.  Compact output must stay heading-only
+and include selector-query next actions; =--json= emits the same document
+search packet family with =method=search/fzf-toc= and =view=fzf-toc=.  A
+trailing positional =toc= may select the same view for shell-friendly command
+composition, but =--view toc= is the canonical spelling.
 
 Document query no-hit output is still a protocol surface.  A query with
 =hit=0= must not stop at a count-only receipt.  It must state that combined

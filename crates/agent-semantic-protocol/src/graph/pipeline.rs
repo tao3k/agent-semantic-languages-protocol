@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::actions::query_term_count;
 use super::aliases::{
     self, graph_aliases, graph_edge_lines, graph_frontier, graph_legend_line, graph_rank,
-    is_owner_item_query,
+    graph_syntax_lines, is_owner_item_query,
 };
 use super::api::{COMPACT_GRAPH_MICRO_LEGEND, GraphRenderOptions};
 use super::header::graph_header;
@@ -68,6 +68,7 @@ pub(super) fn render_search_graph_packet(packet: &Value, options: GraphRenderOpt
     if !alias_definitions.is_empty() {
         lines.push(alias_definitions);
     }
+    lines.extend(graph_syntax_lines(&aliases));
     lines.extend(graph_edge_lines(&aliases, owner_item_query));
     let rank = graph_rank(&aliases, owner_item_query);
     let frontier = graph_frontier(&aliases, owner_item_query);

@@ -84,10 +84,9 @@ fn search_history_audit_reads_prompt_output_command_artifacts() {
     let graph_turbo = bin_dir.join("asp-graph-turbo");
     std::fs::write(
         &graph_turbo,
-         "#!/bin/sh\n\
+        "#!/bin/sh\n\
          test \"$1\" = timeline || { echo expected timeline >&2; exit 2; }\n\
          case \"$2\" in */.cache/agent-semantic-protocol/artifacts) ;; *) echo bad artifact dir >&2; exit 2 ;; esac\n\
-         cat >/dev/null\n\
          echo '[graph-turbo-timeline] fake=true events=3 actions=3 sessions=1 rounds=1'\n\
          echo '[graph-turbo-owner-collapse] collapsible=1 actions=1'\n\
          echo '[graph-turbo-owner-action] decision=collapse replacement=promote-to-owner-query-item-test-frontier'\n",

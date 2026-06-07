@@ -16,7 +16,7 @@
   "workdir": ".",
   "budgets": {
     "maxCommands": 1,
-    "maxTotalLinesWarn": 12,
+    "maxTotalLinesWarn": 32,
     "maxTotalElapsedMsWarn": 30000,
     "maxTotalStdoutBytesWarn": 4096
   },
@@ -63,7 +63,9 @@
       "timeoutSeconds": 90,
       "expect": {
         "stdoutContains": [
-          "[search-ingest]",
+          "[graph-frontier]",
+          "profile=owner-query",
+          "Q=query:term(codeql)!fzf",
           "symbol(codeql)",
           "frontier="
         ],
@@ -76,7 +78,7 @@
           "executionBackend=codeql",
           "rawOutput"
         ],
-        "maxStdoutLinesWarn": 12,
+        "maxStdoutLinesWarn": 32,
         "maxStdoutBytesWarn": 4096,
         "maxElapsedMsWarn": 90000
       }

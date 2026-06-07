@@ -83,6 +83,9 @@
     "budgets": {
       "$ref": "#/$defs/budgets"
     },
+    "execution": {
+      "$ref": "#/$defs/execution"
+    },
     "steps": {
       "type": "array",
       "minItems": 1,
@@ -298,6 +301,28 @@
         },
         "audit": {
           "$ref": "#/$defs/deepQuestionAudit"
+        },
+        "expectedAspFlow": {
+          "$ref": "#/$defs/expectedAspFlow"
+        }
+      }
+    },
+    "expectedAspFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonicalCommands", "requiredStages", "forbiddenStages"],
+      "properties": {
+        "canonicalCommands": {
+          "$ref": "#/$defs/stringList"
+        },
+        "requiredStages": {
+          "$ref": "#/$defs/pipeFlowStageList"
+        },
+        "forbiddenStages": {
+          "$ref": "#/$defs/pipeFlowStageList"
+        },
+        "notes": {
+          "$ref": "#/$defs/stringList"
         }
       }
     },
@@ -334,6 +359,12 @@
           "type": "boolean"
         },
         "requiresHookEvents": {
+          "type": "boolean"
+        },
+        "requiresComplexPipeFlow": {
+          "type": "boolean"
+        },
+        "requiresTokenCost": {
           "type": "boolean"
         }
       }
@@ -639,13 +670,51 @@
         }
       }
     },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["sequential", "parallel"]
+        },
+        "maxConcurrentSteps": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
     "step": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id"],
       "oneOf": [
-        {"required": ["command"], "not": {"required": ["agentCli"]}},
-        {"required": ["agentCli"], "not": {"required": ["command"]}}
+        {
+          "required": ["command"],
+          "not": {
+            "anyOf": [
+              {"required": ["agentCli"]},
+              {"required": ["agentSdk"]}
+            ]
+          }
+        },
+        {
+          "required": ["agentCli"],
+          "not": {
+            "anyOf": [
+              {"required": ["command"]},
+              {"required": ["agentSdk"]}
+            ]
+          }
+        },
+        {
+          "required": ["agentSdk"],
+          "not": {
+            "anyOf": [
+              {"required": ["command"]},
+              {"required": ["agentCli"]}
+            ]
+          }
+        }
       ],
       "properties": {
         "id": {
@@ -662,7 +731,8 @@
             "security",
             "hook-replay",
             "wrapper",
-            "agent-cli"
+            "agent-cli",
+            "agent-sdk"
           ]
         },
         "coverage": {
@@ -676,6 +746,9 @@
         },
         "agentCli": {
           "$ref": "#/$defs/agentCli"
+        },
+        "agentSdk": {
+          "$ref": "#/$defs/agentSdk"
         },
         "stdin": {
           "type": "string"
@@ -758,12 +831,87 @@
         }
       }
     },
+    "agentSdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["client", "prompt", "outputFormat"],
+      "properties": {
+        "client": {
+          "enum": ["claude"]
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outputFormat": {
+          "enum": ["text", "json", "stream-json"]
+        },
+        "includePartialMessages": {
+          "type": "boolean"
+        },
+        "includeHookEvents": {
+          "type": "boolean"
+        },
+        "verbose": {
+          "type": "boolean"
+        },
+        "allowedTools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "disallowedTools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "requireAspBashCommands": {
+          "type": "boolean"
+        },
+        "useRepoClaudeSettings": {
+          "type": "boolean"
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/envName"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "requiredEnv": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/envName"
+          }
+        }
+      }
+    },
     "expect": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "exitCode": {
           "type": "integer"
+        },
+        "allowNonZeroExit": {
+          "type": "boolean"
         },
         "lineProtocol": {
           "type": "boolean"
@@ -802,6 +950,9 @@
         "guideQuality": {
           "$ref": "#/$defs/guideQuality"
         },
+        "pipeFlow": {
+          "$ref": "#/$defs/pipeFlowExpectation"
+        },
         "maxStdoutLinesWarn": {
           "type": "integer",
           "minimum": 1
@@ -818,6 +969,74 @@
           "type": "integer",
           "minimum": 1
         }
+      }
+    },
+    "pipeFlowExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxAspCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxSearchCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxQueryCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxDirectReadCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxRepeatedCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxSearchPipeCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxSearchPrimeCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minQuerySelectorCommands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requireComplexPipeFlow": {
+          "type": "boolean"
+        },
+        "requireTokenCost": {
+          "type": "boolean"
+        },
+        "requiredStages": {
+          "$ref": "#/$defs/pipeFlowStageList"
+        },
+        "forbiddenStages": {
+          "$ref": "#/$defs/pipeFlowStageList"
+        }
+      }
+    },
+    "pipeFlowStageList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "search-pipe",
+          "search-prime",
+          "search-fzf",
+          "search-reasoning",
+          "search-fzf-or-reasoning",
+          "query-selector",
+          "treesitter-query",
+          "direct-read",
+          "repeated-commands",
+          "repeated-prime"
+        ]
       }
     },
     "guideQuality": {

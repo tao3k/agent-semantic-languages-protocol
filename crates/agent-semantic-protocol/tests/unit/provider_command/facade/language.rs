@@ -252,9 +252,9 @@ fn language_facade_selects_matching_provider_from_activation() {
     let output = asp_command(&root)
         .env("PATH", prepend_path(&bin_dir))
         .env("PRJ_CACHE_HOME", &cache_home)
-        .args(["typescript", "search", "fzf", "parseSearchArgs", "."])
+        .args(["typescript", "check", "--changed", "."])
         .output()
-        .expect("run asp typescript search");
+        .expect("run asp typescript check");
 
     assert!(
         output.status.success(),
@@ -263,7 +263,7 @@ fn language_facade_selects_matching_provider_from_activation() {
     );
     assert_eq!(
         String::from_utf8(output.stdout).expect("stdout"),
-        "ts args=[search][fzf][parseSearchArgs]\n"
+        "ts args=[check][--changed]\n"
     );
     let _ = std::fs::remove_dir_all(root);
 }

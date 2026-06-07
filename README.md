@@ -75,6 +75,11 @@ just agent-hooks-install
 just agent-hooks-doctor
 ```
 
+This installs the core ASP runtime surface: `asp`, `asp-graph-turbo`,
+`rs-harness`, `ts-harness`, and `py-harness`. `asp-graph-turbo` is the only
+supported graph turbo executable and a required local ranking dependency for
+the graph-turbo search/history path, not an optional debugging tool.
+
 Install the same tools into a user-owned bin directory. The directory must be
 on the PATH that your agent client uses to run hooks:
 
@@ -90,12 +95,43 @@ Install individual agent tools when only one boundary changed:
 ```sh
 just agent-tools-install-protocol "$HOME/.local/bin"
 just agent-tools-install-asp "$HOME/.local/bin"
-just agent-tools-install-graph-turbo "$HOME/.local/bin"
+just agent-tools-install-asp-graph-turbo "$HOME/.local/bin"
 just agent-tools-install-hook "$HOME/.local/bin"
 just agent-tools-install-rust "$HOME/.local/bin"
 just agent-tools-install-typescript "$HOME/.local/bin"
 just agent-tools-install-python "$HOME/.local/bin"
 ```
+
+Run `asp-graph-turbo` through the native ASP wrapper when an agent step needs the
+ranking engine without depending on Python workspace internals:
+
+```sh
+asp wrap asp-graph-turbo -- help
+asp tools wrap asp-graph-turbo -- help
+```
+
+Graph-turbo request packets use the ranking engine by default through the
+`asp graph render --packet <path-or-> --view seeds` boundary. The Rust compact
+graph renderer remains the fallback for ordinary semantic search packets and
+for graph-turbo runtime failures.
+
+Agent-facing fast search uses the ranked compact graph-turbo frontier by
+default. `asp rust search fzf <term> owner tests .` and the explicit compact
+form `asp rust search fzf <term> owner tests --view seeds .` both stay compact;
+neither prints the JSON request packet. The compact frontier is still
+algorithm-owned by `asp-graph-turbo`: rank, profile, paths, scores, cache,
+trace, explanations, and metrics are projected by the Python ranking engine.
+Default fast-search request packets include candidate hot range nodes and
+`item -> hot` typed edges when locators are available, plus owner-scoped
+dependency nodes and `owner -> dependency` import edges for query-deps routing,
+so graph-turbo can rank direct code and package follow-ups. Warm graph-turbo
+backend cache entries are stored under `$PRJ_CACHE_HOME` when set, otherwise
+under the git toplevel `.cache`, with the graph fingerprint guarding against
+stale source facts. Inspect or reset that ranking cache with
+`asp-graph-turbo cache status`, `asp-graph-turbo cache prune`, and
+`asp-graph-turbo cache invalidate`. Use
+`--view graph-turbo-request` only when validating or debugging the JSON packet
+that will be sent to `asp-graph-turbo`.
 
 agent semantic client-backend phase 1 is local-native only:
 
@@ -104,8 +140,16 @@ asp guide
 asp doctor
 asp providers
 asp cache status
+asp search --language rust prime --view seeds .
+asp query --language rust --treesitter-query '<pattern>' .
 asp rust search prime --view seeds .
 ```
+
+`asp search` and `asp query` are thin routers over the language facades. Use
+`--language <rust|typescript|python|julia|org|md>` for ambiguous roots, or pass
+an owner/selector path or project root that matches one active provider's
+activation coverage so `asp` can route to the same
+`asp <language> search|query` boundary without parsing package layout.
 
 Calibrate the local Julia cache hot path after client/cache changes:
 
@@ -116,17 +160,25 @@ just perf-calibrate-julia-cache
 Refresh a client hook config after the binaries already exist:
 
 ```sh
+just install
 asp hook install --client codex .
 asp hook doctor --client codex .
 asp hook install --client claude .
 asp hook doctor --client claude .
 ```
 
+`just install` installs `asp`, `asp-graph-turbo`, `rs-harness`, `ts-harness`,
+`py-harness`, and `asp-julia-harness` into
+`${SEMANTIC_AGENT_BIN_DIR:-$HOME/.local/bin}` by default, then refreshes the
+Codex hook config. Pass a directory argument, such as
+`just install /tmp/asp-bin`, to override the install root.
+
 `asp hook install --client <codex|claude>` writes the root client hook
 configuration, cache activation, versioned hook policy config, and provider
-manifests for this repository. It does not build or install `rs-harness`,
-`ts-harness`, or `py-harness`; use the `just agent-tools-install-*` commands
-for those binaries.
+manifests for this repository. It does not build or install `asp-graph-turbo`,
+`rs-harness`, `ts-harness`, `py-harness`, or `asp-julia-harness`; use
+`just install` for the full local setup or the `just agent-tools-install-*`
+commands for one binary family.
 
 Agent clients invoke the runtime hook entrypoint as `asp hook --client
 <codex|claude> --event <event>`. Lifecycle commands stay under the hook

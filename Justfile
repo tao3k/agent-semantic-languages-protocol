@@ -11,7 +11,11 @@ julia_compiled_harness := "languages/JuliaLangProjectHarness.jl/build/juliac-asp
 default:
     @just --list
 
-# Install all agent tools and Codex hook config. Optional: just agent-hooks-install ~/.local/bin
+# Install asp, asp-graph-turbo, and provider harnesses into $HOME/.local/bin by default, then install Codex hooks.
+install bin_dir="":
+    @just agent-hooks-install "{{bin_dir}}"
+
+# Install all agent tools, including asp-graph-turbo, and Codex hook config. Optional: just agent-hooks-install ~/.local/bin
 agent-hooks-install bin_dir="":
     @bin_dir="{{bin_dir}}"; \
       if [ -z "${bin_dir}" ]; then bin_dir="${SEMANTIC_AGENT_BIN_DIR:-$HOME/.local/bin}"; fi; \
@@ -76,19 +80,22 @@ agent-hooks-smoke-codex:
       fi; \
       rm -f "${out}"
 
-# Install asp, graph-turbo, rs-harness, ts-harness, and py-harness.
+# Install asp, asp-graph-turbo, rs-harness, ts-harness, py-harness, and asp-julia-harness.
 agent-tools-install-global bin_dir="":
     @bin_dir="{{bin_dir}}"; \
       if [ -z "${bin_dir}" ]; then bin_dir="${SEMANTIC_AGENT_BIN_DIR:-$HOME/.local/bin}"; fi; \
       just agent-tools-install-protocol "${bin_dir}"; \
-      just agent-tools-install-graph-turbo "${bin_dir}"; \
-      just agent-tools-install-hook "${bin_dir}"; \
+      just agent-tools-install-asp-graph-turbo "${bin_dir}"; \
       just agent-tools-install-rs "${bin_dir}"; \
       just agent-tools-install-ts "${bin_dir}"; \
       just agent-tools-install-py "${bin_dir}"; \
-      echo "[agent-tools-install-global] installed asp, graph-turbo, rs-harness, ts-harness, and py-harness into ${bin_dir}"
+      just agent-tools-install-julia "${bin_dir}"; \
+      echo "[agent-tools-install-global] installed asp, asp-graph-turbo, rs-harness, ts-harness, py-harness, and asp-julia-harness into ${bin_dir}"
 
 # Install only the shared asp binary.
+agent-tools-install-asp bin_dir="":
+    @just agent-tools-install-protocol "{{bin_dir}}"
+
 agent-tools-install-protocol bin_dir="":
     @bin_dir="{{bin_dir}}"; \
       if [ -z "${bin_dir}" ]; then bin_dir="${SEMANTIC_AGENT_BIN_DIR:-$HOME/.local/bin}"; fi; \
@@ -103,17 +110,20 @@ agent-tools-install-protocol bin_dir="":
 agent-tools-install-hook bin_dir="":
     @just agent-tools-install-protocol "{{bin_dir}}"
 
-# Install only the graph-turbo extension binary.
-agent-tools-install-graph-turbo bin_dir="":
+# Install only the core asp-graph-turbo ranking binary.
+agent-tools-install-asp-graph-turbo bin_dir="":
     @bin_dir="{{bin_dir}}"; \
       if [ -z "${bin_dir}" ]; then bin_dir="${SEMANTIC_AGENT_BIN_DIR:-$HOME/.local/bin}"; fi; \
       mkdir -p "${bin_dir}"; \
       uv tool install --force --editable packages/python/asp_graph_turbo; \
-      graph_turbo_bin="$(uv tool dir --bin)/graph-turbo"; \
-      if [ "${graph_turbo_bin}" != "${bin_dir}/graph-turbo" ]; then \
-        ln -sfn "${graph_turbo_bin}" "${bin_dir}/graph-turbo"; \
+      uv_tool_bin="$(uv tool dir --bin)"; \
+      tool_bin="${uv_tool_bin}/asp-graph-turbo"; \
+      test -x "${tool_bin}"; \
+      if [ "${tool_bin}" != "${bin_dir}/asp-graph-turbo" ]; then \
+        ln -sfn "${tool_bin}" "${bin_dir}/asp-graph-turbo"; \
       fi; \
-      "${bin_dir}/graph-turbo" --help >/dev/null
+      rm -f "${bin_dir}/graph-turbo" "${uv_tool_bin}/graph-turbo"; \
+      "${bin_dir}/asp-graph-turbo" --help >/dev/null
 
 # Install only the Rust provider binary.
 agent-tools-install-rust bin_dir="":
@@ -156,7 +166,23 @@ agent-tools-install-py bin_dir="":
       fi; \
       "${bin_dir}/py-harness" --help >/dev/null
 
-agent-hooks-doctor-providers: agent-hooks-doctor-rs agent-hooks-doctor-ts agent-hooks-doctor-py
+# Install only the Julia provider binary.
+agent-tools-install-julia bin_dir="":
+    @just agent-tools-install-jl "{{bin_dir}}"
+
+agent-tools-install-jl bin_dir="":
+    @bin_dir="{{bin_dir}}"; \
+      if [ -z "${bin_dir}" ]; then bin_dir="${SEMANTIC_AGENT_BIN_DIR:-$HOME/.local/bin}"; fi; \
+      mkdir -p "${bin_dir}"; \
+      if [ ! -x "{{julia_compiled_harness}}" ]; then \
+        (cd "{{julia_harness_project}}" && \
+          julia --project=juliac -e 'using Pkg; Pkg.instantiate()' && \
+          ASP_JULIA_BUILD_DIR=build/juliac-asp-local julia --project=juliac juliac/compile.jl); \
+      fi; \
+      install -m 755 "{{julia_compiled_harness}}" "${bin_dir}/asp-julia-harness"; \
+      "${bin_dir}/asp-julia-harness" guide {{julia_harness_project}} >/dev/null
+
+agent-hooks-doctor-providers: agent-hooks-doctor-rs agent-hooks-doctor-ts agent-hooks-doctor-py agent-hooks-doctor-julia
 
 agent-hooks-doctor-rs:
     rs-harness agent doctor {{repo}}
@@ -166,6 +192,9 @@ agent-hooks-doctor-ts:
 
 agent-hooks-doctor-py:
     py-harness agent doctor {{repo}}
+
+agent-hooks-doctor-julia:
+    asp-julia-harness agent doctor --json {{julia_harness_project}} >/dev/null
 
 check-sandtables:
     uv run --project packages/python python -m tools sandtable

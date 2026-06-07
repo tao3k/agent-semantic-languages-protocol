@@ -1,0 +1,630 @@
+#+TITLE: 31.22 Claude Sandtable Live Pipe Audit
+#+DATE: 2026-06-06
+#+STATUS: active
+#+JOHNNY_DECIMAL: 31.22
+#+AREA: 30-39 Research
+#+CATEGORY: 31 Search Flow Research
+#+SCENARIO: sandtables/rust/tokio-claude-deep-question-flow.json
+
+* Purpose
+
+This report records the live Claude SDK sandtable findings from the Tokio deep
+question flow.  The goal is not to make live prompts run longer.  The goal is to
+make structure-grounded AST search/query strong enough that an agent reaches
+useful hot selectors inside the existing 120 second per-prompt limit.
+
+The live run exposed a useful distinction:
+
+#+begin_example
+agent can trigger ASP search/query       -> baseline success
+agent still spends too many commands     -> flow design failure
+agent times out on meta optimization     -> prompt/pipe contract is too loose
+#+end_example
+
+Future work should reduce command count, token cost, repeated search stages,
+and broad selector uncertainty by improving the search/query pipe itself.
+
+* Scenario Under Test
+
+The active scenario is:
+
+#+begin_example
+sandtables/rust/tokio-claude-deep-question-flow.json
+#+end_example
+
+It currently defines one representative Claude SDK prompt for the early
+optimization loop:
+
+| step | intent | expected evidence |
+|------+--------+-------------------|
+| =claude-tokio-vec-scalar-meaning= | explain =Vec<scalar>= collection-field meaning | ASP commands, token cost, pipeFlow |
+
+The broader three-prompt matrix is retained as historical evidence below, but
+it should not run during the early =pipeCommands= tuning loop.
+
+The hard runtime budget is:
+
+#+begin_example
+execution.maxConcurrentSteps=3
+step.timeoutSeconds=120
+budgets.maxTotalElapsedMsWarn=360000
+#+end_example
+
+Do not increase =timeoutSeconds= to hide workflow inefficiency.  A prompt that
+does not produce enough useful evidence inside 120 seconds is an optimization
+failure.
+
+* Fixture Boundary
+
+The phrase =tokio 0.6.0= is ambiguous in current upstream packaging:
+
+- crates.io does not provide a =tokio = "=0.6.0"= crate version;
+- the available upstream tag discovered during the live test was
+  =tokio-util-0.6.0= in =tokio-rs/tokio=;
+- the live root used for evidence was a temporary checkout at
+  =/tmp/asp-tokio-util-0.6.0=, tag =tokio-util-0.6.0=, short commit
+  =a66017f=.
+
+This means the scenario should not be treated as a verified historical Tokio
+crate fixture until the target is made explicit.  The search/query behavior is
+still useful evidence, but the fixture contract should be tightened before this
+becomes a stable benchmark.
+
+* Observed Evidence
+
+** Prompt 1: collection-field meaning
+
+The first prompt completed within the 120 second limit and produced usable
+observations even though Claude SDK returned exit code 1.
+
+#+begin_example
+elapsedMs=85237
+exitCode=1
+stdoutBytes=162168
+stderrBytes=2538
+tokenCost.inputTokens=52514
+tokenCost.cacheReadInputTokens=343936
+tokenCost.outputTokens=3975
+tokenCost.totalTokens=400425
+tokenCost.costUsd=0.533913
+pipeFlow.aspCommands=18
+pipeFlow.searchCommands=12
+pipeFlow.queryCommands=5
+pipeFlow.directReadCommands=2
+pipeFlow.searchPrimeCommands=2
+pipeFlow.searchFzfCommands=7
+pipeFlow.searchReasoningCommands=1
+pipeFlow.querySelectorCommands=2
+pipeFlow.repeatedCommands=2
+pipeFlow.complexPipeFlow=true
+#+end_example
+
+The good news is that the agent did trigger a complex ASP flow.  The bad news
+is that it repeated =search prime= and =search fzf=, and spent far more than the
+expected search budget.
+
+** Prompt 2: collection metadata feature
+
+The second prompt also completed within 120 seconds and produced a richer
+query-heavy flow.
+
+#+begin_example
+elapsedMs=80928
+exitCode=1
+stdoutBytes=101152
+stderrBytes=2538
+tokenCost.inputTokens=40434
+tokenCost.cacheReadInputTokens=286720
+tokenCost.outputTokens=3536
+tokenCost.totalTokens=330690
+tokenCost.costUsd=0.43393000000000004
+pipeFlow.aspCommands=16
+pipeFlow.searchCommands=7
+pipeFlow.queryCommands=8
+pipeFlow.directReadCommands=0
+pipeFlow.searchPrimeCommands=1
+pipeFlow.searchFzfCommands=0
+pipeFlow.searchReasoningCommands=5
+pipeFlow.querySelectorCommands=4
+pipeFlow.treesitterQueryCommands=7
+pipeFlow.repeatedCommands=0
+pipeFlow.complexPipeFlow=true
+#+end_example
+
+This is closer to the desired shape: no direct reads and no repeated commands.
+However, it still needs too many ASP commands and relies on many tree-sitter
+query attempts instead of getting a compact field/type frontier from the
+provider.
+
+** Prompt 3: pipe optimization audit
+
+The third prompt exceeded the 120 second budget in the live run.  This is not a
+reason to increase the timeout.  It means the prompt is too meta, and the
+current pipe contract does not give the agent a bounded way to inspect and
+summarize its own search/query behavior.
+
+The runner has been adjusted so timeout paths retain partial stdout/stderr
+counts and parse partial ASP command observations when available.  That is a
+measurement fix, not a runtime budget increase.
+
+* Exposed Problems
+
+** 31.22-A Token cost is too high for live search calibration
+
+Two completed prompts consumed roughly:
+
+#+begin_example
+330k-400k total tokens per prompt
+$0.43-$0.53 per prompt
+100k-162k stdout bytes per prompt
+#+end_example
+
+This is too expensive for iterative sandtable tuning.  The cost is dominated by
+large cache-read context plus verbose stream output.  The next research slice
+must treat token cost as a first-class budget, not only elapsed time.
+
+** 31.22-B The agent can trigger ASP but still wastes search stages
+
+The first prompt proves that "uses ASP" is not sufficient.  It ran a complex
+flow but still repeated =search prime= and ran seven =search fzf= commands.
+
+The desired flow is not:
+
+#+begin_example
+prime -> fzf -> fzf -> fzf -> reasoning -> owner -> query -> more query
+#+end_example
+
+The desired flow is:
+
+#+begin_example
+prime once -> one typed frontier -> one owner/reasoning refinement ->
+one exact selector query -> answer
+#+end_example
+
+The provider should make the next step obvious enough that the agent does not
+explore the same semantic axis repeatedly.
+
+** 31.22-C Field/type semantics are not structural enough
+
+The deep question is about =Vec<scalar>= collection fields.  The current flow
+pushes the agent toward text terms such as =Vec=, =scalar=, =collection=, and
+=field=.  That produces broad search behavior.
+
+The parser-owned frontier should expose typed AST facts such as:
+
+- field name;
+- field type;
+- generic constructor, such as =Vec<T>=, =Option<T>=, =HashMap<K,V>=;
+- collection-vs-scalar classification;
+- enclosing struct/enum/impl owner;
+- first selector for the field declaration and enclosing item.
+
+Without that element model, the agent has to rediscover structural facts
+through repeated text searches and tree-sitter probes.
+
+** 31.22-D The live prompt can read the guide but still miss the intended pipe
+
+The prompt asks the agent to use =SKILL.md= and ASP search/query.  That works at
+a coarse level, but the agent still has to choose among =search prime=,
+=search fzf=, =search reasoning=, =query guide treesitter=, and selector reads.
+
+This suggests the live prompt should not carry the whole burden.  The provider
+needs an agent-facing pipe command or graph frontier that encodes the intended
+next actions, budgets, and avoid rules as data.
+
+** 31.22-E Non-zero Claude SDK exits can contain valid evidence
+
+Both completed prompts returned exit code 1 but still produced usable stream
+summaries, token cost, and command-flow observations.  The scenario now allows
+non-zero exit for this live evidence class, but that should not be confused
+with success.
+
+The report should distinguish:
+
+- transport/process success;
+- model reached max turns or returned non-zero;
+- enough command-flow evidence was captured;
+- the final answer quality met the prompt goal.
+
+** 31.22-F The third prompt is too broad for the 120 second budget
+
+"Audit the ASP search/query flow" is a meta-task.  It asks the model to both
+perform a search and critique the search pipeline.  With the current command
+surface, that is too open-ended.
+
+The next version should split this into bounded sub-questions or provide a
+native pipe-flow diagnostic that emits the audit facts directly.
+
+* Research Directions
+
+** 31.22-0 Expected ASP flow as benchmark contract
+
+Long-term optimization cannot rely only on the commands Claude happened to run
+in one live stream.  The scenario JSON must preserve the expected command flow
+as a contract:
+
+#+begin_example
+deepQuestionCases[].expectedAspFlow.canonicalCommands
+deepQuestionCases[].expectedAspFlow.requiredStages
+deepQuestionCases[].expectedAspFlow.forbiddenStages
+steps[].expect.pipeFlow
+#+end_example
+
+The canonical command list is not a brittle exact transcript.  It is the target
+pipe shape: run =search prime= once to establish the project graph context,
+start =search pipe= for the concrete question, follow the emitted
+=pipeCommands= into reasoning profiles, then select an exact query locator.
+Concrete owner paths and selectors can vary by fixture, but the stage budget
+and forbidden behavior should not vary.
+
+This turns live optimization into a measurable delta:
+
+#+begin_example
+expected: asp<=8 search<=4 query<=4 repeated=0 prime=1 pipe=1 reasoning>=1 selector>=1
+actual:   extracted from Claude SDK stream observations
+result:   pass/fail plus concrete pipeFlow drift messages
+#+end_example
+
+Without this JSON-level contract, every run becomes anecdotal and cannot drive
+regression testing.
+
+** 31.22-1 PipePlan live rerun after refreshing =.bin/asp=
+
+After adding =pipePlan=/=pipeStages=/=pipeCommands= to =search pipe --view
+seeds=, the first live rerun was invalid for optimization comparison because
+Claude used the stale repository =.bin/asp=.  Refreshing the hook with:
+
+#+begin_example
+./target/debug/asp hook install --client claude .
+#+end_example
+
+updated =.bin/asp= so the live agent saw:
+
+#+begin_example
+pipeStages=search-prime,search-pipe,search-reasoning,query-selector
+pipeCommands=context=>asp rust search prime --view seeds .,pipe=>asp rust search pipe ...
+#+end_example
+
+The optimization-after report is:
+
+#+begin_example
+.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-deep-question-flow-after-pipeplan.json
+#+end_example
+
+Results:
+
+| step | status | elapsedMs | asp | search | reasoning | querySelector | repeated | totalTokens | costUsd |
+|------+--------+-----------+-----+--------+-----------+---------------+----------+-------------+---------|
+| vec scalar meaning | pass | 74018 | 6 | 4 | 2 | 1 | 0 | 329640 | 0.413968 |
+| collection feature | fail | 59221 | 5 | 4 | 2 | 0 | 0 | 317308 | 0.380164 |
+| flow optimization | fail | 73012 | 2 | 2 | 0 | 0 | 0 | 313335 | 0.392635 |
+
+Compared with the earlier completed runs, =pipePlan= materially improved the
+first prompt: it reached the full =prime -> pipe -> reasoning -> selector=
+contract with 6 ASP commands instead of the previous high-teens command count,
+zero direct reads, and no repeated commands.  The second prompt also dropped to
+5 ASP commands and 4 search commands, but failed to materialize a selector.
+
+The exposed gap is now narrower: generic placeholder commands such as
+=--owner <owner-path>= and =--selector <selector>= are not enough.  =search
+pipe= should emit concrete top owner-query commands and selector/frontier
+actions derived from the ranked graph, so the agent can continue the complex
+pipe without inventing owner paths, shell probes, or broad search variants.
+
+*** Reflection: what the run actually proves
+
+The run proves that =pipePlan= is directionally useful, but not yet a complete
+agent contract.
+
+The first prompt passed because the agent could build the graph context with
+=search prime=, enter the concrete question with =search pipe=, follow two
+=search reasoning owner-query= calls, and finally issue one selector query.
+This is the desired shape.  The important signal is not just lower command
+count; it is that the search stages became typed and non-repeated:
+
+#+begin_example
+prime=1 pipe=1 reasoning=2 selector=1 repeated=0 directRead=0
+#+end_example
+
+The second prompt failed in a more useful way.  It reached =prime=, =pipe=, and
+=reasoning= with only five ASP commands, but never crossed the boundary into a
+selector query.  That means the agent understood the high-level pipe but did
+not receive a concrete enough next action to select code.  The pipeline is now
+strong enough to reduce exploration, but too weak to force a selector.
+
+The third prompt is not a good optimization smoke test.  It is a meta-prompt
+about the search flow itself, so the agent stops after observing =prime= and
+=pipe= and explains the surface instead of continuing through reasoning and
+selector reads.  It should not be part of the early live loop.
+
+The fundamental problem is therefore not "agent did not use ASP" and not
+"disable reasoning to save turns".  The problem is that =search pipe= has to be
+a composable query/search pipeline, not merely a graph renderer or a command
+template printer.  The pipe should express stages such as =prime=, =search=,
+=rank=, =filter=, =expand=, and =project=, then expose selected projections for
+the agent.  =frontierActions= and =pipeCommands= are only projections of the
+pipeline result.  They are not the definition of pipe itself.
+
+The live timeout after the first =pipeExpr= implementation shows a second
+constraint: bounded branch exploration is useful, but branch repetition is not.
+The pipe may expose several ranked branches for reasoning; the agent should run
+each selected branch at most once, then fan in to a selector decision instead of
+replaying the same owner-query commands.
+
+The default branch cap should be top 3.  Those branches should come from
+graph-turbo ranking, including sparse graph/path signals, not from raw lexical
+walk order.  More than three choices adds token and turn pressure before the
+agent has enough evidence to discriminate, and should be reserved for explicit
+debug views or later fan-out experiments.
+
+The bounded top-3 live run confirmed this split:
+
+#+begin_example
+.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-single-prompt-bounded-top3.json
+#+end_example
+
+It removed repeated commands but still timed out:
+
+| asp | search | reasoning | querySelector | repeated | elapsedMs | status |
+|-----+--------+-----------+---------------+----------+-----------+--------|
+| 16 | 11 | 3 | 5 | 0 | 120010 | timeout |
+
+The agent followed three projected branches once each, then continued with
+extra owner/fzf searches because the branch quality was weak.  The top branches
+were lexical =Vec= matches in =tokio/src/fs/*= rather than parser-semantic
+collection-field owners.  This is the current root cause: =repeat=false= fixed
+branch replay, but the branch top 3 must be owned by =asp-graph-turbo= sparse
+ranking, node weighting, and path policy.  Rust =search pipe= should project
+the graph-turbo result; it should not invent a durable private branch-ranking
+algorithm.
+
+The graph-turbo-owned top-3 rerun after refreshing =.bin/asp= confirms the same
+boundary with a better live shape:
+
+Report:
+=.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-single-prompt-graph-turbo-top3.json=
+
+| elapsedMs | asp | search | reasoning | querySelector | repeated | fzf | directRead | stdoutBytes | totalTokens | costUsd  | status |
+|     70387 |   8 |      5 |         3 |             3 |        0 |   0 |          0 |       74396 |      333340 | 0.434496 | fail   |
+
+The failure is a budget failure, not a timeout:
+=pipeFlow searchCommands=5 exceeds maxSearchCommands=4=.  Compared with the
+previous 120 second timeout run, the agent no longer repeats branches and no
+longer falls back to =search fzf=.  It executes =prime=, =pipe=, three
+=reasoning owner-query= branches, and three selector reads in 70 seconds.
+
+The remaining root cause is semantic quality of the selected branches.  The
+graph-turbo top 3 for the Tokio prompt still selected =tokio/src/fs/file.rs=,
+=tokio/src/fs/read.rs=, and =tokio/src/io/async_write.rs=.  Those are executable
+top-3 branches, but they are not the intended proto/vector collection-field
+owners.  The next optimization should therefore improve graph-turbo sparse
+ranking and node weights for type/field/collection semantics before changing
+the sandtable budget.
+
+The sparse candidate + IDF token-weight + symbol-diverse branch projection run
+changed the projected branch set to the intended token spread:
+
+| branch | symbol     | selector owner                         |
+|--------+------------+----------------------------------------|
+| R1/S1  | fields     | tokio/src/io/driver/scheduled_io.rs    |
+| R2/S2  | collection | tokio/src/loom/std/mod.rs              |
+| R3/S3  | vec        | stress-test/examples/simple_echo_tcp.rs |
+
+The first valid live run with the corrected runtime path completed in 55.5s
+with =repeatedCommands=0=, =searchFzfCommands=0=, and =searchPipeCommands=2=.
+It failed only because the agent issued a second rewritten =search pipe= after
+the projected branches:
+
+Report:
+=.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-single-prompt-correct-path-sparse-idf-symbol-diverse.json=
+
+The no-rewrite pipe policy removed that second pipe:
+
+Report:
+=.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-single-prompt-no-rewrite-policy.json=
+
+That run still timed out because the three selectors were single-line lexical
+matches; the agent widened them with owner-local search.  The next optimization
+projected bounded hot context selectors such as =scheduled_io.rs:472:492= and
+=loom/std/mod.rs:21:41=:
+
+Report:
+=.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-single-prompt-hot-context-selectors.json=
+
+The query coverage policy then surfaced =matched=vec,collection,fields= and
+=missing=scalar= with =missingTokenSearch=false=:
+
+Report:
+=.cache/agent-semantic-protocol/sandtable-reports/tokio-claude-single-prompt-query-coverage-policy.json=
+
+This prevented a second pipe, but not post-projection owner/fzf/tree-sitter
+probing.  The current root cause is now clear: the graph is still lexical
+line-hit based.  To answer this prompt within the command budget, the Rust
+provider must add parser-owned field/type/collection nodes and edges so
+graph-turbo can project actual struct/field/type evidence instead of comments
+or module-level lexical hits.
+
+The next optimization must make the projection executable while preserving the
+pipe expression:
+
+#+begin_example
+pipeExpr=prime |> search(term='Vec scalar collection fields') |> rank(profile=owner-query) |> filter(path=source-preferred) |> project(frontierActions,pipeCommands,selectors) |> choose(branch=bounded,max=3,repeat=false)
+pipeProjections=graph-frontier,frontierActions,pipeCommands
+frontierActions=R1.reasoning(owner=tokio-util/src/codec/length_delimited.rs,querySource=search-pipe)!search-reasoning
+frontierActions=S1.selector(selector=tokio-util/src/codec/length_delimited.rs:<range>,owner=tokio-util/src/codec/length_delimited.rs,symbol=<symbol>)!query-selector
+pipeCommands=R1=>asp rust search reasoning owner-query --owner tokio-util/src/codec/length_delimited.rs --query 'Vec scalar collection fields' --view seeds .,S1=>asp rust query --selector tokio-util/src/codec/length_delimited.rs:<range> --code .
+#+end_example
+
+Until those concrete actions exist, live testing should stay at one prompt.
+The single prompt is enough to detect whether the pipe reaches
+=prime -> pipe -> reasoning -> selector= without repeating search.  Adding more
+prompts before concrete =frontierActions= exist mostly measures prompt
+variance and burns token budget.
+
+While the pipe surface is still being tuned, the live Tokio scenario should run
+only the =vec scalar meaning= prompt.  The three-prompt matrix is useful after
+the pipe contract stabilizes, but during early optimization it triples token
+cost without adding proportionate signal.  Keep the single prompt as the smoke
+test for =prime -> pipe -> reasoning -> selector=, then restore additional
+prompts only when the concrete =pipeCommands= action frontier is strong enough.
+
+** 31.22-A Structure-grounded AST query for fields
+
+Add or expose a field-level query model that can answer questions like:
+
+#+begin_example
+fields where type.constructor=Vec
+fields where type.classification=collection
+fields under owner=<struct-or-module>
+first selectors for matching field and enclosing item
+#+end_example
+
+For Rust this can start with parser-owned facts from the Rust harness:
+
+| fact | example |
+|------+---------|
+| =element.kind= | =field= |
+| =type.constructor= | =Vec= |
+| =type.arguments= | =T= |
+| =type.classification= | =collection= |
+| =owner.kind= | =struct= |
+| =selector.field= | =path:start-end= |
+| =selector.owner= | =path:start-end= |
+
+This should reduce the need for repeated =fzf= and broad tree-sitter query
+attempts.
+
+** 31.22-B Search pipe as a provider-owned frontier
+
+The agent needs a single compact surface for deep code questions:
+
+#+begin_example
+asp rust search pipe '<question>' --view seeds .
+#+end_example
+
+or an equivalent reasoning profile.  The output should contain:
+
+- interpreted axes, such as =field-type=, =owner=, =tests=, =deps=;
+- ranked next commands;
+- query profiles to run, with complete argv;
+- avoid rules, especially =repeat-prime=, =broad-fzf=, and =raw-read=;
+- a stop condition for when enough selectors have been found.
+
+This is not a replacement for =search fzf= or =query=.  It is a typed planner
+frontier that should call those surfaces in a bounded order.
+
+** 31.22-C Token-cost budgets in sandtable reports
+
+The live runner now extracts =tokenCost= from Claude SDK stream JSON.  The next
+step is to make those numbers actionable:
+
+- per-step =maxTotalTokensWarn=;
+- per-step =maxCostUsdWarn= when SDK cost is available;
+- per-scenario aggregate token/cost budgets;
+- top-cost command/profile attribution when command-level usage exists;
+- fail-on-cost mode for repeated benchmark runs.
+
+Token cost should be audited alongside command count and elapsed time.
+
+** 31.22-D Partial evidence on timeout
+
+Timeout should not erase evidence.  The runner should keep:
+
+- partial stdout/stderr byte and line counts;
+- partial ASP command extraction;
+- partial =pipeFlow= classification;
+- partial token usage if the SDK has already emitted usage;
+- timeout reason and elapsed time.
+
+This allows a failed live run to still guide optimization without rerunning the
+same expensive prompt.
+
+** 31.22-E Prompt design should become smaller, not longer
+
+The third prompt should be replaced by one or more bounded probes:
+
+#+begin_example
+prompt A: run the canonical search pipe and report commands only
+prompt B: answer the domain question using only pipe-selected selectors
+prompt C: critique missing pipe stages from the recorded command list
+#+end_example
+
+Each prompt must stay under 120 seconds.  If a prompt needs more time, the
+protocol should be improved, not the budget.
+
+* Optimization Expectations
+
+The next live pass should target:
+
+| metric | current evidence | target |
+|--------+------------------+--------|
+| per-prompt timeout | 120s hard limit | stay 120s |
+| ASP commands | 16-18 for completed prompts | <= 8 |
+| search commands | 7-12 | <= 4 |
+| query commands | 5-8 | <= 4 |
+| repeated commands | 0-2 | 0 |
+| repeated prime | observed in prompt 1 | 0 |
+| direct reads | 0-2 | 0 for discovery, <= 1 final exact read |
+| total tokens | 330k-400k | <= 150k |
+| cost per prompt | $0.43-$0.53 | <= $0.20 |
+| stdout bytes | 101k-162k | <= 80k |
+| first hot selector | late / inconsistent | by command 5 |
+
+The important optimization target is not just fewer commands.  It is fewer
+semantic decisions left to the model.  The provider should emit typed next
+actions that make the efficient path the obvious path.
+
+* Immediate Follow-Ups
+
+1. Make the Tokio fixture explicit: either use a real Tokio crate version or
+   rename the live scenario to =tokio-util-0.6.0=.
+2. Keep =timeoutSeconds= at 120 and use partial timeout evidence for failed
+   live runs.
+3. Add token/cost warning fields to the sandtable schema.
+4. Add a field/type AST query frontier for Rust =Vec<T>= and collection-like
+   fields.
+5. Add a pipe-flow diagnostic or =search pipe= profile that emits complete
+   next commands and stop conditions.
+6. Convert the third meta prompt into bounded probes that test one behavior at
+   a time.
+
+* Success Shape
+
+A successful future run should produce a compact report like:
+
+#+begin_example
+[sandtable] scenario=rust.tokio-claude-deep-question-flow status=pass
+|step claude-tokio-vec-scalar-meaning ms=<120000 asp<=8 search<=4 query<=4 repeated=0
+|tokens total<=150000 costUsd<=0.20
+|pipeFlow complex=true missing=-
+|frontier firstHotSelectorByCommand<=5 directReadDiscovery=0
+#+end_example
+
+The final answer should cite parser-owned field/type facts, not broad text
+matches, and the command list should show a single bounded search/query pipe
+rather than repeated exploratory search.
+
+* 2026-06-07 Typed field fact optimization
+
+The latest root cause is that the graph-turbo request was still mostly lexical:
+it could rank lines that mention =Vec=, =collection=, or =fields=, but it did
+not give the agent an explicit =field -> type -> collection -> hot= graph path.
+That left the model to recover structure with extra owner search, fzf, or
+tree-sitter guide probes after =search pipe= had already selected branches.
+
+The optimization landed in three layers:
+
+- RFC contract: =owner-query= now allows =field=, =type=, and =collection=
+  nodes plus =has_type= and =collection_of= relations.
+- Rust fast path: bounded owner scanning adds collection field facts only after
+  the candidate set exists and without spawning the provider.
+- Python graph-turbo: typed nodes are weighted and projected into top-three
+  branch selectors, with query coverage aware of =field/fields= and
+  =collection/collections= aliases.
+
+The next live Tokio run should inspect whether =asp rust search pipe 'Vec scalar
+collection fields' --view seeds= emits a =frontierActions= selector for a
+field-level hot range before launching Claude.  If the pipe output still points
+only at comments or modules, the remaining fix is to move the collection field
+fact producer from bounded syntax scanning into the Rust provider's native
+parser fact index rather than adding more prompt guidance.

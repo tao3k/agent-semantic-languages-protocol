@@ -156,6 +156,7 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
             &provider_args,
             &project_root,
             &invocation_root,
+            &cache_home,
             &config,
         );
     }

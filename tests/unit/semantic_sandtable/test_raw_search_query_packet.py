@@ -137,9 +137,10 @@ class RawSearchQueryPacketTests(unittest.TestCase):
                                 "expect": {
                                     "stdoutContains": [
                                         "[search-fzf]",
+                                        "querySet=3",
                                         "aliases: graph:{G=search",
                                         "Q=query:term(DecisionRouteKind::Read,window_set,direct-source-read)!fzf",
-                                        "test:path(tests/unit/classifier/routes/direct_read/exact.rs)!tests",
+                                        "test:path(tests/unit/classifier/raw_search_policy/support.rs)!tests",
                                         "G>{Q:matches",
                                         "frontier=Q.fzf",
                                     ],

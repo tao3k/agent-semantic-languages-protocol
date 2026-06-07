@@ -34,7 +34,12 @@ def sample_packet() -> dict[str, object]:
                 "role": "fn",
                 "value": "collect_actions",
                 "owner": "src/cli.py",
+                "path": "src/cli.py",
+                "ownerPath": "src/cli.py",
                 "symbol": "collect_actions",
+                "startLine": 10,
+                "endLine": 20,
+                "locator": "src/cli.py:10:20",
             },
             {
                 "id": "hot:command",
@@ -42,7 +47,12 @@ def sample_packet() -> dict[str, object]:
                 "role": "call",
                 "value": "command_intent",
                 "owner": "src/cli.py",
+                "path": "src/cli.py",
+                "ownerPath": "src/cli.py",
                 "symbol": "command_intent",
+                "startLine": 24,
+                "endLine": 28,
+                "locator": "src/cli.py:24:28",
             },
             {
                 "id": "dep:jsonschema",
@@ -88,6 +98,82 @@ def sample_request(*, profile: str = "owner-query", budget: int = 8) -> dict[str
     }
 
 
+def sample_failure_packet() -> dict[str, object]:
+    return {
+        "nodes": [
+            {
+                "id": "failure:cache",
+                "kind": "failure",
+                "role": "test-failure",
+                "value": "cache_cli::writeback::prompt_output_replay",
+                "failureKind": "test-failure",
+                "languageId": "rust",
+            },
+            {
+                "id": "assert:replay",
+                "kind": "assert",
+                "role": "failure",
+                "value": "expected=hit,actual=miss",
+                "languageId": "rust",
+            },
+            {
+                "id": "owner:writeback",
+                "kind": "owner",
+                "role": "path",
+                "value": "src/cache_cli/writeback.rs",
+                "path": "src/cache_cli/writeback.rs",
+                "languageId": "rust",
+            },
+            {
+                "id": "hot:write",
+                "kind": "hot",
+                "role": "fn",
+                "value": "write_prompt_output_artifact",
+                "path": "src/cache_cli/writeback.rs",
+                "ownerPath": "src/cache_cli/writeback.rs",
+                "symbol": "write_prompt_output_artifact",
+                "startLine": 10,
+                "endLine": 24,
+                "locator": "src/cache_cli/writeback.rs:10:24",
+                "languageId": "rust",
+            },
+            {
+                "id": "key:fingerprint",
+                "kind": "key",
+                "role": "signal",
+                "value": "request_fingerprint",
+                "languageId": "rust",
+            },
+            {
+                "id": "evidence:file-hash",
+                "kind": "evidence",
+                "role": "signal",
+                "value": "file_hash(observed=failure)",
+                "languageId": "rust",
+            },
+            {
+                "id": "test:writeback",
+                "kind": "test",
+                "role": "path",
+                "value": "tests/unit/cache_cli/writeback.rs",
+                "path": "tests/unit/cache_cli/writeback.rs",
+                "languageId": "rust",
+            },
+        ],
+        "edges": [
+            {"source": "failure:cache", "target": "test:writeback", "relation": "fails"},
+            {"source": "failure:cache", "target": "assert:replay", "relation": "explains"},
+            {"source": "failure:cache", "target": "owner:writeback", "relation": "selects"},
+            {"source": "assert:replay", "target": "hot:write", "relation": "checks"},
+            {"source": "assert:replay", "target": "key:fingerprint", "relation": "checks"},
+            {"source": "assert:replay", "target": "evidence:file-hash", "relation": "gates"},
+            {"source": "owner:writeback", "target": "hot:write", "relation": "contains"},
+            {"source": "hot:write", "target": "key:fingerprint", "relation": "relates"},
+            {"source": "hot:write", "target": "evidence:file-hash", "relation": "validates"},
+        ],
+    }
+
+
 def test_request_fixture_is_schema_owned_algorithm_input() -> None:
     packet = json.loads(_GRAPH_TURBO_FIXTURE.read_text(encoding="utf-8"))
     errors = list(schema_validator_for(_GRAPH_TURBO_REQUEST_SCHEMA).iter_errors(packet))
@@ -115,6 +201,199 @@ def test_owner_query_profile_masks_dependency_edges() -> None:
     ]
 
 
+def test_owner_query_ranking_prefers_rare_query_token_match_text() -> None:
+    nodes: list[dict[str, object]] = [
+        {
+            "id": "q:vec-collection",
+            "kind": "query",
+            "role": "term",
+            "value": "Vec collection",
+        },
+        {
+            "id": "item:collection",
+            "kind": "item",
+            "role": "symbol",
+            "value": "collection",
+            "path": "tokio/src/loom/std/mod.rs",
+            "ownerPath": "tokio/src/loom/std/mod.rs",
+            "symbol": "collection",
+            "matchText": "collection helpers for loom std",
+        },
+    ]
+    edges: list[dict[str, str]] = [
+        {
+            "source": "q:vec-collection",
+            "target": "item:collection",
+            "relation": "matches",
+        }
+    ]
+    for index in range(8):
+        node_id = f"item:vec-{index}"
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "item",
+                "role": "symbol",
+                "value": "vec",
+                "path": f"tokio/src/fs/file_{index}.rs",
+                "ownerPath": f"tokio/src/fs/file_{index}.rs",
+                "symbol": "vec",
+                "matchText": "let buffer: Vec<u8> = Vec::new();",
+            }
+        )
+        edges.append(
+            {
+                "source": "q:vec-collection",
+                "target": node_id,
+                "relation": "matches",
+            }
+        )
+    graph = TypedGraph.from_packet(
+        {
+            "nodes": nodes,
+            "edges": edges,
+        }
+    )
+    result = rank_frontier(
+        graph,
+        profile="owner-query",
+        seeds=["q:vec-collection"],
+        limit=4,
+        kind_budgets={"query": 1, "item": 3},
+    )
+
+    ranked_items = [node.id for node in result.ranked_nodes if node.kind == "item"]
+
+    assert ranked_items[0] == "item:collection"
+    assert ranked_items[1].startswith("item:vec-")
+
+
+def test_owner_query_projects_typed_collection_field_selector() -> None:
+    graph = TypedGraph.from_packet(
+        {
+            "nodes": [
+                {
+                    "id": "q:vec-fields",
+                    "kind": "query",
+                    "role": "term",
+                    "value": "Vec collection fields",
+                },
+                {
+                    "id": "owner:state",
+                    "kind": "owner",
+                    "role": "path",
+                    "value": "src/state.rs",
+                    "path": "src/state.rs",
+                },
+                {
+                    "id": "item:vec",
+                    "kind": "item",
+                    "role": "symbol",
+                    "value": "vec",
+                    "path": "src/state.rs",
+                    "ownerPath": "src/state.rs",
+                    "symbol": "vec",
+                    "locator": "src/state.rs:30:30",
+                    "matchText": "let values = Vec::new();",
+                },
+                {
+                    "id": "field:scalars",
+                    "kind": "field",
+                    "role": "struct-field",
+                    "value": "scalars: Vec<Scalar>",
+                    "path": "src/state.rs",
+                    "ownerPath": "src/state.rs",
+                    "symbol": "scalars",
+                    "locator": "src/state.rs:12:12",
+                    "matchText": "pub scalars: Vec<Scalar>,",
+                    "fields": {
+                        "fieldName": "scalars",
+                        "typeName": "Vec",
+                        "typeValue": "Vec<Scalar>",
+                        "collectionKind": "Vec",
+                    },
+                },
+                {
+                    "id": "type:scalars",
+                    "kind": "type",
+                    "role": "field-type",
+                    "value": "Vec<Scalar>",
+                    "path": "src/state.rs",
+                    "ownerPath": "src/state.rs",
+                    "symbol": "Vec",
+                    "locator": "src/state.rs:12:12",
+                    "fields": {
+                        "fieldName": "scalars",
+                        "typeName": "Vec",
+                        "typeValue": "Vec<Scalar>",
+                        "collectionKind": "Vec",
+                    },
+                },
+                {
+                    "id": "collection:vec",
+                    "kind": "collection",
+                    "role": "family",
+                    "value": "Vec",
+                    "symbol": "Vec",
+                    "fields": {"collectionKind": "Vec"},
+                    "action": "evidence",
+                },
+                {
+                    "id": "hot:scalars",
+                    "kind": "hot",
+                    "role": "field-range",
+                    "value": "scalars",
+                    "path": "src/state.rs",
+                    "ownerPath": "src/state.rs",
+                    "symbol": "scalars",
+                    "locator": "src/state.rs:4:24",
+                    "matchText": "pub scalars: Vec<Scalar>,",
+                },
+            ],
+            "edges": [
+                {"source": "q:vec-fields", "target": "owner:state", "relation": "matches"},
+                {"source": "q:vec-fields", "target": "item:vec", "relation": "matches"},
+                {"source": "q:vec-fields", "target": "field:scalars", "relation": "matches"},
+                {"source": "q:vec-fields", "target": "type:scalars", "relation": "matches"},
+                {"source": "q:vec-fields", "target": "collection:vec", "relation": "matches"},
+                {"source": "owner:state", "target": "field:scalars", "relation": "contains"},
+                {"source": "field:scalars", "target": "type:scalars", "relation": "has_type"},
+                {
+                    "source": "field:scalars",
+                    "target": "collection:vec",
+                    "relation": "collection_of",
+                },
+                {"source": "field:scalars", "target": "hot:scalars", "relation": "contains"},
+            ],
+        }
+    )
+    result = rank_frontier(
+        graph,
+        profile="owner-query",
+        seeds=["q:vec-fields"],
+        limit=7,
+        kind_budgets={
+            "query": 1,
+            "owner": 1,
+            "item": 1,
+            "field": 1,
+            "type": 1,
+            "collection": 1,
+            "hot": 1,
+        },
+    )
+    compact = render_compact(result)
+
+    assert "F=field:struct-field(scalars: Vec<Scalar>)@src/state.rs:12:12!code" in compact
+    assert "Y=type:field-type(Vec<Scalar>)@src/state.rs:12:12!code" in compact
+    assert "C=collection:family(Vec)!evidence" in compact
+    assert "queryCoverage=matched=vec,collection,fields missing=- source=ranked-frontier" in compact
+    assert (
+        "S1.selector(selector=src/state.rs:4:24,owner=src/state.rs,symbol=scalars,source=H)!query-selector"
+        in compact
+    )
+
+
 def test_query_deps_profile_can_cross_dependency_edges() -> None:
     graph = TypedGraph.from_packet(sample_packet())
     result = rank_frontier(graph, profile="query-deps", seeds=["q:parser"])
@@ -137,8 +416,8 @@ def test_compact_render_uses_asp_graph_frontier_contract() -> None:
     assert "legend: ID=kind:role(value)!next; edge SRC>{DST:rel}; frontier ID.next" in compact
     assert "aliases=G:graph" in compact
     assert "Q=query:term(parser)!fzf" in compact
-    assert "I=item:fn(collect_actions)!code" in compact
-    assert "H=hot:call(command_intent)!code" in compact
+    assert "I=item:fn(collect_actions)@src/cli.py:10:20!code" in compact
+    assert "H=hot:call(command_intent)@src/cli.py:24:28!code" in compact
     assert "G>{" in compact and "Q:matches" in compact and "O:selects" in compact
     assert "Q>{I:matches}" in compact
     assert "O>{" in compact and "T:covers" in compact
@@ -146,11 +425,162 @@ def test_compact_render_uses_asp_graph_frontier_contract() -> None:
     assert "\nfrontier=" in compact
     assert "\nscores=" in compact
     assert "Q:" in compact and "O:" in compact and "T:" in compact
-    assert "\nprofiles=owner-query,query-deps,owner-tests,prime,read-frontier\n" in compact
+    assert "\nprofiles=owner-query,query-deps,owner-tests,prime,read-frontier,failure-frontier\n" in compact
     assert "\nomit=code,full-score-vector,full-graph\n" in compact
     assert "\navoid=raw-read,repeat-owner,broad-fzf\n" in compact
+    assert "\npipeChoice=bounded-fanout maxBranches=3 repeat=false owner=asp-graph-turbo\n" in compact
+    assert (
+        "\npipePolicy=maxSearchPipe=1 rewrite=false branchRepeat=false stopAfterProjectedBranches=true missingTokenSearch=false postProjectionSearch=false\n"
+        in compact
+    )
+    assert "\nqueryCoverage=matched=- missing=parser source=ranked-frontier\n" in compact
+    assert "frontierActions=R1.reasoning(owner=src/cli.py,source=I)!search-reasoning" in compact
+    assert "S1.selector(selector=src/cli.py:10:20,owner=src/cli.py,symbol=collect_actions,source=I)!query-selector" in compact
+    assert "R4.reasoning" not in compact
     assert "[graph-turbo]" not in compact
     assert "aliases:" not in compact
+
+
+def test_owner_query_projection_prefers_symbol_diverse_branches() -> None:
+    graph = TypedGraph.from_packet(
+        {
+            "nodes": [
+                {
+                    "id": "q:vec-fields",
+                    "kind": "query",
+                    "role": "term",
+                    "value": "Vec collection fields",
+                },
+                {
+                    "id": "item:fields",
+                    "kind": "item",
+                    "role": "symbol",
+                    "value": "fields",
+                    "path": "tokio/src/io/driver/scheduled_io.rs",
+                    "ownerPath": "tokio/src/io/driver/scheduled_io.rs",
+                    "symbol": "fields",
+                    "startLine": 480,
+                    "endLine": 480,
+                    "locator": "tokio/src/io/driver/scheduled_io.rs:480:480",
+                    "matchText": "access the waker fields",
+                },
+                {
+                    "id": "item:collection-a",
+                    "kind": "item",
+                    "role": "symbol",
+                    "value": "collection",
+                    "weight": 1.5,
+                    "path": "tokio/src/loom/std/mod.rs",
+                    "ownerPath": "tokio/src/loom/std/mod.rs",
+                    "symbol": "collection",
+                    "startLine": 29,
+                    "endLine": 29,
+                    "locator": "tokio/src/loom/std/mod.rs:29:29",
+                    "matchText": "collection implementation",
+                },
+                {
+                    "id": "item:collection-b",
+                    "kind": "item",
+                    "role": "symbol",
+                    "value": "collection",
+                    "weight": 1.4,
+                    "path": "tokio/src/process/mod.rs",
+                    "ownerPath": "tokio/src/process/mod.rs",
+                    "symbol": "collection",
+                    "startLine": 315,
+                    "endLine": 315,
+                    "locator": "tokio/src/process/mod.rs:315:315",
+                    "matchText": "collection of child processes",
+                },
+                {
+                    "id": "item:vec",
+                    "kind": "item",
+                    "role": "symbol",
+                    "value": "vec",
+                    "path": "stress-test/examples/simple_echo_tcp.rs",
+                    "ownerPath": "stress-test/examples/simple_echo_tcp.rs",
+                    "symbol": "vec",
+                    "startLine": 131,
+                    "endLine": 131,
+                    "locator": "stress-test/examples/simple_echo_tcp.rs:131:131",
+                    "matchText": "Vec buffer",
+                },
+            ],
+            "edges": [
+                {"source": "q:vec-fields", "target": "item:fields", "relation": "matches"},
+                {
+                    "source": "q:vec-fields",
+                    "target": "item:collection-a",
+                    "relation": "matches",
+                },
+                {
+                    "source": "q:vec-fields",
+                    "target": "item:collection-b",
+                    "relation": "matches",
+                },
+                {"source": "q:vec-fields", "target": "item:vec", "relation": "matches"},
+            ],
+        }
+    )
+    result = rank_frontier(
+        graph,
+        profile="owner-query",
+        seeds=["q:vec-fields"],
+        limit=5,
+        kind_budgets={"query": 1, "item": 4},
+    )
+    compact = render_compact(result)
+    frontier_actions = next(
+        line for line in compact.splitlines() if line.startswith("frontierActions=")
+    )
+
+    assert "symbol=fields" in frontier_actions
+    assert frontier_actions.count("symbol=collection") == 1
+    assert "symbol=vec" in frontier_actions
+
+
+def test_failure_frontier_profile_ranks_hot_blocks_and_renders_search_failure() -> None:
+    graph = TypedGraph.from_packet(sample_failure_packet())
+    result = rank_frontier(
+        graph,
+        profile="failure-frontier",
+        seeds=["failure:cache"],
+        kind_budgets={"failure": 1, "assert": 1, "hot": 1, "key": 1, "evidence": 1},
+    )
+    compact = render_compact(result)
+    packet = result_to_packet(result)
+    errors = list(schema_validator_for(_GRAPH_TURBO_SCHEMA).iter_errors(packet))
+    ranked = [node.id for node in result.ranked_nodes]
+
+    assert errors == []
+    assert "assert:replay" in ranked
+    assert "hot:write" in ranked
+    assert "key:fingerprint" in ranked
+    assert "evidence:file-hash" in ranked
+    assert compact.startswith(
+        "[search-failure] kind=test-failure profile=failure-frontier alg=typed-ppr-diverse seed=F budget=8\n"
+    )
+    assert "F=failure:test-failure(cache_cli::writeback::prompt_output_replay)!failure" in compact
+    assert "A=assert:failure(expected=hit,actual=miss)!evidence" in compact
+    assert "H=hot:fn(write_prompt_output_artifact)@src/cache_cli/writeback.rs:10:24!code" in compact
+    assert "K=key:signal(request_fingerprint)!evidence" in compact
+    assert "E=evidence:signal(file_hash(observed=failure))!evidence" in compact
+    assert "\nfrontier=A.evidence,H.code,K.evidence,E.evidence\n" in compact
+    assert "frontier=F.failure" not in compact
+    assert "T.code" not in compact.split("\nfrontier=", 1)[1].split("\n", 1)[0]
+    assert (
+        "frontierActions=H.code=>asp rust query --selector src/cache_cli/writeback.rs:10:24 --code ."
+        in compact
+    )
+    assert (
+        "queryProfiles=failure-frontier(F=>failure-facts+owners+hot-blocks),owner-query(O,K=>items+tests+dependency-usage),owner-tests(O=>covering-tests)"
+        in compact
+    )
+    assert "\nomit=full-source,unrelated-functions,wide-windows\n" in compact
+    assert "\navoid=manual-window-scan,duplicate-read,raw-read,broad-fzf\n" in compact
+    assert packet["profile"] == "failure-frontier"
+    assert packet["omit"] == ["full-source", "unrelated-functions", "wide-windows"]
+    assert packet["avoid"] == ["manual-window-scan", "duplicate-read", "raw-read", "broad-fzf"]
 
 
 def test_result_packet_is_schema_owned_ranking_evidence() -> None:
@@ -175,14 +605,20 @@ def test_result_packet_is_schema_owned_ranking_evidence() -> None:
         "owner-tests",
         "prime",
         "read-frontier",
+        "failure-frontier",
     ]
     assert packet["profileCompatibility"][0]["profile"] == "owner-query"
     assert packet["profileCompatibility"][0]["compatible"] is True
-    assert packet["profileCompatibility"][0]["allowedTransitions"][0] == {
+    assert {
         "sourceKind": "item",
         "targetKind": "hot",
-    }
-    assert packet["profileCompatibility"][0]["kindBonus"]["hot"] == 0.3
+    } in packet["profileCompatibility"][0]["allowedTransitions"]
+    assert {
+        "sourceKind": "field",
+        "targetKind": "hot",
+    } in packet["profileCompatibility"][0]["allowedTransitions"]
+    assert packet["profileCompatibility"][0]["kindBonus"]["field"] == 0.4
+    assert packet["profileCompatibility"][0]["kindBonus"]["hot"] == 0.35
     assert packet["mergedWindows"] == []
     assert packet["sourceSinkFrontier"]["sourceIds"] == ["q:parser", "owner:cli"]
     assert any(path["pathKind"] == "constrained-shortest" for path in packet["typedPaths"])

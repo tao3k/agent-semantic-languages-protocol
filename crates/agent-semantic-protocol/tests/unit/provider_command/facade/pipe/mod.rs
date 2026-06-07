@@ -1,13 +1,18 @@
 mod config;
 mod fzf;
+mod fzf_query_deps;
 mod ingest;
 mod pipe_frontier;
 mod reasoning;
 mod suggest;
 
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+
 use serde_json::Value;
 
 fn assert_graph_turbo_request_contract(payload: &Value) {
+    assert_graph_turbo_request_matches_shared_schema(payload);
     assert_eq!(
         payload["schemaId"],
         "agent.semantic-protocols.semantic-graph-turbo-request"
@@ -73,6 +78,8 @@ fn assert_graph_turbo_request_contract(payload: &Value) {
                     | "owner"
                     | "ownerPath"
                     | "symbol"
+                    | "matchText"
+                    | "syntaxQuery"
                     | "name"
                     | "startLine"
                     | "endLine"
@@ -110,4 +117,65 @@ fn assert_graph_turbo_request_contract(payload: &Value) {
             );
         }
     }
+}
+
+fn assert_graph_turbo_request_matches_shared_schema(payload: &Value) {
+    let schema = shared_graph_turbo_request_schema();
+    let payload = payload.as_object().expect("request object");
+    assert_required_fields(payload, &schema["required"]);
+    assert_allowed_keys(payload.keys(), &property_keys(&schema["properties"]));
+
+    let graph = payload["graph"].as_object().expect("graph object");
+    let graph_schema = &schema["properties"]["graph"];
+    assert_required_fields(graph, &graph_schema["required"]);
+    assert_allowed_keys(graph.keys(), &property_keys(&graph_schema["properties"]));
+
+    let node_keys = property_keys(&schema["$defs"]["node"]["properties"]);
+    for node in graph["nodes"].as_array().expect("graph.nodes") {
+        assert_allowed_keys(node.as_object().expect("node object").keys(), &node_keys);
+    }
+    let edge_keys = property_keys(&schema["$defs"]["edge"]["properties"]);
+    for edge in graph["edges"].as_array().expect("graph.edges") {
+        assert_allowed_keys(edge.as_object().expect("edge object").keys(), &edge_keys);
+    }
+}
+
+fn shared_graph_turbo_request_schema() -> Value {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../schemas/semantic-graph-turbo-request.v1.schema.json");
+    serde_json::from_slice(&std::fs::read(path).expect("read graph turbo request schema"))
+        .expect("parse graph turbo request schema")
+}
+
+fn assert_required_fields(map: &serde_json::Map<String, Value>, required: &Value) {
+    for field in string_array(required) {
+        assert!(
+            map.contains_key(&field),
+            "missing required schema field {field}"
+        );
+    }
+}
+
+fn assert_allowed_keys<'a>(keys: impl Iterator<Item = &'a String>, allowed: &BTreeSet<String>) {
+    for key in keys {
+        assert!(allowed.contains(key), "schema-unknown key {key}");
+    }
+}
+
+fn property_keys(properties: &Value) -> BTreeSet<String> {
+    properties
+        .as_object()
+        .expect("schema properties object")
+        .keys()
+        .cloned()
+        .collect()
+}
+
+fn string_array(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .expect("schema string array")
+        .iter()
+        .map(|item| item.as_str().expect("schema string").to_string())
+        .collect()
 }

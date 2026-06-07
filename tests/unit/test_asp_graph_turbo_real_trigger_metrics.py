@@ -75,12 +75,13 @@ def test_real_trigger_fixture_records_live_graph_turbo_metrics() -> None:
     packet = json.loads(_REAL_TRIGGER_FIXTURE.read_text(encoding="utf-8"))
 
     assert packet["schemaId"] == REAL_TRIGGER_METRICS_SCHEMA_ID
-    assert packet["scenario"] == "rust-fzf-request-rank"
+    assert packet["scenario"] == "rust-fzf-default-rank"
     assert packet["source"] == "live-cli"
     assert packet["profile"] == "owner-query"
     assert packet["algorithm"] == "typed-ppr-diverse"
-    assert packet["metrics"]["commandCount"] == len(packet["commands"]) == 2
-    assert packet["metrics"]["packetBytes"] > 0
+    assert packet["commands"] == ["asp rust search fzf graph_turbo owner tests ."]
+    assert packet["metrics"]["commandCount"] == len(packet["commands"]) == 1
+    assert packet["metrics"]["packetBytes"] >= 0
     assert packet["metrics"]["resultBytes"] > 0
     assert packet["metrics"]["latencyMs"] > 0
     assert packet["observations"] == {

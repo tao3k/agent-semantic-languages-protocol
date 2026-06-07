@@ -17,6 +17,7 @@ pub(super) struct GraphAction {
     pub(super) target: String,
     pub(super) locator: Option<String>,
     pub(super) action: Option<String>,
+    pub(super) syntax_query: Option<String>,
 }
 
 macro_rules! graph_action_specs {
@@ -44,8 +45,8 @@ graph_action_specs! {
     "test" => "test", "path", "T", "tests";
     "tests" => "test", "path", "T", "tests";
     "symbol" => "symbol", "symbol", "S", "symbol";
-    "item-symbol" => "item", "symbol", "I", "code";
-    "hot" => "hot", "symbol", "H", "code";
+    "item-symbol" => "item", "symbol", "I", "syntax";
+    "hot" => "hot", "symbol", "H", "syntax";
     "text" => "query", "term", "Q", "fzf";
     "fzf" => "query", "term", "Q", "fzf";
     "query" => "query", "term", "Q", "query";
@@ -80,6 +81,7 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
                 target,
                 locator: None,
                 action: None,
+                syntax_query: None,
             });
         }
     }
@@ -101,6 +103,7 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
                     .or_else(|| selector_target(packet, "feature="))?,
                 locator: None,
                 action: None,
+                syntax_query: None,
             }),
             "finding-frontier" => Some(GraphAction {
                 kind: "finding".to_string(),
@@ -108,6 +111,7 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
                     .or_else(|| selector_target(packet, "finding="))?,
                 locator: None,
                 action: None,
+                syntax_query: None,
             }),
             _ => None,
         }
@@ -125,6 +129,7 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
     }
 
     let mut actions = Vec::new();
+    let language_id = packet_language_id(packet);
     let reasoning_profile = (packet_view(packet) == "reasoning")
         .then(|| reasoning_profile_action(packet))
         .flatten();
@@ -152,20 +157,22 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
         actions.push(action);
     }
     if is_owner_item_query_packet(packet, packet_view(packet)) {
-        append_owner_item_next_actions(&mut actions, packet.get("nextActions"));
+        append_owner_item_next_actions(&mut actions, packet.get("nextActions"), language_id);
     } else {
-        append_object_actions(&mut actions, packet.get("nextActions"));
+        append_object_actions(&mut actions, packet.get("nextActions"), language_id);
     }
     if synthesis_seeds_are_primary(packet) {
         append_object_actions(
             &mut actions,
             packet.get("searchSynthesis").and_then(|s| s.get("seeds")),
+            language_id,
         );
         append_object_actions(
             &mut actions,
             packet
                 .get("searchSynthesis")
                 .and_then(|s| s.get("windowSet")),
+            language_id,
         );
     } else {
         append_object_actions(
@@ -173,10 +180,12 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
             packet
                 .get("searchSynthesis")
                 .and_then(|s| s.get("windowSet")),
+            language_id,
         );
         append_object_actions(
             &mut actions,
             packet.get("searchSynthesis").and_then(|s| s.get("seeds")),
+            language_id,
         );
     }
     append_string_actions(
@@ -202,7 +211,7 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
     );
     append_owner_paths(&mut actions, packet.get("owners"));
     append_native_fact_owners(&mut actions, packet.get("nativeSyntaxFacts"));
-    append_item_symbols(&mut actions, packet.get("items"));
+    append_item_symbols(&mut actions, packet.get("items"), language_id);
     if let Some(profile) = reasoning_profile.as_ref() {
         actions.retain(|action| {
             !(is_reasoning_profile_duplicate(profile, action)
@@ -215,6 +224,7 @@ pub(super) fn graph_actions(packet: &Value) -> Vec<GraphAction> {
                 target: profile.target.clone(),
                 locator: profile.locator.clone(),
                 action: profile.action.clone(),
+                syntax_query: profile.syntax_query.clone(),
             },
         );
     }
@@ -246,6 +256,7 @@ fn owner_item_query_action(packet: &Value) -> Option<GraphAction> {
         target: owner_item_query_terms(packet)?.join("|"),
         locator: None,
         action: Some("query".to_string()),
+        syntax_query: None,
     })
 }
 
@@ -325,12 +336,14 @@ fn packet_root_action(packet: &Value) -> Option<GraphAction> {
             target: query.to_string(),
             locator: None,
             action: None,
+            syntax_query: None,
         }),
         "dependency" | "deps" => Some(GraphAction {
             kind: "dependency".to_string(),
             target: query.to_string(),
             locator: None,
             action: None,
+            syntax_query: None,
         }),
         "fzf" => {
             let action = packet
@@ -346,24 +359,29 @@ fn packet_root_action(packet: &Value) -> Option<GraphAction> {
                 target: query.to_string(),
                 locator: None,
                 action: None,
+                syntax_query: None,
             })
         }
         _ => None,
     }
 }
 
-fn append_object_actions(actions: &mut Vec<GraphAction>, value: Option<&Value>) {
+fn append_object_actions(actions: &mut Vec<GraphAction>, value: Option<&Value>, language_id: &str) {
     let Some(values) = value.and_then(Value::as_array) else {
         return;
     };
     for value in values {
-        if let Some(action) = action_from_value(value) {
+        if let Some(action) = action_from_value(value, language_id) {
             actions.push(action);
         }
     }
 }
 
-fn append_owner_item_next_actions(actions: &mut Vec<GraphAction>, value: Option<&Value>) {
+fn append_owner_item_next_actions(
+    actions: &mut Vec<GraphAction>,
+    value: Option<&Value>,
+    language_id: &str,
+) {
     let Some(values) = value.and_then(Value::as_array) else {
         return;
     };
@@ -371,7 +389,7 @@ fn append_owner_item_next_actions(actions: &mut Vec<GraphAction>, value: Option<
         if value.get("kind").and_then(Value::as_str) == Some("symbol") {
             continue;
         }
-        if let Some(action) = action_from_value(value) {
+        if let Some(action) = action_from_value(value, language_id) {
             actions.push(action);
         }
     }
@@ -390,6 +408,7 @@ fn append_string_actions(actions: &mut Vec<GraphAction>, value: Option<&Value>, 
             target: target.to_string(),
             locator: None,
             action: None,
+            syntax_query: None,
         });
     }
 }
@@ -405,6 +424,7 @@ fn append_owner_paths(actions: &mut Vec<GraphAction>, value: Option<&Value>) {
                 target: target.to_string(),
                 locator: None,
                 action: None,
+                syntax_query: None,
             });
         }
     }
@@ -426,12 +446,13 @@ fn append_native_fact_owners(actions: &mut Vec<GraphAction>, value: Option<&Valu
                 target: target.to_string(),
                 locator: None,
                 action: None,
+                syntax_query: None,
             });
         }
     }
 }
 
-fn append_item_symbols(actions: &mut Vec<GraphAction>, value: Option<&Value>) {
+fn append_item_symbols(actions: &mut Vec<GraphAction>, value: Option<&Value>, language_id: &str) {
     let Some(values) = value.and_then(Value::as_array) else {
         return;
     };
@@ -443,6 +464,7 @@ fn append_item_symbols(actions: &mut Vec<GraphAction>, value: Option<&Value>) {
             .and_then(Value::as_str);
         if let Some(target) = target {
             let locator = graph_item_locator(value);
+            let syntax_query = graph_item_syntax_query(value, language_id, target);
             actions.push(GraphAction {
                 kind: "item-symbol".to_string(),
                 target: target.to_string(),
@@ -451,6 +473,7 @@ fn append_item_symbols(actions: &mut Vec<GraphAction>, value: Option<&Value>) {
                     .map(item_frontier_action)
                     .map(ToOwned::to_owned),
                 locator,
+                syntax_query,
             });
         }
     }
@@ -465,40 +488,118 @@ fn graph_item_locator(value: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn action_from_value(value: &Value) -> Option<GraphAction> {
+fn graph_item_syntax_query(value: &Value, language_id: &str, target: &str) -> Option<String> {
+    for field in ["syntaxQuery", "syntax_query", "tsq"] {
+        if let Some(query) = value
+            .get("fields")
+            .and_then(|fields| fields.get(field))
+            .and_then(Value::as_str)
+            .or_else(|| value.get(field).and_then(Value::as_str))
+            .filter(|query| !query.trim().is_empty())
+        {
+            return Some(query.to_string());
+        }
+    }
+    tree_sitter_pattern_for_item(
+        language_id,
+        graph_item_kind(value).unwrap_or(default_item_kind(language_id)),
+        target,
+    )
+}
+
+fn graph_item_kind(value: &Value) -> Option<&str> {
+    value
+        .get("fields")
+        .and_then(|fields| fields.get("kind"))
+        .and_then(Value::as_str)
+        .or_else(|| value.get("kind").and_then(Value::as_str))
+        .or_else(|| value.get("symbolKind").and_then(Value::as_str))
+}
+
+fn default_item_kind(language_id: &str) -> &'static str {
+    match language_id {
+        "python" => "function",
+        _ => "fn",
+    }
+}
+
+fn packet_language_id(packet: &Value) -> &str {
+    packet
+        .get("languageId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+}
+
+fn tree_sitter_pattern_for_item(language_id: &str, kind: &str, target: &str) -> Option<String> {
+    let escaped_target = target.replace('\\', "\\\\").replace('"', "\\\"");
+    match language_id {
+        "rust" => rust_tree_sitter_pattern(kind, &escaped_target),
+        "python" => python_tree_sitter_pattern(kind, &escaped_target),
+        _ => None,
+    }
+}
+
+fn rust_tree_sitter_pattern(kind: &str, escaped_target: &str) -> Option<String> {
+    let (node, capture) = match kind {
+        "struct" => ("struct_item", "type.name"),
+        "enum" => ("enum_item", "type.name"),
+        "trait" | "trait_alias" => ("trait_item", "type.name"),
+        "type" => ("type_item", "type.name"),
+        "const" => ("const_item", "constant.name"),
+        "static" => ("static_item", "constant.name"),
+        "mod" => ("mod_item", "module.name"),
+        "macro" => ("macro_definition", "macro.name"),
+        "impl" => {
+            return Some(format!(
+                "((impl_item type: (_) @impl.target) (#match? @impl.target \"{escaped_target}\"))"
+            ));
+        }
+        "fn" | "function" | "method" => ("function_item", "function.name"),
+        _ => ("function_item", "function.name"),
+    };
+    Some(format!(
+        "(({node} name: (_) @{capture}) (#eq? @{capture} \"{escaped_target}\"))"
+    ))
+}
+
+fn python_tree_sitter_pattern(kind: &str, escaped_target: &str) -> Option<String> {
+    let (node, capture) = match kind {
+        "class" | "class_definition" => ("class_definition", "class.name"),
+        "function" | "function_definition" | "method" | "fn" => {
+            ("function_definition", "function.name")
+        }
+        _ => ("function_definition", "function.name"),
+    };
+    Some(format!(
+        "(({node} name: (identifier) @{capture}) (#eq? @{capture} \"{escaped_target}\"))"
+    ))
+}
+
+fn action_from_value(value: &Value, language_id: &str) -> Option<GraphAction> {
     let kind = value.get("kind")?.as_str()?.to_string();
     let locator = value
         .get("read")
         .and_then(Value::as_str)
         .map(str::to_string);
     let action = if kind == "hot" {
-        Some("code".to_string())
+        Some("syntax".to_string())
     } else {
         None
     };
+    let target = value
+        .get("target")
+        .or_else(|| value.get("ownerPath"))?
+        .as_str()?
+        .to_string();
     Some(GraphAction {
         kind,
-        target: value
-            .get("target")
-            .or_else(|| value.get("ownerPath"))?
-            .as_str()?
-            .to_string(),
+        syntax_query: graph_item_syntax_query(value, language_id, &target),
+        target,
         locator,
         action,
     })
 }
 
-fn item_frontier_action(locator: &str) -> &'static str {
-    let mut parts = locator.rsplit(':');
-    let Some(end) = parts.next().and_then(|part| part.parse::<usize>().ok()) else {
-        return "code";
-    };
-    let Some(start) = parts.next().and_then(|part| part.parse::<usize>().ok()) else {
-        return "code";
-    };
-    if end.saturating_sub(start).saturating_add(1) > 40 {
-        "outline"
-    } else {
-        "code"
-    }
+fn item_frontier_action(_locator: &str) -> &'static str {
+    "syntax"
 }

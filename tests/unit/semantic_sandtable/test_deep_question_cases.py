@@ -50,7 +50,9 @@ class DeepQuestionCaseTests(unittest.TestCase):
                 self.assertGreaterEqual(len(question["queryTerms"]), 3)
                 self.assertTrue(set(question["stepIds"]).issubset(step_ids))
                 audit = question["audit"]
-                self.assertLessEqual(audit["maxSearchCommands"], audit["maxAspCommands"])
+                self.assertLessEqual(
+                    audit["maxSearchCommands"], audit["maxAspCommands"]
+                )
                 self.assertLessEqual(audit["maxQueryCommands"], audit["maxAspCommands"])
                 self.assertEqual(0, audit["maxRepeatedCommands"])
                 self.assertTrue(audit["requiresGraphSignals"])
@@ -70,12 +72,58 @@ class DeepQuestionCaseTests(unittest.TestCase):
             scenario["skipUnlessEnv"],
         )
         step = scenario["steps"][0]
-        self.assertEqual("agent-cli", step["kind"])
-        self.assertEqual("claude", step["agentCli"]["client"])
-        self.assertTrue(step["agentCli"]["includeHookEvents"])
-        deep_question = scenario["evidence"]["deepQuestionCases"][0]
-        self.assertIn("tokio 0.6.0", deep_question["question"])
-        self.assertEqual(["claude-tokio-vec-scalar"], deep_question["stepIds"])
+        self.assertEqual(
+            {"mode": "parallel", "maxConcurrentSteps": 1}, scenario["execution"]
+        )
+        self.assertEqual(1, len(scenario["steps"]))
+        self.assertEqual(120000, scenario["budgets"]["maxTotalElapsedMsWarn"])
+        self.assertEqual(
+            [120],
+            [step["timeoutSeconds"] for step in scenario["steps"]],
+        )
+        self.assertEqual("agent-sdk", step["kind"])
+        self.assertEqual("claude", step["agentSdk"]["client"])
+        self.assertTrue(step["agentSdk"]["includeHookEvents"])
+        self.assertEqual(["Bash"], step["agentSdk"]["allowedTools"])
+        self.assertTrue(step["agentSdk"]["requireAspBashCommands"])
+        self.assertTrue(step["agentSdk"]["useRepoClaudeSettings"])
+        self.assertEqual(9, step["agentSdk"]["maxTurns"])
+        step_ids = {step["id"] for step in scenario["steps"]}
+        self.assertEqual(1, len(scenario["evidence"]["deepQuestionCases"]))
+        for deep_question in scenario["evidence"]["deepQuestionCases"]:
+            self.assertIn("Tokio 0.6.0", deep_question["question"])
+            self.assertTrue(set(deep_question["stepIds"]).issubset(step_ids))
+            self.assertTrue(deep_question["audit"]["requiresComplexPipeFlow"])
+            self.assertTrue(deep_question["audit"]["requiresTokenCost"])
+            expected_flow = deep_question["expectedAspFlow"]
+            self.assertTrue(
+                any(
+                    command.startswith("asp rust search pipe ")
+                    for command in expected_flow["canonicalCommands"]
+                )
+            )
+            self.assertIn(
+                "asp rust search prime --view seeds .",
+                expected_flow["canonicalCommands"],
+            )
+            self.assertIn("search-prime", expected_flow["requiredStages"])
+            self.assertIn("search-pipe", expected_flow["requiredStages"])
+            self.assertIn("search-reasoning", expected_flow["requiredStages"])
+            self.assertIn("query-selector", expected_flow["requiredStages"])
+            self.assertIn("repeated-prime", expected_flow["forbiddenStages"])
+        for step in scenario["steps"]:
+            pipe_flow = step["expect"]["pipeFlow"]
+            self.assertEqual(8, pipe_flow["maxAspCommands"])
+            self.assertEqual(4, pipe_flow["maxSearchCommands"])
+            self.assertEqual(4, pipe_flow["maxQueryCommands"])
+            self.assertEqual(0, pipe_flow["maxRepeatedCommands"])
+            self.assertEqual(1, pipe_flow["maxSearchPipeCommands"])
+            self.assertEqual(1, pipe_flow["maxSearchPrimeCommands"])
+            self.assertIn("search-prime", pipe_flow["requiredStages"])
+            self.assertIn("search-pipe", pipe_flow["requiredStages"])
+            self.assertIn("search-reasoning", pipe_flow["requiredStages"])
+            self.assertTrue(pipe_flow["requireComplexPipeFlow"])
+            self.assertTrue(pipe_flow["requireTokenCost"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,82 @@
+"""Rank command tests for the packaged ASP graph turbo CLI."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+
+from unit.asp_graph_turbo_cli_support import (
+    sample_graph_turbo_request,
+    validate_shared_schema,
+)
+
+
+def test_graph_turbo_rank_compact_projects_algorithm_evidence(tmp_path) -> None:
+    packet_path = tmp_path / "graph-turbo-request.json"
+    packet_path.write_text(json.dumps(sample_graph_turbo_request()), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "asp_graph_turbo",
+            "rank",
+            str(packet_path),
+            "--format",
+            "compact",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    stdout = completed.stdout
+    assert stdout.startswith("[graph-frontier] profile=owner-query alg=typed-ppr-diverse")
+    assert "\nscores=" in stdout
+    assert "\npaths=P" in stdout
+    assert "\ncache=" in stdout
+    assert "\ntrace=" in stdout
+    assert "typed-ppr:scipy-csr" in stdout
+    assert "\nexplain=" in stdout
+    assert "\nmetrics=" in stdout
+
+
+def test_graph_turbo_request_fixture_matches_shared_schema() -> None:
+    validate_shared_schema(
+        sample_graph_turbo_request(),
+        "semantic-graph-turbo-request.v1.schema.json",
+    )
+
+
+def test_graph_turbo_rank_json_owns_trace_path_score_explanations(tmp_path) -> None:
+    packet_path = tmp_path / "graph-turbo-request.json"
+    packet_path.write_text(json.dumps(sample_graph_turbo_request()), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "asp_graph_turbo",
+            "rank",
+            str(packet_path),
+            "--format",
+            "json",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(completed.stdout)
+    validate_shared_schema(payload, "semantic-graph-turbo-result.v1.schema.json")
+
+    assert payload["schemaId"] == "agent.semantic-protocols.semantic-graph-turbo-result"
+    assert payload["packetKind"] == "graph-turbo-result"
+    assert payload["algorithm"] == "typed-ppr-diverse"
+    assert payload["scores"]
+    assert payload["typedPaths"][0]["rank"] == 1
+    assert payload["graphCache"]["backend"] == "scipy-csr"
+    assert payload["algorithmTrace"]
+    assert any(step["step"] == "typed-ppr" for step in payload["algorithmTrace"])
+    assert payload["rankExplanations"]
+    assert payload["algorithmMetrics"]["pathCount"] >= 1

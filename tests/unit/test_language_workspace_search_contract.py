@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
+from typing import Any, NoReturn
 
 
 _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT / "packages/python/src"))
 
 from tools.language_workspace_search_contract_gate import run_contract  # noqa: E402
+from tools.language_workspace_search_contract_cases import CONTRACT_CASES  # noqa: E402
+from tools.language_workspace_search_contract_runner import _run_asp  # noqa: E402
 from tools.language_workspace_search_contract_types import AspResult  # noqa: E402
 
 
@@ -95,6 +99,31 @@ def test_language_workspace_search_contract_runs_expected_matrix(tmp_path: Path)
         "languages/JuliaLangProjectHarness.jl",
         ".",
     ) in seen
+    python_case = next(case for case in CONTRACT_CASES if case.language == "python")
+    assert python_case.workspace_router_next_prime is True
+
+
+def test_language_workspace_search_contract_runner_reports_timeout(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(*_args: Any, **kwargs: Any) -> NoReturn:
+        raise subprocess.TimeoutExpired(
+            cmd="/bin/asp",
+            timeout=kwargs["timeout"],
+            output="partial stdout\n",
+            stderr=b"partial stderr\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setenv("SEMANTIC_AGENT_PROTOCOL_BIN", "/bin/asp")
+
+    result = _run_asp(["julia", "search", "workspace"], tmp_path, None)
+
+    assert result.returncode == 124
+    assert result.stdout == "partial stdout\n"
+    assert "timed out after 60s" in result.stderr
+    assert "partial stderr" in result.stderr
 
 
 def _workspace_stdout(language: str) -> str:
@@ -115,6 +144,15 @@ def _workspace_stdout(language: str) -> str:
             "O=owner:path(src/Example.jl)!owner\n"
             "G>{O:selects}\n"
             "frontier=O.owner\n"
+        )
+    if language == "python":
+        return (
+            "[search-workspace]\n"
+            "legend: ID=kind:role(value)!next\n"
+            "aliases: graph:{G=search}\n"
+            "G>{}\n"
+            "rank= frontier=\n"
+            "|next prime:.,prime:src/python_lang_parser\n"
         )
     return (
         "[search-workspace]\n"

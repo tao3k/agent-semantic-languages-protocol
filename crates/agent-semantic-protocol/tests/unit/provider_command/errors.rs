@@ -160,24 +160,20 @@ fn provider_language_facades_forward_language_like_provider_args() {
     ] {
         assert!(stdout.contains(expected), "missing {expected}: {stdout}");
     }
-    for command in ["search", "query", "check"] {
-        let output = asp_command(&root)
-            .args([command, "--language", "rust", "."])
-            .output()
-            .expect("run asp command");
-        assert!(!output.status.success());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains(&format!("asp {command} is not a public command surface")),
-            "{stderr}"
-        );
-        assert!(
-            stderr.contains(&format!(
-                "use asp <rust|typescript|python|julia|org|md> {command}"
-            )),
-            "{stderr}"
-        );
-    }
+    let output = asp_command(&root)
+        .args(["check", "--language", "rust", "."])
+        .output()
+        .expect("run asp check");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("asp check is not a public command surface"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("use asp <rust|typescript|python|julia> check"),
+        "{stderr}"
+    );
     let output = asp_command(&root)
         .args(["julia", "search", "prime", "."])
         .output()

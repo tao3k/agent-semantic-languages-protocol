@@ -8,15 +8,22 @@ from .model import AllowedTransition, Edge, GraphProfile, Node, TypedGraph
 from .policy import NODE_KIND_BONUS_BY_PROFILE
 
 _DEFAULT_FRONTIER_ACTIONS = {
+    "assert": "evidence",
+    "collection": "code",
     "dependency": "deps",
+    "evidence": "evidence",
+    "failure": "failure",
+    "field": "code",
     "finding": "owner",
     "hot": "code",
     "item": "code",
+    "key": "evidence",
     "owner": "owner",
     "query": "fzf",
     "range": "code",
     "symbol": "code",
     "test": "tests",
+    "type": "code",
     "window": "code",
 }
 
@@ -29,13 +36,31 @@ DEFAULT_PROFILES: dict[str, GraphProfile] = {
     "owner-query": GraphProfile(
         name="owner-query",
         allowed_relations=frozenset(
-            {"matches", "selects", "repairs", "contains", "calls", "covers", "covered_by"}
+            {
+                "matches",
+                "selects",
+                "repairs",
+                "contains",
+                "calls",
+                "covers",
+                "covered_by",
+                "has_type",
+                "collection_of",
+            }
         ),
         allowed_transitions=_transitions(
             (
                 ("query", "item"),
+                ("query", "field"),
+                ("query", "type"),
+                ("query", "collection"),
                 ("owner", "item"),
+                ("owner", "field"),
                 ("item", "hot"),
+                ("field", "hot"),
+                ("field", "type"),
+                ("field", "collection"),
+                ("type", "collection"),
                 ("owner", "test"),
             )
         ),
@@ -89,6 +114,38 @@ DEFAULT_PROFILES: dict[str, GraphProfile] = {
         ),
         frontier_actions=_DEFAULT_FRONTIER_ACTIONS,
         kind_bonus=NODE_KIND_BONUS_BY_PROFILE["read-frontier"],
+    ),
+    "failure-frontier": GraphProfile(
+        name="failure-frontier",
+        allowed_relations=frozenset(
+            {
+                "checks",
+                "contains",
+                "explains",
+                "fails",
+                "gates",
+                "matches",
+                "relates",
+                "selects",
+                "validates",
+            }
+        ),
+        allowed_transitions=_transitions(
+            (
+                ("failure", "assert"),
+                ("failure", "owner"),
+                ("failure", "test"),
+                ("assert", "evidence"),
+                ("assert", "hot"),
+                ("assert", "key"),
+                ("owner", "hot"),
+                ("hot", "evidence"),
+                ("hot", "key"),
+            )
+        ),
+        frontier_actions={**_DEFAULT_FRONTIER_ACTIONS, "test": "code"},
+        kind_bonus=NODE_KIND_BONUS_BY_PROFILE["failure-frontier"],
+        max_depth=3,
     ),
 }
 

@@ -182,6 +182,17 @@ pub(super) fn write_stdout_stderr_exit_provider(
     );
 }
 
+pub(super) fn write_check_failure_provider(bin_dir: &Path, binary: &str, stderr_text: &str) {
+    write_provider_script(
+        bin_dir,
+        binary,
+        &format!(
+            "#!/bin/sh\ncase \" $* \" in *\" --view \"*) printf 'unexpected --view in provider args\\n' >&2; exit 2;; esac\ncase \" $* \" in *\" --changed \"*) ;; *) printf 'missing --changed in provider args\\n' >&2; exit 2;; esac\nprintf '%s' {} >&2\nexit 1\n",
+            shell_single_quote(stderr_text)
+        ),
+    );
+}
+
 pub(super) fn write_pwd_provider(bin_dir: &Path, binary: &str) {
     write_provider_script(bin_dir, binary, "#!/bin/sh\npwd\n");
 }

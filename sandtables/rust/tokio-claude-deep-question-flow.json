@@ -19,6 +19,10 @@
     "ANTHROPIC_AUTH_TOKEN",
     "SANDTABLE_RUST_TOKIO_060_ROOT"
   ],
+  "execution": {
+    "mode": "parallel",
+    "maxConcurrentSteps": 1
+  },
   "evidence": {
     "source": "real-trigger",
     "targetLibrary": {
@@ -30,36 +34,14 @@
     },
     "intentCases": [
       {
-        "intentKind": "feature-implementation",
-        "intent": "Trace a collection-field modeling question through compact graph search before source reads",
+        "intentKind": "api-usage",
+        "intent": "Ask Claude to explain the API-facing meaning of Vec<scalar> collection fields from parser-owned evidence",
         "stepIds": [
-          "claude-tokio-vec-scalar"
+          "claude-tokio-vec-scalar-meaning"
         ],
         "queryTerms": [
           "Vec",
           "scalar",
-          "collection",
-          "fields"
-        ]
-      },
-      {
-        "intentKind": "api-usage",
-        "intent": "Ask Claude to report the API-facing meaning of Vec<scalar> collection fields from parser-owned evidence",
-        "stepIds": [
-          "claude-tokio-vec-scalar"
-        ],
-        "queryTerms": [
-          "Vec",
-          "scalar"
-        ]
-      },
-      {
-        "intentKind": "implementation-principle",
-        "intent": "Audit whether Claude uses graph/search/query commands instead of broad source reads",
-        "stepIds": [
-          "claude-tokio-vec-scalar"
-        ],
-        "queryTerms": [
           "collection",
           "fields"
         ]
@@ -68,9 +50,9 @@
     "deepQuestionCases": [
       {
         "id": "tokio-vec-scalar-collection-fields",
-        "question": "tokio 0.6.0 的 Vec<scalar> collection fields 意义是什么？它们在结构体字段建模里为什么不是普通 scalar field？",
+        "question": "In Tokio 0.6.0, what do Vec<scalar> collection fields mean, and why are they not modeled as ordinary scalar fields?",
         "stepIds": [
-          "claude-tokio-vec-scalar"
+          "claude-tokio-vec-scalar-meaning"
         ],
         "queryTerms": [
           "Vec",
@@ -85,7 +67,31 @@
           "maxRepeatedCommands": 0,
           "requiresGraphSignals": true,
           "requiresQuerySet": true,
-          "requiresHookEvents": true
+          "requiresHookEvents": true,
+          "requiresComplexPipeFlow": true,
+          "requiresTokenCost": true
+        },
+        "expectedAspFlow": {
+          "canonicalCommands": [
+            "asp rust search prime --view seeds .",
+            "asp rust search pipe 'Vec scalar collection fields' --view seeds .",
+            "asp rust search reasoning owner-query --owner <owner-path> --query 'Vec scalar collection fields' --view seeds .",
+            "asp rust query --selector <field-or-owner-selector> --code ."
+          ],
+          "requiredStages": [
+            "search-prime",
+            "search-pipe",
+            "search-reasoning",
+            "query-selector"
+          ],
+          "forbiddenStages": [
+            "repeated-prime",
+            "repeated-commands"
+          ],
+          "notes": [
+            "Prime exactly once to build the project graph context, then start search pipe and follow the emitted pipeCommands.",
+            "The owner-query command is available when the first pipe frontier does not already expose an exact selector."
+          ]
         }
       }
     ]
@@ -103,16 +109,20 @@
   },
   "steps": [
     {
-      "id": "claude-tokio-vec-scalar",
-      "kind": "agent-cli",
-      "agentCli": {
+      "id": "claude-tokio-vec-scalar-meaning",
+      "kind": "agent-sdk",
+      "agentSdk": {
         "client": "claude",
-        "binary": "claude",
-        "prompt": "在当前 tokio 0.6.0 工作目录中回答：tokio 0.6.0 的 Vec<scalar> collection fields 意义是什么？请先用 ASP Rust compact graph/search/query 定位证据，避免宽泛阅读全文；回答末尾列出实际使用过的 asp search/query/direct-read 命令。",
+        "prompt": "In tokio 0.6.0, what do Vec<scalar> collection fields mean, and why are they not modeled as ordinary scalar fields? Use this repository's SKILL.md and ASP search/query workflow. Start with asp rust search prime --view seeds . once, then asp rust search pipe 'Vec scalar collection fields' --view seeds ., follow its pipeCommands through reasoning, then query selectors before any exact code read. List the asp commands you actually ran at the end.",
         "outputFormat": "stream-json",
-        "inputFormat": "text",
         "includeHookEvents": true,
         "verbose": true,
+        "allowedTools": [
+          "Bash"
+        ],
+        "requireAspBashCommands": true,
+        "useRepoClaudeSettings": true,
+        "maxTurns": 9,
         "env": {
           "ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}"
         },
@@ -122,7 +132,28 @@
       },
       "timeoutSeconds": 120,
       "expect": {
-        "exitCode": 0,
+        "allowNonZeroExit": true,
+        "pipeFlow": {
+          "maxAspCommands": 8,
+          "maxSearchCommands": 4,
+          "maxQueryCommands": 4,
+          "maxRepeatedCommands": 0,
+          "maxSearchPipeCommands": 1,
+          "maxSearchPrimeCommands": 1,
+          "minQuerySelectorCommands": 1,
+          "requireComplexPipeFlow": true,
+          "requireTokenCost": true,
+          "requiredStages": [
+            "search-prime",
+            "search-pipe",
+            "search-reasoning",
+            "query-selector"
+          ],
+          "forbiddenStages": [
+            "repeated-prime",
+            "repeated-commands"
+          ]
+        },
         "stdoutContains": [
           "Vec",
           "scalar"

@@ -38,6 +38,7 @@ class StepResult:
     stderr_bytes: int
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    observations: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -110,7 +111,9 @@ class CoverageReport:
         missing: dict[str, list[str]] = {}
         for language, expected in self.language_expected_surfaces.items():
             covered = self.covered_surfaces_for_language(language)
-            language_missing = [surface for surface in expected if surface not in covered]
+            language_missing = [
+                surface for surface in expected if surface not in covered
+            ]
             if language_missing:
                 missing[language] = language_missing
         return missing

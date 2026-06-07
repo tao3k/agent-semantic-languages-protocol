@@ -14,6 +14,8 @@ use agent_semantic_hook::{
 use crate::receipt::NativeProvenance;
 use crate::types::{LanguageId, ProviderId};
 
+/// Explicit activation.json path used when a protocol facade already resolved
+/// the hook installation root separately from the provider execution root.
 pub const ASP_PROVIDER_ACTIVATION_PATH_ENV: &str = "ASP_PROVIDER_ACTIVATION_PATH";
 
 /// Provider resolved from the project hook activation.

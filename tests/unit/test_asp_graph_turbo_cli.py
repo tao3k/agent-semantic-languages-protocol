@@ -5,8 +5,21 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tomllib
+from pathlib import Path
 
 from asp_graph_turbo.graph_turbo_cli import main
+
+
+def test_graph_turbo_package_registers_canonical_console_script() -> None:
+    pyproject = (
+        Path(__file__).resolve().parents[2]
+        / "packages/python/asp_graph_turbo/pyproject.toml"
+    )
+    scripts = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["scripts"]
+
+    assert scripts["asp-graph-turbo"] == "asp_graph_turbo.graph_turbo_cli:main"
+    assert "graph-turbo" not in scripts
 
 
 def test_graph_turbo_dispatcher_help_lists_subcommands(capsys) -> None:
@@ -27,19 +40,17 @@ def test_graph_turbo_dispatcher_routes_metrics_command(capsys) -> None:
             [
                 "metrics",
                 "--scenario",
-                "rust-fzf-request-rank",
+                "rust-fzf-default-rank",
                 "--measured-at",
                 "2026-06-07T00:50:24Z",
                 "--profile",
                 "owner-query",
                 "--command",
-                "asp rust search fzf --view graph-turbo-request",
-                "--command",
-                "graph-turbo rank --format compact",
+                "asp rust search fzf graph_turbo owner tests .",
                 "--command-count",
-                "2",
+                "1",
                 "--packet-bytes",
-                "22359",
+                "0",
                 "--result-bytes",
                 "1181",
                 "--latency-ms",
@@ -58,7 +69,8 @@ def test_graph_turbo_dispatcher_routes_metrics_command(capsys) -> None:
     captured = capsys.readouterr()
 
     assert captured.out.startswith("[graph-turbo-real-trigger]")
-    assert "packetBytes=22359" in captured.out
+    assert "commandCount=1" in captured.out
+    assert "packetBytes=0" in captured.out
 
 
 def test_graph_turbo_module_entrypoint_dispatches_timeline_json(tmp_path) -> None:

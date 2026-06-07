@@ -116,6 +116,41 @@ class SemanticSandtableScenarioSchemaTests(unittest.TestCase):
                         },
                         "requiredEnv": ["ANTHROPIC_AUTH_TOKEN"],
                     },
+                    "expect": {"allowNonZeroExit": True},
+                }
+            ],
+        }
+
+        self.assertEqual([], self.validation_errors(scenario))
+
+    def test_agent_sdk_claude_step_is_valid(self) -> None:
+        scenario: dict[str, object] = {
+            "id": "root.claude-sdk",
+            "language": "root",
+            "workdir": ".",
+            "skipUnlessEnv": ["ASP_LIVE_CLAUDE_CLI", "ANTHROPIC_AUTH_TOKEN"],
+            "execution": {"mode": "parallel", "maxConcurrentSteps": 3},
+            "steps": [
+                {
+                    "id": "claude-sdk",
+                    "kind": "agent-sdk",
+                    "agentSdk": {
+                        "client": "claude",
+                        "prompt": "Explain ASP hook install",
+                        "outputFormat": "stream-json",
+                        "includePartialMessages": True,
+                        "includeHookEvents": True,
+                        "verbose": True,
+                        "allowedTools": ["Bash"],
+                        "requireAspBashCommands": True,
+                        "useRepoClaudeSettings": True,
+                        "maxTurns": 9,
+                        "model": "sonnet",
+                        "env": {
+                            "ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}",
+                        },
+                        "requiredEnv": ["ANTHROPIC_AUTH_TOKEN"],
+                    },
                 }
             ],
         }
@@ -157,6 +192,36 @@ class SemanticSandtableScenarioSchemaTests(unittest.TestCase):
                     "agentCli": {
                         "client": "claude",
                         "binary": "claude",
+                        "prompt": "Explain ASP hook install",
+                        "outputFormat": "text",
+                    },
+                }
+            ],
+        }
+
+        self.assertTrue(
+            any(
+                "{'id': 'ambiguous'" in error or "is valid under each" in error
+                for error in self.validation_errors(scenario)
+            )
+        )
+
+    def test_step_rejects_agent_cli_and_agent_sdk_together(self) -> None:
+        scenario: dict[str, object] = {
+            "id": "root.claude-sdk",
+            "language": "root",
+            "workdir": ".",
+            "steps": [
+                {
+                    "id": "ambiguous",
+                    "agentCli": {
+                        "client": "claude",
+                        "binary": "claude",
+                        "prompt": "Explain ASP hook install",
+                        "outputFormat": "text",
+                    },
+                    "agentSdk": {
+                        "client": "claude",
                         "prompt": "Explain ASP hook install",
                         "outputFormat": "text",
                     },
@@ -220,6 +285,7 @@ class SemanticSandtableScenarioSchemaTests(unittest.TestCase):
             {schema_path: root_schema for schema_path in schema_copies},
             {schema_path: _load_json(schema_path) for schema_path in schema_copies},
         )
+
 
 if __name__ == "__main__":
     unittest.main()

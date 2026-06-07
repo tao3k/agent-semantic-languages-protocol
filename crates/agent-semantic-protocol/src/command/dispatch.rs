@@ -7,6 +7,7 @@ use super::graph::run_graph_command;
 use super::healthcheck::run_healthcheck_command;
 use super::hook::run_hook_command;
 use super::provider::run_language_command;
+use super::root_language_facade::run_root_language_facade;
 use super::source_access::run_source_access_command;
 
 pub(crate) fn run_protocol_command(args: Vec<String>) -> Result<(), String> {
@@ -17,9 +18,11 @@ pub(crate) fn run_protocol_command(args: Vec<String>) -> Result<(), String> {
         Some("search") if args.get(1).is_some_and(|arg| arg == "history") => {
             run_client_command(args)
         }
-        Some(command @ ("search" | "query" | "check")) => Err(format!(
-            "asp {command} is not a public command surface; use asp <rust|typescript|python|julia|org|md> {command} ..."
-        )),
+        Some(command @ ("search" | "query")) => run_root_language_facade(command, &args[1..]),
+        Some("check") => Err(
+            "asp check is not a public command surface; use asp <rust|typescript|python|julia> check ..."
+                .to_string(),
+        ),
         Some("hook") => run_hook_command(&args[1..]),
         Some("healthcheck") => run_healthcheck_command(&args[1..]),
         Some("source-access") => run_source_access_command(&args[1..]),
@@ -32,7 +35,7 @@ pub(crate) fn run_protocol_command(args: Vec<String>) -> Result<(), String> {
 }
 
 fn usage() -> String {
-    "usage: asp <guide|providers|tools|wrap|cache|cloud|hook|healthcheck|source-access|ast-patch|graph|rust|typescript|python|julia|org|md> ...".to_string()
+    "usage: asp <guide|providers|tools|wrap|cache|cloud|hook|healthcheck|source-access|ast-patch|graph|search|query|rust|typescript|python|julia|org|md> ...".to_string()
 }
 
 fn run_client_command(args: Vec<String>) -> Result<(), String> {

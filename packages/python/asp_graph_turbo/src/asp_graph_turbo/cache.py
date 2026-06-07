@@ -8,6 +8,11 @@ from collections import OrderedDict
 from collections.abc import Mapping
 
 from .backend import SparseGraphBackend, build_sparse_backend
+from .cache_store import (
+    _load_persistent_backend,
+    _persistent_entry_count,
+    _store_persistent_backend,
+)
 from .model import GraphCache, GraphProfile, TypedGraph
 
 _MAX_CACHE_ENTRIES = 16
@@ -84,9 +89,18 @@ def cached_sparse_backend(
     if cached is not None:
         _BACKEND_CACHE.move_to_end(fingerprint)
         return cached, GraphCache(fingerprint, "hit", "scipy-csr", len(_BACKEND_CACHE))
+    persistent = _load_persistent_backend(fingerprint)
+    if persistent is not None:
+        _remember_backend(fingerprint, persistent)
+        return persistent, GraphCache(fingerprint, "hit", "scipy-csr", _persistent_entry_count())
     backend = build_sparse_backend(graph, profile)
+    _remember_backend(fingerprint, backend)
+    _store_persistent_backend(fingerprint, backend)
+    return backend, GraphCache(fingerprint, "miss", "scipy-csr", len(_BACKEND_CACHE))
+
+
+def _remember_backend(fingerprint: str, backend: SparseGraphBackend) -> None:
     _BACKEND_CACHE[fingerprint] = backend
     _BACKEND_CACHE.move_to_end(fingerprint)
     while len(_BACKEND_CACHE) > _MAX_CACHE_ENTRIES:
         _BACKEND_CACHE.popitem(last=False)
-    return backend, GraphCache(fingerprint, "miss", "scipy-csr", len(_BACKEND_CACHE))

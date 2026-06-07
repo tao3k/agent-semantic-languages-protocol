@@ -1,12 +1,18 @@
 //! Provider method execution for the local client backend.
 
+use std::collections::BTreeMap;
+use std::env;
+use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use agent_semantic_client_core::{
     ByteCount, CacheStatus, ClientMethod, ClientRequest, LanguageId, ProviderRegistrySnapshot,
 };
 use agent_semantic_client_local_cli::{LocalNativeCliBackend, LocalNativeOutput};
+use agent_semantic_provider_transport::{
+    OutputMode, ProviderProcessLimits, ProviderProcessSpec, StdinMode, run_provider_process,
+};
 use bytes::Bytes;
 
 use crate::cache_cli::{
@@ -22,7 +28,10 @@ pub(crate) fn run_provider_method(
     language_id: LanguageId,
 ) -> Result<(), String> {
     let snapshot = ProviderRegistrySnapshot::load(&parsed.activation_root)?;
+    let check_failure_frontier_view =
+        method == ClientMethod::Check && has_seed_view(&parsed.forwarded_args);
     let forwarded_args = provider_forwarded_args(&method, parsed.forwarded_args);
+    let request_language_id = language_id.clone();
     let mut request = ClientRequest::new(method, parsed.project_root.clone())
         .with_forwarded_args(forwarded_args)
         .with_language(language_id);
@@ -112,6 +121,27 @@ pub(crate) fn run_provider_method(
         output
     };
     crate::syntax_receipt::apply_syntax_query_receipt_metadata(&mut output.receipt, &output.stdout);
+    if request.method == ClientMethod::Check {
+        persist_last_check_output(
+            &parsed.project_root,
+            output.status_code,
+            &output.stdout,
+            &output.stderr,
+        )?;
+        if output.status_code != 0 && check_failure_frontier_view {
+            let frontier =
+                render_last_check_failure_frontier(&parsed.project_root, &request_language_id)?;
+            io::stdout()
+                .write_all(frontier.as_ref())
+                .map_err(|error| format!("failed to write failure frontier stdout: {error}"))?;
+            if parsed.receipt_json {
+                let receipt = serde_json::to_string(&output.receipt)
+                    .map_err(|error| format!("failed to serialize receipt JSON: {error}"))?;
+                eprintln!("{receipt}");
+            }
+            return Ok(());
+        }
+    }
     if !parsed.receipt_json {
         io::stderr()
             .write_all(&output.stderr)
@@ -129,6 +159,40 @@ pub(crate) fn run_provider_method(
         std::process::exit(output.status_code);
     }
     Ok(())
+}
+
+pub(crate) fn persist_last_check_output(
+    project_root: &Path,
+    status_code: i32,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Result<(), String> {
+    let path = last_check_output_path(project_root);
+    if status_code == 0 {
+        let _ = fs::remove_file(path);
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
+    }
+    let mut transcript = Vec::new();
+    transcript.extend_from_slice(stdout);
+    if !stdout.is_empty() && !stdout.ends_with(b"\n") {
+        transcript.push(b'\n');
+    }
+    transcript.extend_from_slice(stderr);
+    fs::write(&path, transcript)
+        .map_err(|error| format!("failed to write {}: {error}", path.display()))
+}
+
+pub(crate) fn last_check_output_path(project_root: &Path) -> PathBuf {
+    let cache_home = env::var_os("PRJ_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| project_root.join(".cache"));
+    cache_home
+        .join("agent-semantic-protocol")
+        .join("last-check-output.txt")
 }
 
 fn is_stdin_candidate_ingest_request(request: &ClientRequest) -> bool {
@@ -165,6 +229,9 @@ rank= frontier=\n\
 }
 
 fn provider_forwarded_args(method: &ClientMethod, args: Vec<String>) -> Vec<String> {
+    if method == &ClientMethod::Check {
+        return normalize_check_forwarded_args(args);
+    }
     if method != &ClientMethod::Query || !args.iter().any(|arg| arg == "--treesitter-query") {
         return args;
     }
@@ -178,6 +245,72 @@ fn provider_forwarded_args(method: &ClientMethod, args: Vec<String>) -> Vec<Stri
             }
         })
         .collect()
+}
+
+fn normalize_check_forwarded_args(args: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "changed" => {
+                normalized.push("--changed".to_string());
+                index += 1;
+            }
+            "--view" if args.get(index + 1).is_some_and(|value| value == "seeds") => {
+                index += 2;
+            }
+            "--view=seeds" => {
+                index += 1;
+            }
+            _ => {
+                normalized.push(args[index].clone());
+                index += 1;
+            }
+        }
+    }
+    normalized
+}
+
+fn render_last_check_failure_frontier(
+    project_root: &Path,
+    language_id: &LanguageId,
+) -> Result<Vec<u8>, String> {
+    let program = env::var_os("SEMANTIC_AGENT_PROTOCOL_BIN")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("asp"))
+        .to_string_lossy()
+        .into_owned();
+    let output = run_provider_process(ProviderProcessSpec {
+        program,
+        args: vec![
+            language_id.to_string(),
+            "search".to_string(),
+            "failure".to_string(),
+            "--from-last-check".to_string(),
+            "--view".to_string(),
+            "seeds".to_string(),
+            ".".to_string(),
+        ],
+        cwd: project_root.to_path_buf(),
+        env: BTreeMap::new(),
+        stdin: StdinMode::Closed,
+        stdout: OutputMode::Capture,
+        stderr: OutputMode::Capture,
+        limits: ProviderProcessLimits::default(),
+    })
+    .map_err(|error| format!("failed to render check failure frontier: {error}"))?;
+    if !output.stderr.is_empty() {
+        io::stderr()
+            .write_all(output.stderr.as_ref())
+            .map_err(|error| format!("failed to write failure frontier stderr: {error}"))?;
+    }
+    if !output.status.success() {
+        return Err(format!(
+            "search failure frontier exited with status {}",
+            output.status.code().unwrap_or(1)
+        ));
+    }
+    Ok(output.stdout.to_vec())
 }
 
 fn arg_is_option_value(args: &[String], index: usize) -> bool {

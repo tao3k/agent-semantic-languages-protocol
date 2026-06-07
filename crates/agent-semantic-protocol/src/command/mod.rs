@@ -13,11 +13,16 @@ mod provider;
 mod provider_process;
 mod provider_roots;
 mod query_direct_read;
+mod root_language_facade;
 mod search_config;
+mod search_failure_render;
 mod search_pipe;
 mod search_pipe_candidates;
+mod search_pipe_dependency_facts;
 mod search_pipe_graph_turbo;
+mod search_pipe_plan;
 mod search_pipe_render;
+mod search_pipe_semantic_facts;
 mod search_suggest;
 mod source_access;
 

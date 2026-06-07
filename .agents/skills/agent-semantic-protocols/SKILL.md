@@ -31,7 +31,11 @@ Detected from provider binaries plus `asp.toml`; only activated languages are li
 
 Start with `asp <language> guide .` when a task needs the provider-owned tool
 map. Use `asp providers` or `asp doctor` when the active language or provider
-binary is unclear.
+binary is unclear. The root `asp search` and `asp query` forms are thin routers:
+use `--language <id>` when the project root is ambiguous, or pass an
+owner/selector path or project root that matches one active provider's
+activation coverage so the root facade can route to the same
+`asp <language> search|query` boundary.
 
 Document languages use the same facade shape but are not policy harnesses:
 `asp org <guide|search|query> ...` and
@@ -69,27 +73,70 @@ are intentionally unsupported for document files.
   shell command.
 - `asp hook install --client codex .` installs hooks, provider activation, and
   the rendered skill for the detected providers.
-- Search is discovery and should not inline source code.
+- Search and non-code query are discovery surfaces and should not inline source
+  code.
+- Direct source reads are last-mile transport for exact, source-preserved text
+  after a parser-owned frontier has selected the locator. Do not use
+  `direct-source-read` for discovery, owner mapping, import scanning, symbol
+  search, or "show me this file" habits.
 - Query with `--code` is for exact or unique code extraction.
-- Tree-sitter query is the syntax base; native parser facts enrich the
-  capture/frontier.
+- Tree-sitter-compatible query is the syntax base; native parser facts enrich
+  the capture/frontier. When syntax shape matters, use the tree-sitter guide
+  and locator query before falling back to source-preserved direct read.
 - Hook config may disable provider `ast-patch`; when disabled, patch with
   `apply_patch` after exact locator/code evidence.
 
 ## Complex Flows
 
+### Command Selection Ladder
+
+For code tasks, keep the command order structural-first:
+
+```sh
+asp search --language <language> prime --view seeds .
+asp query --language <language> --treesitter-query '<pattern>' .
+asp <language> search prime --view seeds .
+asp <language> search pipe '<question-or-feature-term>' --view seeds .
+asp <language> search fzf '<term-or-error>' owner tests --view seeds .
+asp <language> search owner <owner-path> items --query '<symbol-or-a|b|c>' .
+asp <language> query <owner-path> --term '<candidate>' --names-only .
+asp <language> query guide treesitter .
+asp <language> query --treesitter-query '<pattern>' .
+asp <language> query --selector <exact-path-or-range> --treesitter-query '<narrow-pattern>' --code .
+```
+
+For a concrete deep question, bug, feature, or API-usage task, use
+`search prime` once to establish the project graph context, then use
+`search pipe` for the concrete term and follow its `pipeCommands`/`avoid`
+lines into reasoning profiles and selector queries. Use owner-local item
+queries and tree-sitter locator output to choose an exact selector. Only after
+that selector is known should stdout become source text through `--code`.
+
 ### Hook Recovery
 
 When a hook blocks a raw source read or broad raw search, follow the recovery
 route printed in the hook message. Do not retry `Read`, `cat`, `sed`, `rg`, or
-source-dump commands on the same matched source.
+source-dump commands on the same matched source. Treat any
+`direct-source-read` route as a bounded fallback, not the default next step.
+First try the structural recovery path that matches the blocked intent:
 
 ```sh
-asp <language> query --from-hook direct-source-read --selector <path-or-range> --code .
-asp <language> query --from-hook direct-source-read --selector <glob-or-path> --term <term> --surface owners,tests --view seeds .
+asp <language> search fzf '<blocked-term-or-symbol>' owner tests --view seeds .
+asp <language> search owner <owner-path> items --query '<symbol-or-a|b|c>' .
+asp <language> query <owner-path> --term '<candidate>' --names-only .
+asp <language> query --treesitter-query '<pattern>' .
+asp <language> query --selector <exact-path-or-range> --treesitter-query '<narrow-pattern>' --code .
+asp <language> query --from-hook direct-source-read --selector <exact-path-or-range> --code .
 asp org query --from-hook direct-source-read --selector <path-or-range> .
 asp md query --from-hook direct-source-read --selector <path-or-range> .
 ```
+
+Use `direct-source-read --code` only when the exact selector is already known
+and source preservation matters, such as a small file-header import window,
+staged/index/head source-version inspection, or a provider-selected read-plan
+frontier that cannot be expressed as a syntax query. If the selector is a whole
+file, glob, package root, or broad line range, ask the provider for owner items,
+tree-sitter locator output, or a read-plan frontier instead of printing code.
 
 For document languages, do not add `--content` to `direct-source-read`. Use
 `query --content` only as a filtered element-content projection with
@@ -99,19 +146,69 @@ after an exact selector is known and source-preserved text is required.
 ### Search Before Code
 
 ```sh
+asp search --language <language> prime --view seeds .
 asp <language> search prime --view seeds .
+asp <language> search pipe '<question-or-feature-term>' --view seeds .
 asp <language> search fzf <term> owner tests --view seeds .
 asp <language> search owner <owner-path> items --query '<symbol-or-a|b|c>' .
 asp <language> query <owner-path> --term <candidate> --names-only .
+asp <language> query --treesitter-query '<pattern>' .
 asp <language> query <owner-path> --term <candidate> --code .
 ```
 
 Use `--names-only` for broad owner-local prefixes before requesting code.
-Within one task session, do not repeat `asp <language> search prime --view seeds .`
-for the same language/root after a fresh prime frontier is already available.
-Reuse that prime frontier and move to owner, fzf, query, read-plan, or
-query-code actions unless the project root, language provider state, or search
-scope has changed.
+Within one task session, do not repeat `asp <language> search pipe ...` for the
+same concrete term or `asp <language> search prime --view seeds .` for the same
+language/root after a fresh frontier is already available. Reuse that frontier
+and move to the emitted owner, fzf, query, read-plan, or query-code actions
+unless the project root, language provider state, or search scope has changed.
+
+### Reasoning Search Profiles
+
+Use `asp <language> search guide .` as the source of truth for current reasoning
+profiles. Its `command=` rows are executable shapes. Do not reconstruct
+reasoning commands from `entries=` text as positional arguments.
+
+When `search prime` or `search fzf` exposes a reasoning frontier, run the
+matching profile with explicit flags before falling back to broad query or
+direct-source-read:
+
+```sh
+asp <language> search reasoning owner-query --owner <owner-path> --query '<term>' --view seeds .
+asp <language> search reasoning owner-tests --owner <owner-path> --view seeds .
+asp <language> search reasoning query-deps --query '<term>' --dependency '<pkg>' --view seeds .
+asp <language> search reasoning finding-frontier --query '<finding-term>' --owner <owner-path> --view seeds .
+asp <language> search reasoning feature-cfg --query '<feature-name>' --view seeds .
+```
+
+Invalid shapes such as `search reasoning owner-query <path> <term>` or
+`search reasoning owner-query --owner <path>` waste turns. If the required flags
+are unclear, ask `search guide` for the profile command instead of guessing.
+
+### Failure Frontier Search
+
+When a check or test failure has already produced a compact failure transcript,
+project it into hot selectors before reading code:
+
+```sh
+asp <language> check changed --view seeds .
+asp <language> check --changed --view seeds .
+asp <language> search failure --message '<failure text>' --view seeds .
+asp <language> search failure --from-last-check --view seeds .
+asp <language> search failure --message '<failure text>' --view graph-turbo-request .
+asp <language> query --selector <hot-block-selector> --code .
+```
+
+`search failure` stdout is a search surface, not a source surface. It should
+start with `[search-failure]` and return failure facts, candidate owners, hot
+blocks, query profiles, frontier actions, and `avoid` guidance. Follow only the
+hot block selectors in `frontierActions` for code reads. `check ... --view
+seeds` is the same failure-frontier projection after a failing provider check;
+it strips ASP projection flags before provider execution and then renders the
+last-check transcript through `asp-graph-turbo` with `profile=failure-frontier`.
+Use `--view graph-turbo-request` only to debug the typed request packet sent to
+the ranking engine. Do not recover a failure by manually scanning repeated
+100-line windows.
 
 ### Document Element Search
 
@@ -126,12 +223,14 @@ asp md query guide .
 
 ```sh
 asp org search prime --view seeds .
+asp org search toc .
 asp org query --term <heading-property-task-or-table-term> --view metadata .
 asp org query --term <heading-property-task-or-table-term> --content .
 asp org query --kind <element-kind> --view metadata .
 asp org query --field <key=value> --view metadata .
 asp org query --selector <path:start-end> --view metadata .
 asp md search prime --view seeds .
+asp md search toc .
 asp md query --term <heading-paragraph-task-link-or-table-term> --view metadata .
 asp md query --term <heading-paragraph-task-link-or-table-term> --content .
 asp md query --kind paragraph --view metadata .
@@ -142,6 +241,9 @@ asp md query --selector <path:start-end> --view metadata .
 Document search and query return parser-owned element facts: headings,
 paragraphs,
 properties, planning rows, tables, blocks, lists, tasks, links, and images.
+Use `search toc` as the repository documentation entrypoint: it returns only
+document heading outlines grouped by file, with `level`, `title`, range
+locators, and selector-query next actions.
 Use selector query for the element frontier inside a known range. Use
 `--content` when stdout should be only the matched element content. Use
 `direct-source-read` only when source-preserved document text is required after
@@ -186,9 +288,12 @@ asp <language> query --treesitter-query '<pattern>' .
 asp <language> query --selector <path-or-range> --treesitter-query '<narrow-pattern>' --code .
 ```
 
-Without `--code`, tree-sitter query output should be a capture/frontier locator.
+Without `--code`, tree-sitter query output is a capture/frontier locator. Use
+it to pick the owner, symbol, import, call, attribute, decorator, or test window.
 With `--code`, stdout should be pure source for an exact selector or unique
-match.
+match. If the provider cannot compile the pattern or reports unsupported
+captures, record that reason and fall back to owner items or a bounded
+direct-source-read instead of silently widening the read.
 
 ### Verification
 

@@ -39,7 +39,8 @@
         "query-deps",
         "owner-tests",
         "prime",
-        "read-frontier"
+        "read-frontier",
+        "failure-frontier"
       ]
     },
     "algorithm": {
@@ -176,6 +177,18 @@
         "symbol": {
           "type": "string",
           "minLength": 1
+        },
+        "matchText": {
+          "type": "string",
+          "description": "Provider-owned candidate text used by graph-turbo for query-token node weighting. Compact renderers must not print this as source code."
+        },
+        "syntaxQuery": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Optional parser-owned syntax query used to locate the candidate symbol."
         },
         "name": {
           "type": "string",

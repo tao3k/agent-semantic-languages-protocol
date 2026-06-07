@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -195,6 +196,36 @@ fn sample_owner_items_packet() -> serde_json::Value {
     })
 }
 
+fn sample_graph_turbo_request_packet() -> serde_json::Value {
+    json!({
+        "schemaId": "agent.semantic-protocols.semantic-graph-turbo-request",
+        "schemaVersion": "1",
+        "protocolId": "agent.semantic-protocols.semantic-language",
+        "protocolVersion": "1",
+        "packetKind": "graph-turbo-request",
+        "profile": "owner-query",
+        "algorithm": "typed-ppr-diverse",
+        "seedIds": ["query:parser"],
+        "budget": 4,
+        "kindBudgets": {"owner": 1, "item": 2, "test": 1},
+        "windowMerge": {"enabled": true, "maxGapLines": 8},
+        "pathBudget": 4,
+        "pathMaxHops": 4,
+        "cache": {"enabled": true},
+        "graph": {
+            "nodes": [
+                {"id": "query:parser", "kind": "query", "role": "term", "value": "parser", "action": "fzf"},
+                {"id": "owner:cli", "kind": "owner", "role": "path", "value": "src/cli.rs", "action": "owner"},
+                {"id": "item:render", "kind": "item", "role": "symbol", "value": "render_graph", "action": "syntax"}
+            ],
+            "edges": [
+                {"source": "query:parser", "target": "owner:cli", "relation": "matches"},
+                {"source": "owner:cli", "target": "item:render", "relation": "contains"}
+            ]
+        }
+    })
+}
+
 #[test]
 fn shared_renderer_projects_search_packet_into_compact_graph() {
     let output = render_search_graph_packet(&sample_packet(), GraphRenderOptions::default());
@@ -235,14 +266,15 @@ fn shared_renderer_projects_owner_items_into_query_item_hot_frontier() {
         "Q=query:term(tool_action|structured|payload|command_intent|from_payload|from_action)!query"
     ));
     assert!(output.contains(
-        "I=item:symbol(payload_string)@crates/agent-semantic-hook/src/tool_action.rs:212:214!code"
+        "I=item:symbol(payload_string)@crates/agent-semantic-hook/src/tool_action.rs:212:214!syntax"
     ));
-    assert!(output.contains("I2=item:symbol(collect_tool_actions)@crates/agent-semantic-hook/src/tool_action.rs:216:419!outline"));
-    assert!(output.contains("H=hot:symbol(command_source_paths)@crates/agent-semantic-hook/src/tool_action.rs:397:401!code"));
+    assert!(output.contains("I2=item:symbol(collect_tool_actions)@crates/agent-semantic-hook/src/tool_action.rs:216:419!syntax"));
+    assert!(output.contains("H=hot:symbol(command_source_paths)@crates/agent-semantic-hook/src/tool_action.rs:397:401!syntax"));
+    assert!(output.contains("syntax I selector=crates/agent-semantic-hook/src/tool_action.rs:212:214 pattern='((function_item name: (_) @function.name) (#eq? @function.name \"payload_string\"))'"));
     assert!(output.contains("G>{O:selects,Q:matches}"));
     assert!(output.contains("O>{I:contains,I2:contains,H:contains,H2:contains}"));
     assert!(output.contains("Q>{I:matches,I2:matches,H:revise,H2:revise}"));
-    assert!(output.contains("rank=H,H2,I,I2,O frontier=H.code,H2.code,I.code,I2.outline"));
+    assert!(output.contains("rank=H,H2,I,I2,O frontier=H.syntax,H2.syntax,I.syntax,I2.syntax"));
     assert!(output.contains(
         "revise=command_intent->command_source_paths,from_action->nested_action_from_tool_use"
     ));
@@ -305,6 +337,72 @@ fn graph_render_cli_reads_packet_file() {
 }
 
 #[test]
+fn graph_render_cli_uses_asp_graph_turbo_for_turbo_request_packet() {
+    let packet_path = temp_packet_path();
+    let args_path = temp_packet_path();
+    let stdin_path = temp_packet_path();
+    let bin_dir = std::env::temp_dir().join(format!(
+        "agent-semantic-protocol-graph-bin-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&bin_dir);
+    fs::create_dir_all(&bin_dir).unwrap();
+    let graph_turbo = bin_dir.join("asp-graph-turbo");
+    fs::write(
+        &graph_turbo,
+        "#!/bin/sh\n\
+         printf '%s\n' \"$@\" > \"$ASP_GRAPH_TURBO_ARGS_OUT\"\n\
+         cat > \"$ASP_GRAPH_TURBO_STDIN_OUT\"\n\
+         printf '[graph-frontier] external=true\\n'\n",
+    )
+    .unwrap();
+    make_executable(&graph_turbo);
+    fs::write(
+        &packet_path,
+        sample_graph_turbo_request_packet().to_string(),
+    )
+    .unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_asp"))
+        .env("PATH", prepend_path(&bin_dir))
+        .env("ASP_GRAPH_TURBO_ARGS_OUT", &args_path)
+        .env("ASP_GRAPH_TURBO_STDIN_OUT", &stdin_path)
+        .args([
+            "graph",
+            "render",
+            "--packet",
+            packet_path.to_str().unwrap(),
+            "--view",
+            "seeds",
+        ])
+        .output()
+        .unwrap();
+
+    fs::remove_file(&packet_path).unwrap();
+    let _ = fs::remove_dir_all(&bin_dir);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "[graph-frontier] external=true\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&args_path).unwrap(),
+        "rank\n-\n--format\ncompact\n"
+    );
+    assert!(
+        fs::read_to_string(&stdin_path)
+            .unwrap()
+            .contains("\"packetKind\":\"graph-turbo-request\"")
+    );
+    fs::remove_file(&args_path).unwrap();
+    fs::remove_file(&stdin_path).unwrap();
+}
+
+#[test]
 fn graph_render_cli_rejects_non_seed_view() {
     let packet_path = temp_packet_path();
     fs::write(&packet_path, sample_packet().to_string()).unwrap();
@@ -326,6 +424,26 @@ fn graph_render_cli_rejects_non_seed_view() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("supports only --view seeds"));
 }
+
+fn prepend_path(path_prefix: &Path) -> std::ffi::OsString {
+    let mut paths = vec![path_prefix.to_path_buf()];
+    if let Some(path) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&path));
+    }
+    std::env::join_paths(paths).expect("join PATH")
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut permissions = fs::metadata(path).expect("script metadata").permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(path, permissions).expect("chmod script");
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) {}
 
 fn temp_packet_path() -> std::path::PathBuf {
     static TEMP_PACKET_COUNTER: AtomicU64 = AtomicU64::new(0);

@@ -622,31 +622,84 @@ to the shared renderer without fallback.
 =asp-graph-turbo= is a typed ranking engine for parser-owned graph facts, not a
 second prompt renderer.  Its durable output is
 =semantic-graph-turbo-result.v1=, which records the selected profile, seed
-nodes, ranked node ids, ranking budget, frontier actions, relation edges, and
-scores.  When graph turbo emits compact text, it must use the same
-=[graph-frontier]= family owned by this RFC: header, legend, =aliases=, node
-aliases, edge lines, =rank=, =frontier=, =scores=, =profiles=, =omit=, and
-=avoid=.  It must not invent a second =[graph-turbo]= prompt format.  Provider
-search output must continue to render through the shared
-=semantic-compact-graph-render.v1= template.
+nodes, ranked node ids, ranking budget, frontier actions, relation edges,
+scores, typed paths, cache trace, algorithm trace, rank explanations, and
+algorithm metrics.  When graph turbo emits compact text, it must use the same
+compact graph grammar owned by this RFC: header, legend, =aliases=, node
+aliases, edge lines, =rank=, =frontier=, profile-specific projection lines,
+=scores=, =paths=, =cache=, =trace=, =explain=, =metrics=, =profiles=,
+=omit=, and =avoid=.  ASP-owned fast-search adapters may append query-pipeline
+projection lines after the graph frontier, such as =pipePlan=, =pipeExpr=,
+=pipeProjections=, =pipeStages=, =frontierActions=, =pipeCommands=, and
+=pipeChoice=, and =stop=.  Those lines describe the ASP pipe expression and
+selected agent-facing projections; they must not be treated as graph-turbo ranking facts.  The
+default search frontier header is
+=[graph-frontier]=.  A profile-specific surface such as =failure-frontier= may
+use a narrower header such as =[search-failure]= only when the rest of the
+grammar and =semantic-graph-turbo-result.v1= evidence remain graph-turbo
+owned.  It must not invent a second =[graph-turbo]= prompt format.  Ordinary
+non-turbo =semantic-search-packet= fallback output may continue to render
+through the shared =semantic-compact-graph-render.v1= template, but
+ranking/profile/path/score/trace projection for graph-turbo requests is owned
+by =asp-graph-turbo=.
 
 Graph turbo must not infer missing relation labels, node roles, or frontier
 actions from prose.  Any prompt-visible rank or action produced by the turbo
 engine must be visible in the result packet before another renderer serializes
 it for an agent.
 
+The =asp <language> search failure= surface is a graph-turbo adapter, not a
+Rust-owned renderer.  The facade may parse the last check transcript, collect
+candidate facts, and construct a =semantic-graph-turbo-request.v1= packet with
+=profile=failure-frontier=.  It must not rank failure facts, decide the
+frontier order, or synthesize =frontierActions= outside the graph-turbo result.
+The =failure-frontier= profile owns failure, assert, owner, hot, key, evidence,
+and test node transitions; the compact =[search-failure]= text is only a
+projection of that profile result.
+
+The check projection route follows the same boundary.  =asp <language> check
+changed --view seeds .= and =asp <language> check --changed --view seeds .=
+execute the provider check without forwarding the ASP =--view seeds= flag,
+persist the failing transcript as the last-check artifact, and then render
+=search failure --from-last-check --view seeds= through the graph-turbo
+=failure-frontier= profile.  =search failure --view graph-turbo-request= is a
+debug/schema surface for auditing that request packet; it is not the default
+agent prompt surface.
+
 Graph turbo requests are schema-owned too.  A caller that wants the Python
 ranking engine to run =typed-ppr-diverse= should send
 =semantic-graph-turbo-request.v1= with =profile=, =algorithm=, =seedIds=,
 =budget=, typed =graph.nodes[]=/=graph.edges[]= facts, optional
-=kindBudgets=, and optional =windowMerge= controls.  Command-line arguments
-may override request profile, seeds, or budget for local debugging, but
-provider integration should prefer the request packet so the algorithm input
-and response can be audited together.  The response is
+=kindBudgets=, and optional =windowMerge= controls.  Default fast-search
+candidate packets should include owner/item/test facts plus hot range nodes
+when a candidate locator is known, connected through typed edges such as
+=owner->item contains=, =item->hot contains=, and =owner->test covers= so path
+ranking can select direct code follow-ups without reparsing compact text.
+When the bounded candidate set exposes data-shape intent, such as field, type,
+collection, map, set, or list terms, the request should also carry typed
+semantic nodes for =field=, =type=, and =collection=.  These are schema-visible
+graph facts rather than compact-renderer heuristics: =field= records the owner,
+field name, type text, collection kind, locator, and matched text; =type=
+records the field type; and =collection= records the collection family.  The
+default owner-query adapter connects them through typed edges such as
+=query->field matches=, =owner->field contains=, =field->type has_type=,
+=field->collection collection_of=, =type->collection collection_of=, and
+=field->hot contains=.  This lets graph turbo project field-level selectors for
+questions such as =Vec collection fields= without requiring the agent to run a
+second owner search, broad fzf, or tree-sitter guide probe after the ranked
+frontier has selected the evidence boundary.
+Command-line arguments may override request profile, seeds, or budget for
+local debugging, but provider integration should prefer the request packet so
+the algorithm input and response can be audited together.  The response is
 =semantic-graph-turbo-result.v1= and must echo the effective profile,
 algorithm, seed ids, budget, per-kind budget, merged windows, profile
-compatibility, plus prompt-visible =profiles=, =omit=, and =avoid= facts used
-by compact graph-frontier rendering.
+compatibility, typed paths, graph cache, algorithm trace, rank explanations,
+algorithm metrics, plus prompt-visible =profiles=, =omit=, and =avoid= facts
+used by compact graph-frontier rendering.  Graph cache state is owned by the
+Python ranking engine; persistent backend entries live under =$PRJ_CACHE_HOME=
+or the git toplevel =.cache=, and the packet fingerprint must include graph
+nodes, edges, profile, seeds, budgets, path, and window controls so changed
+source facts do not replay stale rankings.
 
 Language implementations may use their ecosystem's normal graph algorithm
 library, such as Python =NetworkX= or Julia =Graphs.jl=, for traversal,
@@ -687,12 +740,14 @@ families, but unknown unweighted relations must not silently become neutral
 rank edges.
 
 Each profile owns a node-kind bonus map and an explicit transition mask.  The
-initial bonuses are =owner-query= hot +0.3, item +0.25, test +0.15, owner
-+0.1; =prime= owner +0.3, query +0.2, dependency +0.15, test +0.15; and
-=read-frontier= window +0.4, symbol +0.3, range -0.2.  The initial typed
-transitions are =owner-query= query->item, owner->item, item->hot, owner->test;
-=query-deps= query->owner, owner->dependency, dependency->owner, owner->test;
-and =read-frontier= range->symbol, range->window, symbol->window.  The result
+initial bonuses are =owner-query= field +0.4, hot +0.35, collection +0.3, type
++0.28, item +0.25, test +0.15, owner +0.1; =prime= owner +0.3, query +0.2,
+dependency +0.15, test +0.15; and =read-frontier= window +0.4, symbol +0.3,
+range -0.2.  The initial typed transitions are =owner-query= query->item,
+query->field, query->type, query->collection, owner->item, owner->field,
+item->hot, field->hot, field->type, field->collection, type->collection,
+owner->test; =query-deps= query->owner, owner->dependency, dependency->owner,
+owner->test; and =read-frontier= range->symbol, range->window, symbol->window.  The result
 packet's =profileCompatibility= evidence must expose allowed relations,
 allowed transitions, and kind bonuses so another renderer or agent does not
 have to infer the policy from rank output.
@@ -794,10 +849,27 @@ Completed:
   packets from typed graph facts, and a Python sandtable validates the package
   CLI through schema-owned stdout instead of treating compact debug text as the
   source of truth.
-- [X] ASP fast search can emit =semantic-graph-turbo-request.v1= packets for
-  live candidate frontiers through =--view graph-turbo-request=.  This keeps
-  ASP's Rust layer at candidate collection and schema request construction,
-  while typed ranking remains owned by =graph-turbo rank=.
+- [X] ASP fast search routes default compact candidate frontiers through
+  =asp-graph-turbo rank - --format compact=.  =--view seeds= and omitted
+  =--view= stay prompt-compact and must not print request JSON.  The explicit
+  =--view graph-turbo-request= surface exists only for schema validation and
+  debugging of the =semantic-graph-turbo-request.v1= packet sent to the ranking
+  boundary.
+- [X] Default fast-search request packets carry candidate hot range facts and
+  =item->hot= edges when locators are available, and graph-turbo warm ranking is
+  protected by persistent-cache, schema-validation, and query/search
+  performance tests.
+- [X] Default fast-search request packets also carry owner-scoped dependency
+  facts and =owner->dependency= import edges for Rust and TypeScript
+  =query-deps= routing.  Rust extracts the crate root from =use= items, while
+  TypeScript preserves quoted package specifiers such as =node:fs=, so
+  graph-turbo receives package-level typed facts rather than depending on a
+  fuzzy text hit to land on an import line.
+- [X] =asp-graph-turbo cache status|prune|invalidate= is the supported cache
+  management surface for the Python ranking backend.  Cache entries live under
+  =$PRJ_CACHE_HOME= when set or the git-toplevel =.cache= fallback, and the
+  packet fingerprint remains part of the key so changed graph/source facts do
+  not replay stale sparse matrices.
 - [X] Python graph turbo has an offline artifact evaluator that converts cached
   =semantic-search-packet= artifacts under
   =.cache/agent-semantic-protocol/artifacts/search= into schema-owned graph
@@ -1028,13 +1100,13 @@ Completed:
   The fixture
   =sandtables/fixtures/asp/graph-turbo-real-trigger-metrics.json= records a
   2026-06-07 run of
-  =asp rust search fzf graph_turbo owner tests --view graph-turbo-request .=
-  piped into =graph-turbo rank - --format compact=: ~commandCount=2~,
-  ~packetBytes=22359~, ~resultBytes=1181~, ~latencyMs=811~,
-  ~repeatedTriggerPatterns=0~, ~missingFacts=0~, and
-  ~confusingNextActions=0~.  The packaged =graph-turbo metrics= command owns
-  the stable text/JSON record shape so future live runs can refresh the same
-  evidence without hand-written prose.
+  =asp rust search fzf graph_turbo owner tests .= hitting the default
+  graph-turbo compact path: ~commandCount=1~, ~resultBytes=1181~,
+  ~latencyMs=811~, ~repeatedTriggerPatterns=0~, ~missingFacts=0~, and
+  ~confusingNextActions=0~.  Request JSON size remains a debugging/schema
+  validation metric, not the default agent-facing output.  The packaged
+  =asp-graph-turbo metrics= command owns the stable text/JSON record shape so
+  future live runs can refresh the same evidence without hand-written prose.
 
 * Acceptance criteria
 
