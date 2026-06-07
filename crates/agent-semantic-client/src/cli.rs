@@ -37,6 +37,7 @@ pub fn run_cli_args(
         }
         Some("guide") => run_guide(parsed, language_id),
         Some("tools") => crate::tools_cli::run_tools(&parsed.project_root, &parsed.forwarded_args),
+        Some("wrap") => crate::tools_cli::run_wrap(&parsed.forwarded_args),
         Some("providers") => run_providers(parsed),
         Some("doctor") => run_doctor(parsed),
         Some("cache") => crate::cache_cli::run_cache(
@@ -165,6 +166,10 @@ fn print_guide() {
     println!("|cmd doctor=asp doctor");
     println!("|cmd providers=asp providers");
     println!("|cmd tools-doctor=asp tools doctor");
+    println!("|cmd graph-turbo=asp wrap asp-graph-turbo -- help");
+    println!(
+        "|cmd graph-turbo-search=asp <rust|typescript|python> search fzf <term> owner tests ."
+    );
     println!("|cmd search-history=asp search history audit .");
     println!("|cmd guide=asp <rust|typescript|python> guide .");
     println!("|cmd search-guide=asp <rust|typescript|python> search guide .");

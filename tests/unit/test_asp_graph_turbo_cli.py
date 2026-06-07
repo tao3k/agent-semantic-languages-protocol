@@ -14,7 +14,7 @@ def test_graph_turbo_dispatcher_help_lists_subcommands(capsys) -> None:
 
     captured = capsys.readouterr()
 
-    assert "usage: graph-turbo <command> [args]" in captured.out
+    assert "usage: asp-graph-turbo <command> [args]" in captured.out
     assert "rank" in captured.out
     assert "artifacts" in captured.out
     assert "timeline" in captured.out

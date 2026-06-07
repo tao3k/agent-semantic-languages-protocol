@@ -127,7 +127,7 @@ ts_locate="$(
     --selector src/cli/protocol-tree-sitter-query.ts \
     languages/typescript-lang-project-harness
 )"
-assert_contains "$ts_locate" "src/cli/protocol-tree-sitter-query.ts:53" "typescript locate"
+assert_contains "$ts_locate" "src/cli/protocol-tree-sitter-query.ts:55" "typescript locate"
 assert_contains "$ts_locate" "parseTreeSitterQueryArgs" "typescript locate"
 assert_not_contains "$ts_locate" "export function parseTreeSitterQueryArgs" "typescript locate"
 assert_locate_has_no_cache_noise "$ts_locate" "typescript locate"
@@ -153,7 +153,7 @@ assert_json_string "$ts_json" "schemaId" "agent.semantic-protocols.semantic-tree
 assert_json_string "$ts_json" "adapterMode" "native-projection" "typescript json"
 assert_json_string "$ts_json" "compatibilityLevel" "native-only" "typescript json"
 assert_contains "$ts_json" '"nativeFactRefs"' "typescript json"
-assert_contains "$ts_json" 'typescript:item:src/cli/protocol-tree-sitter-query.ts:53:58:parseTreeSitterQueryArgs' "typescript json"
+assert_contains "$ts_json" 'typescript:item:src/cli/protocol-tree-sitter-query.ts:55:60:parseTreeSitterQueryArgs' "typescript json"
 assert_json_false "$ts_json" "rawSourceStored" "typescript json"
 assert_json_string "$ts_json" "nodeType" "identifier" "typescript json"
 assert_json_string "$ts_json" "field" "name" "typescript json"

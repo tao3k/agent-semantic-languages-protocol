@@ -36,7 +36,7 @@ export SEMANTIC_AGENT_PROTOCOL_BIN="$repo_root/target/debug/asp"
 
 "$repo_root/target/debug/asp" hook install --client codex .
 
-python tools/validate-provider-registry-contracts.py \
+uv run --project packages/python --frozen python tools/validate-provider-registry-contracts.py \
   --asp-bin "$repo_root/target/debug/asp" \
   --provider rust \
   --provider typescript \

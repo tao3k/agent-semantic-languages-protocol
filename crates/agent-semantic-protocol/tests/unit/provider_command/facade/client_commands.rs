@@ -9,7 +9,7 @@ fn tools_doctor_reports_required_external_tools() {
     let root = temp_project_root("tools-doctor");
     let bin_dir = root.join(".bin");
     std::fs::create_dir_all(&bin_dir).expect("create bin dir");
-    for tool in ["fd", "rg", "fzf", "eza", "graph-turbo"] {
+    for tool in ["fd", "rg", "fzf", "eza", "asp-graph-turbo"] {
         let path = bin_dir.join(tool);
         std::fs::write(&path, "#!/bin/sh\nexit 0\n").expect("write fake tool");
         make_executable(&path);
@@ -28,12 +28,50 @@ fn tools_doctor_reports_required_external_tools() {
     );
     let stdout = String::from_utf8(output.stdout).expect("stdout");
     assert!(stdout.starts_with("[asp-tools] status=ok"));
-    assert!(stdout.contains("required=fd,rg,fzf,eza,graph-turbo"));
+    assert!(stdout.contains("required=fd,rg,fzf,eza,asp-graph-turbo"));
     assert!(stdout.contains("|tool name=fd status=ok"));
     assert!(stdout.contains("|tool name=rg status=ok"));
     assert!(stdout.contains("|tool name=fzf status=ok"));
     assert!(stdout.contains("|tool name=eza status=ok"));
-    assert!(stdout.contains("|tool name=graph-turbo status=ok"));
+    assert!(stdout.contains("|tool name=asp-graph-turbo status=ok path="));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn wrap_graph_turbo_is_native_top_level_command() {
+    let root = temp_project_root("wrap-graph-turbo");
+    let bin_dir = root.join(".bin");
+    std::fs::create_dir_all(&bin_dir).expect("create bin dir");
+    let marker = root.join("wrapped-args.txt");
+    let graph_turbo = bin_dir.join("asp-graph-turbo");
+    std::fs::write(
+        &graph_turbo,
+        "#!/bin/sh\n\
+         printf '%s\n' \"$@\" > \"$1\"\n",
+    )
+    .expect("write fake asp-graph-turbo");
+    make_executable(&graph_turbo);
+
+    let output = asp_command(&root)
+        .env("PATH", prepend_path(&bin_dir))
+        .args([
+            "wrap",
+            "asp-graph-turbo",
+            "--",
+            &marker.display().to_string(),
+            "rank",
+        ])
+        .output()
+        .expect("run asp wrap graph turbo");
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let observed = std::fs::read_to_string(&marker).expect("read wrapped args");
+    assert_eq!(observed, format!("{}\nrank\n", marker.display()));
 
     let _ = std::fs::remove_dir_all(root);
 }
@@ -43,17 +81,18 @@ fn search_history_audit_reads_prompt_output_command_artifacts() {
     let root = temp_project_root("search-history-audit");
     let bin_dir = root.join(".bin");
     std::fs::create_dir_all(&bin_dir).expect("create bin dir");
-    let graph_turbo = bin_dir.join("graph-turbo");
+    let graph_turbo = bin_dir.join("asp-graph-turbo");
     std::fs::write(
         &graph_turbo,
-        "#!/bin/sh\n\
+         "#!/bin/sh\n\
          test \"$1\" = timeline || { echo expected timeline >&2; exit 2; }\n\
          case \"$2\" in */.cache/agent-semantic-protocol/artifacts) ;; *) echo bad artifact dir >&2; exit 2 ;; esac\n\
+         cat >/dev/null\n\
          echo '[graph-turbo-timeline] fake=true events=3 actions=3 sessions=1 rounds=1'\n\
          echo '[graph-turbo-owner-collapse] collapsible=1 actions=1'\n\
          echo '[graph-turbo-owner-action] decision=collapse replacement=promote-to-owner-query-item-test-frontier'\n",
     )
-    .expect("write fake graph-turbo");
+    .expect("write fake asp-graph-turbo");
     make_executable(&graph_turbo);
     let artifact_dir = root.join(".cache/agent-semantic-protocol/artifacts/prompt-output");
     std::fs::create_dir_all(&artifact_dir).expect("create artifact dir");

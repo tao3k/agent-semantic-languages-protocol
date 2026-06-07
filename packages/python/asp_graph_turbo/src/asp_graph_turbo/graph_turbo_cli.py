@@ -1,4 +1,4 @@
-"""Explicit graph-turbo command dispatcher."""
+"""Explicit asp-graph-turbo command dispatcher."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = args[0]
     spec = _COMMANDS.get(command)
     if spec is None:
-        sys.stderr.write(f"graph-turbo: unknown command: {command}\n")
+        sys.stderr.write(f"asp-graph-turbo: unknown command: {command}\n")
         _print_help(file=sys.stderr)
         return 2
     module_name, function_name, _ = spec
@@ -56,7 +56,7 @@ def _load_function(module_name: str, function_name: str) -> Callable[..., object
 
 def _print_help(*, file: object | None = None) -> None:
     output = sys.stdout if file is None else file
-    output.write("usage: graph-turbo <command> [args]\n\n")
+    output.write("usage: asp-graph-turbo <command> [args]\n\n")
     output.write("commands:\n")
     for name, (_, _, summary) in sorted(_COMMANDS.items()):
         output.write(f"  {name:<12} {summary}\n")

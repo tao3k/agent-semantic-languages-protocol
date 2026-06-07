@@ -71,7 +71,7 @@ fn run_graph_turbo_timeline(
     };
     args.extend(forwarded_args.iter().cloned());
     run_provider_process(ProviderProcessSpec {
-        program: "graph-turbo".to_string(),
+        program: "asp-graph-turbo".to_string(),
         args,
         cwd,
         env: BTreeMap::new(),
@@ -81,7 +81,9 @@ fn run_graph_turbo_timeline(
         limits: ProviderProcessLimits::default(),
     })
     .map_err(|error| {
-        format!("failed to run graph-turbo timeline: {error}; install graph-turbo on PATH")
+        format!(
+            "failed to run asp-graph-turbo timeline: {error}; run just agent-tools-install-asp-graph-turbo <bin-dir>"
+        )
     })
 }
 

@@ -56,14 +56,14 @@ fn search_history_backfills_artifacts_and_passes_rust_sqlite_events() {
     .expect("write tree-sitter query artifact");
     let bin_dir = root.join(".bin");
     std::fs::create_dir_all(&bin_dir).expect("create bin dir");
-    let stdin_path = root.join("graph-turbo-stdin.json");
-    let args_path = root.join("graph-turbo-args.txt");
-    let graph_turbo = bin_dir.join("graph-turbo");
+    let stdin_path = root.join("asp-graph-turbo-stdin.json");
+    let args_path = root.join("asp-graph-turbo-args.txt");
+    let graph_turbo = bin_dir.join("asp-graph-turbo");
     std::fs::write(
         &graph_turbo,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$GRAPH_TURBO_ARGS_OUT\"\ncat > \"$GRAPH_TURBO_STDIN_OUT\"\nprintf '[graph-turbo-test]\\n'\n",
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$ASP_GRAPH_TURBO_ARGS_OUT\"\ncat > \"$ASP_GRAPH_TURBO_STDIN_OUT\"\nprintf '[graph-turbo-test]\\n'\n",
     )
-    .expect("write graph-turbo");
+    .expect("write asp-graph-turbo");
     make_executable(&graph_turbo);
 
     let previous_path = std::env::var_os("PATH");
@@ -71,8 +71,8 @@ fn search_history_backfills_artifacts_and_passes_rust_sqlite_events() {
     let cache_root = root.join(".cache/agent-semantic-protocol");
     unsafe {
         std::env::set_var("PATH", prepend_path(&bin_dir));
-        std::env::set_var("GRAPH_TURBO_STDIN_OUT", &stdin_path);
-        std::env::set_var("GRAPH_TURBO_ARGS_OUT", &args_path);
+        std::env::set_var("ASP_GRAPH_TURBO_STDIN_OUT", &stdin_path);
+        std::env::set_var("ASP_GRAPH_TURBO_ARGS_OUT", &args_path);
         std::env::set_var("PRJ_CACHE_HOME", &cache_root);
     }
 
@@ -96,8 +96,8 @@ fn search_history_backfills_artifacts_and_passes_rust_sqlite_events() {
         },
     }
     unsafe {
-        std::env::remove_var("GRAPH_TURBO_STDIN_OUT");
-        std::env::remove_var("GRAPH_TURBO_ARGS_OUT");
+        std::env::remove_var("ASP_GRAPH_TURBO_STDIN_OUT");
+        std::env::remove_var("ASP_GRAPH_TURBO_ARGS_OUT");
     }
     match previous_prj_cache_home {
         Some(path) => unsafe {
@@ -109,8 +109,8 @@ fn search_history_backfills_artifacts_and_passes_rust_sqlite_events() {
     }
 
     result.expect("run search history");
-    let args = std::fs::read_to_string(&args_path).expect("read graph-turbo args");
-    let stdin = std::fs::read_to_string(&stdin_path).expect("read graph-turbo stdin");
+    let args = std::fs::read_to_string(&args_path).expect("read asp-graph-turbo args");
+    let stdin = std::fs::read_to_string(&stdin_path).expect("read asp-graph-turbo stdin");
     assert!(args.contains("--events-json"), "{args}");
     assert!(stdin.contains("\"kind\":\"rust-sqlite\""), "{stdin}");
     let packet: serde_json::Value = serde_json::from_str(&stdin).expect("events packet");

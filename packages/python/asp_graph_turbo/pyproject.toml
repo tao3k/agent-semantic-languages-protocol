@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.scripts]
-graph-turbo = "asp_graph_turbo.graph_turbo_cli:main"
+asp-graph-turbo = "asp_graph_turbo.graph_turbo_cli:main"
 
 [dependency-groups]
 dev = [

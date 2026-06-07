@@ -85,7 +85,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         ("tree-sitter", "validate", "rust-query-corpus"),
-        "tools.tree_sitter.validate_rust_queries",
+        "tools.tree_sitter.validate_rust_query_corpus",
         "main",
         "sys_argv",
         "Validate Rust tree-sitter query corpus fixtures.",
@@ -96,6 +96,13 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "main",
         "sys_argv",
         "Validate TypeScript tree-sitter query corpus fixtures.",
+    ),
+    CommandSpec(
+        ("tree-sitter", "sync", "query-snapshots"),
+        "tools.tree_sitter.sync_query_snapshots",
+        "main",
+        "argv",
+        "Sync tree-sitter query snapshots from an upstream checkout, excluding highlights.",
     ),
     CommandSpec(
         ("tree-sitter", "sync", "rust-queries"),
