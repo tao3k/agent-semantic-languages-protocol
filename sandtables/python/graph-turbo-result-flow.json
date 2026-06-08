@@ -2,21 +2,24 @@
   "id": "python.graph-turbo-result-flow",
   "language": "python",
   "title": "Python ASP graph turbo schema-backed result flow",
-  "coverage": [
-    "json-schema",
-    "search-flow"
+    "coverage": [
+        "json-schema",
+        "search-flow",
+        "performance",
+        "evidence-assurance"
   ],
   "tags": [
-    "asp",
-    "graph-turbo",
-    "compact-graph"
+        "asp",
+        "graph-turbo",
+        "compact-graph",
+        "benchmark"
   ],
   "workdir": ".",
-  "budgets": {
-    "maxCommands": 1,
-    "maxTotalLinesWarn": 1,
-    "maxTotalElapsedMsWarn": 10000,
-    "maxTotalStdoutBytesWarn": 9000
+    "budgets": {
+        "maxCommands": 3,
+        "maxTotalLinesWarn": 3,
+        "maxTotalElapsedMsWarn": 10000,
+        "maxTotalStdoutBytesWarn": 40000
   },
   "evidence": {
     "source": "handwritten",
@@ -24,23 +27,33 @@
     "intentKind": "implementation-principle",
     "editBoundary": "none",
     "metrics": {
-      "recordedCommandCount": 1,
-      "repeatedSearches": 0,
-      "jsonSearches": 1,
-      "compactSearches": 0,
+            "recordedCommandCount": 3,
+            "repeatedSearches": 0,
+            "jsonSearches": 3,
+            "compactSearches": 0,
       "tokenDelta": "same"
     },
     "findings": [
-      {
-        "kind": "graph-turbo-packet",
-        "severity": "info",
-        "message": "Graph turbo ranking evidence is validated as semantic-graph-turbo-result before any compact renderer consumes it."
-      }
+            {
+                "kind": "graph-turbo-packet",
+                "severity": "info",
+                "message": "Graph turbo ranking evidence is validated as semantic-graph-turbo-result before any compact renderer consumes it."
+            },
+            {
+                "kind": "graph-turbo-benchmark",
+                "severity": "info",
+                "message": "Graph turbo benchmark evidence is validated as semantic-graph-turbo-benchmark with path backend and candidate width metrics."
+            },
+            {
+                "kind": "graph-turbo-sandtable-summary",
+                "severity": "info",
+                "message": "Benchmark metrics and frontier receipt facts are joined into a schema-owned sandtable summary row."
+            }
     ]
   },
   "steps": [
-    {
-      "id": "graph-turbo-json-packet",
+        {
+            "id": "graph-turbo-json-packet",
       "kind": "schema-contract",
       "coverage": [
         "json-schema",
@@ -67,11 +80,9 @@
           "seedIds.1": "owner:cli",
           "profiles.0": "owner-query",
           "omit.0": "code",
-          "avoid.0": "raw-read",
-          "profileCompatibility.0.profile": "owner-query",
-          "profileCompatibility.0.allowedTransitions.0.sourceKind": "item",
-          "profileCompatibility.0.allowedTransitions.0.targetKind": "hot",
-          "sourceSinkFrontier.sourceIds.0": "q:parser",
+                    "avoid.0": "raw-read",
+                    "profileCompatibility.0.profile": "owner-query",
+                    "sourceSinkFrontier.sourceIds.0": "q:parser",
           "sourceSinkFrontier.sourceIds.1": "owner:cli",
           "graphCache.backend": "scipy-csr",
           "algorithmTrace.2.step": "profile-policy",
@@ -105,9 +116,113 @@
           "\"allowedTransitions\""
         ],
         "maxStdoutLinesWarn": 1,
-        "maxStdoutBytesWarn": 9000,
-        "maxElapsedMsWarn": 10000
-      }
-    }
-  ]
+                "maxStdoutBytesWarn": 36000,
+                "maxElapsedMsWarn": 10000
+            }
+        },
+        {
+            "id": "graph-turbo-benchmark-packet",
+            "kind": "schema-contract",
+            "coverage": [
+                "json-schema",
+                "performance"
+            ],
+            "command": [
+                "python",
+                "-m",
+                "tools",
+                "graph",
+                "turbo",
+                "benchmark",
+                "sandtables/fixtures/asp/graph-turbo-owner-query.json",
+                "--runs",
+                "2",
+                "--warmup-runs",
+                "0",
+                "--cache-mode",
+                "disabled",
+                "--format",
+                "json"
+            ],
+            "expect": {
+                "stdoutJsonSchema": "schemas/semantic-graph-turbo-benchmark.v1.schema.json",
+                "stdoutJsonEquals": {
+                    "schemaId": "agent.semantic-protocols.semantic-graph-turbo-benchmark",
+                    "packetKind": "graph-turbo-benchmark",
+                    "profile": "owner-query",
+                    "algorithm": "typed-ppr-diverse",
+                    "cacheMode": "disabled",
+                    "lastAlgorithmMetrics.cacheStatus": "disabled",
+                    "lastAlgorithmMetrics.pathBackend": "python-bfs-small",
+                    "lastTypedPathTrace.step": "typed-paths",
+                    "lastTypedPathTrace.engine": "python-bfs-small"
+                },
+                "stdoutContains": [
+                    "\"durationMs\"",
+                    "\"lastAlgorithmMetrics\"",
+                    "\"lastTypedPathTrace\"",
+                    "\"pathCandidateCount\"",
+                    "\"pathFallbackCount\"",
+                    "\"pathPairCount\""
+                ],
+                "maxStdoutLinesWarn": 1,
+                "maxStdoutBytesWarn": 3000,
+                "maxElapsedMsWarn": 10000
+            }
+        },
+        {
+            "id": "graph-turbo-sandtable-summary",
+            "kind": "schema-contract",
+            "coverage": [
+                "json-schema",
+                "performance",
+                "evidence-assurance"
+            ],
+            "command": [
+                "python",
+                "-m",
+                "tools",
+                "graph",
+                "turbo",
+                "sandtable-summary",
+                "--benchmark-packet",
+                "sandtables/fixtures/asp/graph-turbo-owner-query.json",
+                "--benchmark-runs",
+                "2",
+                "--benchmark-warmup-runs",
+                "0",
+                "--benchmark-cache-mode",
+                "disabled",
+                "--receipt",
+                "schemas/semantic-fact-frontier-receipt.fixtures.v1.json",
+                "--scenario",
+                "python.graph-turbo-result-flow",
+                "--format",
+                "json"
+            ],
+            "expect": {
+                "stdoutJsonSchema": "schemas/semantic-graph-turbo-sandtable-summary.v1.schema.json",
+                "stdoutJsonEquals": {
+                    "schemaId": "agent.semantic-protocols.semantic-graph-turbo-sandtable-summary",
+                    "packetKind": "graph-turbo-sandtable-summary",
+                    "scenario": "python.graph-turbo-result-flow",
+                    "profile": "owner-query",
+                    "benchmark.cacheMode": "disabled",
+                    "benchmark.pathBackend": "python-bfs-small",
+                    "benchmark.cacheStatus": "disabled",
+                    "receipt.receiptId": "agent-semantic-protocols.rfc014.frontier-receipt-real-project"
+                },
+                "stdoutContains": [
+                    "\"benchmark\"",
+                    "\"receipt\"",
+                    "\"pathCandidateCount\"",
+                    "\"frontierFollowRate\"",
+                    "\"commandsToValidation\""
+                ],
+                "maxStdoutLinesWarn": 1,
+                "maxStdoutBytesWarn": 3000,
+                "maxElapsedMsWarn": 10000
+            }
+        }
+    ]
 }

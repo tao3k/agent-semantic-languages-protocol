@@ -8,7 +8,9 @@ from typing import Any
 
 from .constants import ALGORITHM_ID
 
-REAL_TRIGGER_METRICS_SCHEMA_ID = "agent.semantic-protocols.graph-turbo-real-trigger-metrics"
+REAL_TRIGGER_METRICS_SCHEMA_ID = (
+    "agent.semantic-protocols.graph-turbo-real-trigger-metrics"
+)
 REAL_TRIGGER_METRICS_SCHEMA_VERSION = "1"
 REAL_TRIGGER_METRICS_PROTOCOL_ID = "agent.semantic-protocols.semantic-language"
 REAL_TRIGGER_METRICS_PROTOCOL_VERSION = "1"

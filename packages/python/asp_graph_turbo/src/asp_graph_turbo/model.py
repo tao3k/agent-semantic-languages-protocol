@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from .graph_model import Edge, Node, TypedGraph
+from .graph_model import Edge, Node, OrientedEdge, TypedGraph
 from .profile_model import (
     AllowedTransition,
     GraphProfile,
     ProfileCompatibility,
     ProfileMatrixSummary,
+    RelationChannelSummary,
 )
 from .result_model import (
     AlgorithmMetrics,
@@ -36,11 +37,13 @@ __all__ = [
     "GraphResult",
     "MergedWindow",
     "Node",
+    "OrientedEdge",
     "ProfileCompatibility",
     "ProfileMatrixSummary",
     "RankExplanation",
     "ReadLoopGuard",
     "ReceiptAdjustment",
+    "RelationChannelSummary",
     "SourceSinkFrontier",
     "TypedGraph",
     "TypedPath",

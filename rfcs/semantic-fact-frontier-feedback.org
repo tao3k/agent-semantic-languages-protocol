@@ -1,9 +1,10 @@
 #+TITLE: RFC: Semantic Fact Frontier Feedback
 #+AUTHOR: agent-semantic-protocols
 #+DATE: 2026-06-07
-#+RFC: 013
+#+RFC: 014
 #+STATUS: draft
 #+DEPENDS: rfcs/cli-first-harness-ux.org (005), rfcs/agent-compact-graph-feature.org (006), rfcs/agent-semantic-client-backend-protocol.org (008), rfcs/semantic-query-projection-protocol.org (010), rfcs/asp-native-relation-flow-codeql.org (012)
+#+SEE_ALSO: docs/30-39-research/31.30-semantic-fact-frontier-real-project-evidence.org
 
 * One-sentence summary
 
@@ -118,6 +119,18 @@ The P0 ontology contract is schema-first:
   =search semantic-facts --json= provider packet.  Providers must advertise
   this packet schema for fact graph output instead of =semantic-graph.v1=;
   =semantic-graph.v1= remains the embedded search packet graph vocabulary.
+- Relation vocabulary closure is explicit at P0.  Relations that exist only in
+  the ontology schema are =calls=, =imports=, =mutates=, =reads=, and =writes=.
+  Relations that exist only in the runtime fact graph are =affects=,
+  =covered_by=, =depends_on=, =packages=, =targets=, and =tests=.  Relations
+  that are profile-internal to graph-turbo are =checks=, =gates=, =relates=,
+  =repairs=, =selects=, =split=, and =uses=.  Profile relation sets must be
+  schema-declared or explicitly profile-internal.
+- Confidence/freshness closure is an explicit mapping, not an implicit enum
+  merge.  Ontology =exact= maps to runtime =exact=; =inferred= maps to
+  runtime =high=, =medium=, or =low=; =heuristic= maps to runtime
+  =heuristic=.  Ontology =fresh= maps to runtime =fresh= or =cache-hit=;
+  =stale= maps to =stale=; =unknown= maps to =unknown=.
 - =schemas/semantic-fact-ontology.fixtures.v1.json= is the executable
   cross-language fixture matrix for Rust, TypeScript, Python, and Julia
   sequence/map facts.
@@ -132,6 +145,9 @@ The P0 ontology contract is schema-first:
   fixture matrix, and the provider registry declaration.
 - =tests/unit/test_asp_graph_turbo_ontology.py= validates that the projected
   ontology facts are rankable as field-first graph frontiers.
+- =tests/unit/test_semantic_fact_protocol_vocabulary.py= validates RFC number
+  uniqueness, relation boundary closure, graph-turbo profile-internal
+  relations, and confidence/freshness mapping coverage.
 - =languages/rust-lang-project-harness/src/search/semantic_facts.rs= emits
   ontology-shaped Rust =field=/=type=/=collection= graph facts from =syn=
   parser facts while preserving the existing provider metadata fields used by
@@ -217,6 +233,19 @@ The first implementation remains SciPy/NumPy based.  Learned scoring may
 adjust profile weights later, but relation construction and profile semantics
 must remain inspectable.
 
+The P1 observable contract is =profileMatrices[].relationChannels= and
+path-backend metrics in =schemas/semantic-graph-turbo-result.v1.schema.json=.
+Each profile matrix summary lists one channel per allowed relation, including
+zero-edge channels, with supported/reachable edge counts and supported/reachable
+weight mass. =algorithmMetrics.pathBackend= and
+=algorithmMetrics.pathFallbackCount= record whether typed paths used
+=python-bfs-small=, =scipy-yen=, =scipy-dijkstra=, or =python-bfs-fallback= and
+how many backend fallbacks were needed. =algorithmMetrics.pathPairCount= and
+=algorithmMetrics.pathCandidateCount= record the source/sink pair width and the
+final backend candidate count before budgeted typed-path projection. This keeps
+the sparse bank and typed-path algorithm choice inspectable before learned
+weights or alternative backends are introduced.
+
 * Build, test, and package graph
 
 Parser facts are not enough for repository-level agents.  The next fact graph
@@ -287,6 +316,24 @@ testResult
 editTouchedOwner
 outputFingerprint
 #+end_src
+
+=schemas/semantic-fact-frontier-receipt.v1.schema.json= owns this receipt
+contract.  All fields above are required at the top level; values that do not
+apply to a specific receipt kind must be recorded as =null= or an empty array
+instead of being omitted.  This keeps benchmark conversion able to distinguish
+"not applicable" from "not recorded".
+=schemas/semantic-fact-frontier-receipt.fixtures.v1.json= records the first
+real-project task-session fixture for this contract plus runtime capture
+fixtures for =asp-graph-turbo receipt= and the public =asp <language> search
+--frontier-receipt-out= facade.
+The graph-turbo runtime exposes this capture path through
+=asp-graph-turbo receipt=, which ranks a graph-turbo request and emits the
+receipt schema using explicit followed/read/test facts from the caller.
+The ASP search runtime exposes a frontier-only trigger through
+=--frontier-receipt-out <path>= on graph-turbo frontier search commands.  This
+trigger strips the runtime flag before provider execution, writes the receipt
+as a side effect, and keeps stdout as the normal compact =[graph-frontier]=
+output.
 
 Graph-turbo must penalize:
 
@@ -363,6 +410,15 @@ contextUtilization =
 
 This prevents a false optimization where graph-turbo emits more plausible
 nodes but agents still ignore them or fall back to manual source scans.
+
+=schemas/semantic-fact-frontier-benchmark-report.v1.schema.json= owns the
+offline comparison report before live sandtable scoring.  Each report joins a
+receipt fixture with the graph-turbo benchmark metric surface and records
+whether the scenario is ready for weight calibration.  The companion
+=schemas/semantic-fact-frontier-benchmark-report.fixtures.v1.json= currently
+fixes the task-session receipt, graph-turbo runtime receipt, and ASP runtime
+frontier-only receipt in one table; calibration stays blocked until ASP runtime
+has a followed/read/test scenario.
 
 * Lightweight scoring
 
@@ -531,6 +587,9 @@ P1 audit should answer:
 
 - Add benchmark fixtures with gold context, gold frontier, gold exact selector,
   and gold test action.
+- Keep the offline receipt+benchmark comparison in
+  =schemas/semantic-fact-frontier-benchmark-report.fixtures.v1.json= before
+  promoting any ranking-weight change.
 - Record =contextPrecision=, =contextRecall=, =contextUtilization=,
   =commandsToFirstUsefulLocator=, and =stdoutBytesToPatch=.
 - Run one real-project scenario before allowing scoring changes to count as an
@@ -565,4 +624,5 @@ The RFC is considered landed only when:
 | sandtables report context precision/utilization metrics | closed | =tests/unit/semantic_sandtable/test_expectations.py=, =test_agent_observation_pipe.py=, =test_agent_observation_read_loop.py=, and =test_deep_question_cases.py= |
 | read/failure/test receipt facts affect ranking | closed | =tests/unit/asp_graph_turbo_feedback_profiles/test_receipt_feedback.py=, =tests/unit/test_asp_graph_turbo_failure_frontier.py=, and read-loop memory gates in =tests/unit/test_asp_graph_turbo_read_loop.py= |
 | default agent-facing outputs stay compact with exact follow-up actions | closed | graph-turbo seed/render tests plus =tests/unit/semantic_sandtable/test_expectations_pipe_flow_drift.py= enforcing primary selector actions without broad executable branch spam |
-| real-project run reduces repeated reads/searches without losing frontier | closed | =docs/30-39-research/31.22-claude-sandtable-live-pipe-audit.org= records the Tokio 1.52.3 live run with =prime -> pipe -> query-selector=, zero repeated commands, zero direct reads, one remembered selector, and retained selector evidence |
+| receipt runtime capture is schema-owned and public-facade reachable | closed | =schemas/semantic-fact-frontier-receipt.fixtures.v1.json= records task-session, =asp-graph-turbo receipt=, and =asp <language> search --frontier-receipt-out= fixtures validated by =tests/unit/test_semantic_fact_frontier_receipt_schema.py= |
+| real-project receipt plus benchmark table drives scoring decisions | partial | =schemas/semantic-fact-frontier-benchmark-report.fixtures.v1.json= fixes the current three-scenario receipt+benchmark report; P5 still needs a followed/read/test ASP runtime scenario before ranking weight changes count as optimization |

@@ -26,11 +26,7 @@ def prime_suppression_candidates(
             str(group["subject"]),
         )
     )
-    actions = [
-        action
-        for group in groups
-        for action in group["suppressionActions"]
-    ]
+    actions = [action for group in groups for action in group["suppressionActions"]]
     return {
         "policy": "same-session-fresh-prime",
         "freshnessScope": "session+language+subject",
@@ -45,7 +41,9 @@ def prime_suppression_candidates(
     }
 
 
-def _session_prime_groups(session: tuple[ArtifactEvent, ...]) -> list[dict[str, object]]:
+def _session_prime_groups(
+    session: tuple[ArtifactEvent, ...],
+) -> list[dict[str, object]]:
     groups: dict[tuple[str, str], list[ArtifactEvent]] = {}
     for event in session:
         if event.kind == "search" and event.method == "search/prime":

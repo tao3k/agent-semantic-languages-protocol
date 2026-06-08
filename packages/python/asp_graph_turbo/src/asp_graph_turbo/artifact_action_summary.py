@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from typing import Any
 
 
-def action_summary(report_actions: Mapping[str, object], *, limit: int) -> dict[str, object]:
+def action_summary(
+    report_actions: Mapping[str, object], *, limit: int
+) -> dict[str, object]:
     actions = [
         *_fanout_actions(report_actions.get("fanoutPlanning")),
         *_owner_actions(report_actions.get("ownerCollapse")),

@@ -20,7 +20,9 @@ def optimization_targets(
     selected = [*repeat_targets[:repeat_budget]]
     selected.extend(fanout_targets[: max(0, limit - len(selected))])
     if len(selected) < limit:
-        selected.extend(_remaining_targets(repeat_targets, fanout_targets, selected, limit))
+        selected.extend(
+            _remaining_targets(repeat_targets, fanout_targets, selected, limit)
+        )
     return selected[:limit]
 
 
@@ -240,10 +242,7 @@ def _first_key(
             key
             for key in keys
             if str(key.get("method") or "") == method
-            and (
-                not require_target
-                or target_like(str(key.get("subject") or ""))
-            )
+            and (not require_target or target_like(str(key.get("subject") or "")))
         ),
         None,
     )

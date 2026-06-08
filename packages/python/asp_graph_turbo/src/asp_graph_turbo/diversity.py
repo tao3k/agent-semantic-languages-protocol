@@ -11,6 +11,12 @@ from .policy import (
     SAME_OWNER_PENALTY,
     SAME_SYMBOL_NAME_PENALTY,
 )
+from .selector import (
+    graph_turbo_node_range,
+    graph_turbo_owner_path_for_node,
+    graph_turbo_ranges_adjacent,
+    graph_turbo_selector_for_node,
+)
 
 
 def normalize_kind_budgets(kind_budgets: Mapping[str, int] | None) -> dict[str, int]:
@@ -34,7 +40,7 @@ def rank_nodes(
     remaining = [
         graph.nodes[node_id]
         for node_id in scores
-        if _selector_for_node(graph.nodes[node_id]) not in seen_selectors
+        if graph_turbo_selector_for_node(graph.nodes[node_id]) not in seen_selectors
     ]
     ranked: list[Node] = []
     selected_kind_counts: dict[str, int] = {}
@@ -91,13 +97,7 @@ def _adjusted_score(
 
 
 def _owner_key(node: Node) -> str | None:
-    value = node.fields.get("owner") or node.fields.get("ownerPath")
-    if isinstance(value, str) and value:
-        return value
-    path = node.fields.get("path")
-    if isinstance(path, str) and path:
-        return path
-    return None
+    return graph_turbo_owner_path_for_node(node)
 
 
 def _symbol_name(node: Node) -> str | None:
@@ -113,44 +113,20 @@ def _has_contiguous_window(node: Node, selected: tuple[Node, ...] | list[Node]) 
     window = _window_bounds(node)
     if window is None:
         return False
-    path, start_line, end_line = window
     for item in selected:
         other = _window_bounds(item)
         if other is None:
             continue
-        other_path, other_start, other_end = other
-        if path == other_path and start_line <= other_end + 1 and other_start <= end_line + 1:
+        if graph_turbo_ranges_adjacent(window, other, max_gap_lines=1):
             return True
     return False
 
 
-def _window_bounds(node: Node) -> tuple[str, int, int] | None:
+def _window_bounds(node: Node):
     if node.kind not in {"range", "window"}:
         return None
-    path = node.fields.get("path")
-    start = node.fields.get("startLine") or node.fields.get("start")
-    end = node.fields.get("endLine") or node.fields.get("end")
-    if not isinstance(path, str) or not isinstance(start, int) or not isinstance(end, int):
-        return None
-    return path, start, end
+    return graph_turbo_node_range(node)
 
 
 def selector_for_node(node: Node) -> str | None:
-    return _selector_for_node(node)
-
-
-def _selector_for_node(node: Node) -> str | None:
-    fields = node.fields.get("fields")
-    if isinstance(fields, Mapping):
-        context_locator = fields.get("contextLocator")
-        if isinstance(context_locator, str) and context_locator:
-            return context_locator
-    locator = node.fields.get("locator") or node.fields.get("location")
-    if isinstance(locator, str) and locator:
-        return locator
-    path = node.fields.get("path")
-    start = node.fields.get("startLine") or node.fields.get("start")
-    end = node.fields.get("endLine") or node.fields.get("end")
-    if isinstance(path, str) and isinstance(start, int) and isinstance(end, int):
-        return f"{path}:{start}:{end}"
-    return None
+    return graph_turbo_selector_for_node(node)

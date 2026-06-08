@@ -343,6 +343,13 @@
         },
         "relation": {
           "enum": ["matches", "contains", "has_type", "collection_of", "covers", "covered_by", "tests", "belongs_to", "packages", "builds", "targets", "depends_on", "affects", "fails", "explains", "points_to", "validates"]
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fields": {
+          "$ref": "#/$defs/nodeFields"
         }
       }
     }

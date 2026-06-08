@@ -25,9 +25,11 @@ def search_packet_to_graph_turbo_request(
     targets = packet_targets(packet)
     nodes: dict[tuple[str, str], dict[str, object]] = {}
     edges: dict[tuple[str, str, str], dict[str, object]] = {}
-    query_id, seed_ids, owner_ids, test_ids, dependency_ids, item_ids = _request_node_ids(
-        nodes,
-        targets,
+    query_id, seed_ids, owner_ids, test_ids, dependency_ids, item_ids = (
+        _request_node_ids(
+            nodes,
+            targets,
+        )
     )
     _request_edges(edges, query_id, owner_ids, test_ids, dependency_ids, item_ids)
     if not nodes or not edges or not seed_ids:
@@ -63,9 +65,7 @@ def _request_edges(
     _connect_owner_edges(edges, owner_ids, test_ids, dependency_ids, item_ids)
 
 
-def _query_node_id(
-    nodes: dict[tuple[str, str], dict[str, object]], query: str
-) -> str:
+def _query_node_id(nodes: dict[tuple[str, str], dict[str, object]], query: str) -> str:
     if not query:
         return ""
     return _add_node(nodes, "query", "term", query, action="fzf")

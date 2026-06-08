@@ -1,0 +1,150 @@
+{
+  "schemaId": "agent.semantic-protocols.semantic-fact-frontier-benchmark-report.fixtures",
+  "schemaVersion": "1",
+  "reports": [
+    {
+      "schemaId": "agent.semantic-protocols.semantic-fact-frontier-benchmark-report",
+      "schemaVersion": "1",
+      "protocolId": "agent.semantic-protocols.semantic-fact-frontier-feedback",
+      "protocolVersion": "1",
+      "reportId": "agent-semantic-protocols.rfc014.receipt-benchmark-report",
+      "sourceReceiptFixtureCatalog": "schemas/semantic-fact-frontier-receipt.fixtures.v1.json",
+      "sourceBenchmarkFixture": "sandtables/fixtures/asp/graph-turbo-owner-query.json",
+      "scenarios": [
+        {
+          "scenarioId": "task-session-frontier-read-test",
+          "captureKind": "task-session",
+          "receiptFixtureId": "agent-semantic-protocols.graph-turbo-frontier-receipt",
+          "receiptId": "agent-semantic-protocols.rfc014.frontier-receipt-real-project",
+          "receiptMetrics": {
+            "frontierReturnedCount": 10,
+            "frontierFollowedCount": 1,
+            "frontierFollowRate": 0.1,
+            "codeActuallyReadCount": 1,
+            "rawReadFallbackCount": 0,
+            "duplicateSelectorCount": 0,
+            "sameOwnerScanCount": 0,
+            "relationChannelCount": 9,
+            "pprIterations": 100,
+            "pprResidual": 1.74953e-7,
+            "stdoutBytesToFrontier": 5017,
+            "commandsToFirstUsefulLocator": 1,
+            "commandsToValidation": 3
+          },
+          "benchmarkMetrics": {
+            "profile": "owner-query",
+            "cacheMode": "hit",
+            "pathBackend": "python-bfs-small",
+            "pathPairCount": 6,
+            "pathCandidateCount": 5,
+            "pathFallbackCount": 0,
+            "projectedTypedPathCount": 4,
+            "relationChannelCount": 9,
+            "pprIterations": 65,
+            "pprResidual": 9.053049976337491e-10,
+            "medianMs": 1.267271,
+            "p95Ms": 1.870416
+          },
+          "benchmarkReadiness": {
+            "hasFollowedFrontier": true,
+            "hasValidationCommand": true,
+            "hasRuntimeCapture": false,
+            "readyForWeightCalibration": false
+          }
+        },
+        {
+          "scenarioId": "graph-turbo-runtime-receipt",
+          "captureKind": "graph-turbo-runtime",
+          "receiptFixtureId": "agent-semantic-protocols.graph-turbo-frontier-receipt-runtime",
+          "receiptId": "agent-semantic-protocols.rfc014.frontier-receipt-runtime",
+          "receiptMetrics": {
+            "frontierReturnedCount": 5,
+            "frontierFollowedCount": 1,
+            "frontierFollowRate": 0.2,
+            "codeActuallyReadCount": 1,
+            "rawReadFallbackCount": 0,
+            "duplicateSelectorCount": 0,
+            "sameOwnerScanCount": 0,
+            "relationChannelCount": 9,
+            "pprIterations": 65,
+            "pprResidual": 9.053049976337491e-10,
+            "stdoutBytesToFrontier": 2845,
+            "commandsToFirstUsefulLocator": 1,
+            "commandsToValidation": 3
+          },
+          "benchmarkMetrics": {
+            "profile": "owner-query",
+            "cacheMode": "hit",
+            "pathBackend": "python-bfs-small",
+            "pathPairCount": 6,
+            "pathCandidateCount": 5,
+            "pathFallbackCount": 0,
+            "projectedTypedPathCount": 4,
+            "relationChannelCount": 9,
+            "pprIterations": 65,
+            "pprResidual": 9.053049976337491e-10,
+            "medianMs": 1.267271,
+            "p95Ms": 1.870416
+          },
+          "benchmarkReadiness": {
+            "hasFollowedFrontier": true,
+            "hasValidationCommand": true,
+            "hasRuntimeCapture": true,
+            "readyForWeightCalibration": false
+          }
+        },
+        {
+          "scenarioId": "asp-runtime-frontier-only",
+          "captureKind": "asp-runtime-frontier",
+          "receiptFixtureId": "agent-semantic-protocols.asp-search-frontier-receipt-runtime",
+          "receiptId": "asp.search-frontier.python-semantic-fact-frontier-receipt-relationchannels-ppr",
+          "receiptMetrics": {
+            "frontierReturnedCount": 10,
+            "frontierFollowedCount": 0,
+            "frontierFollowRate": 0.0,
+            "codeActuallyReadCount": 0,
+            "rawReadFallbackCount": 0,
+            "duplicateSelectorCount": 0,
+            "sameOwnerScanCount": 0,
+            "relationChannelCount": 9,
+            "pprIterations": 100,
+            "pprResidual": 1.7495347254259386e-7,
+            "stdoutBytesToFrontier": 5327,
+            "commandsToFirstUsefulLocator": null,
+            "commandsToValidation": null
+          },
+          "benchmarkMetrics": {
+            "profile": "owner-query",
+            "cacheMode": "hit",
+            "pathBackend": "python-bfs-small",
+            "pathPairCount": 6,
+            "pathCandidateCount": 5,
+            "pathFallbackCount": 0,
+            "projectedTypedPathCount": 4,
+            "relationChannelCount": 9,
+            "pprIterations": 65,
+            "pprResidual": 9.053049976337491e-10,
+            "medianMs": 1.267271,
+            "p95Ms": 1.870416
+          },
+          "benchmarkReadiness": {
+            "hasFollowedFrontier": false,
+            "hasValidationCommand": false,
+            "hasRuntimeCapture": true,
+            "readyForWeightCalibration": false
+          }
+        }
+      ],
+      "summary": {
+        "scenarioCount": 3,
+        "receiptFixtureCount": 3,
+        "minFrontierFollowRate": 0.0,
+        "maxRawReadFallbackCount": 0,
+        "allRelationChannelsVisible": true,
+        "runtimeCaptureScenarioCount": 2,
+        "calibrationReadyScenarioCount": 0,
+        "nextAction": "add followed-read-test ASP runtime scenarios before relation weight calibration"
+      }
+    }
+  ]
+}

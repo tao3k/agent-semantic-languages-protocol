@@ -92,7 +92,9 @@ DEFAULT_PROFILES: dict[str, GraphProfile] = {
     ),
     "prime": GraphProfile(
         name="prime",
-        allowed_relations=frozenset({"matches", "selects", "uses", "imports", "covers"}),
+        allowed_relations=frozenset(
+            {"matches", "selects", "uses", "imports", "covers"}
+        ),
         allowed_transitions=_transitions(
             (
                 ("query", "owner"),
@@ -379,7 +381,9 @@ def resolve_profile(profile: str | GraphProfile) -> GraphProfile:
         return DEFAULT_PROFILES[profile]
     except KeyError as error:
         names = ", ".join(sorted(DEFAULT_PROFILES))
-        raise ValueError(f"unknown graph profile {profile!r}; expected one of {names}") from error
+        raise ValueError(
+            f"unknown graph profile {profile!r}; expected one of {names}"
+        ) from error
 
 
 def frontier_action(profile: GraphProfile, node: Node) -> str | None:

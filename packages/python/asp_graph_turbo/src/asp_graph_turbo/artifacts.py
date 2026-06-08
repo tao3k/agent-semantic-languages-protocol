@@ -52,7 +52,9 @@ def evaluate_search_artifacts(
 ) -> dict[str, object]:
     search_dir = search_artifact_dir(root)
     started = time.perf_counter()
-    state = _evaluate_artifact_paths(search_dir, limit=limit, budget=budget, examples=examples)
+    state = _evaluate_artifact_paths(
+        search_dir, limit=limit, budget=budget, examples=examples
+    )
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     return _evaluation_packet(root, search_dir, state, elapsed_ms, examples)
 

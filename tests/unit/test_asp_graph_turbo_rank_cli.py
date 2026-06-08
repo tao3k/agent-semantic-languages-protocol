@@ -32,13 +32,16 @@ def test_graph_turbo_rank_compact_projects_algorithm_evidence(tmp_path) -> None:
     )
 
     stdout = completed.stdout
-    assert stdout.startswith("[graph-frontier] profile=owner-query alg=typed-ppr-diverse")
+    assert stdout.startswith(
+        "[graph-frontier] profile=owner-query alg=typed-ppr-diverse"
+    )
     assert "\nscores=" in stdout
     assert "\npaths=P" in stdout
     assert "\ncache=" in stdout
     assert "\ntrace=" in stdout
     assert "typed-ppr:scipy-csr" in stdout
     assert "\nexplain=" in stdout
+    assert "relation:matches" in stdout
     assert "\nmetrics=" in stdout
 
 
@@ -80,3 +83,12 @@ def test_graph_turbo_rank_json_owns_trace_path_score_explanations(tmp_path) -> N
     assert any(step["step"] == "typed-ppr" for step in payload["algorithmTrace"])
     assert payload["rankExplanations"]
     assert payload["algorithmMetrics"]["pathCount"] >= 1
+    assert payload["algorithmMetrics"]["pathBackend"] in {
+        "python-bfs-small",
+        "scipy-yen",
+        "scipy-dijkstra",
+        "python-bfs-fallback",
+    }
+    assert payload["algorithmMetrics"]["pathFallbackCount"] >= 0
+    assert payload["algorithmMetrics"]["pathPairCount"] >= 1
+    assert payload["algorithmMetrics"]["pathCandidateCount"] >= 1

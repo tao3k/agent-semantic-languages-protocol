@@ -49,6 +49,20 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Rank typed ASP graph facts into compact frontier output.",
     ),
     CommandSpec(
+        ("graph", "turbo", "benchmark"),
+        "asp_graph_turbo.benchmark_cli",
+        "main",
+        "argv",
+        "Benchmark graph turbo ranking for sandtable evidence.",
+    ),
+    CommandSpec(
+        ("graph", "turbo", "sandtable-summary"),
+        "asp_graph_turbo.sandtable_summary_cli",
+        "main",
+        "argv",
+        "Summarize graph turbo benchmark and receipt metrics.",
+    ),
+    CommandSpec(
         ("graph", "turbo", "artifacts"),
         "asp_graph_turbo.artifacts_cli",
         "main",

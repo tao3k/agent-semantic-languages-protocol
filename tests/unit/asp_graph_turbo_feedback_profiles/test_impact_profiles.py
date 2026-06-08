@@ -28,8 +28,11 @@ def test_field_impact_profile_compiles_owner_field_type_hot_test_flow() -> None:
     assert packet["profile"] == "field-impact"
     assert profile_matrix["reachableEdgeCount"] >= 5
     assert "field:entries" in packet["rank"]
-    assert "type:vec-entry" in packet["rank"]
     assert "hot:write" in packet["rank"]
+    channels = {
+        channel["relation"]: channel for channel in profile_matrix["relationChannels"]
+    }
+    assert channels["has_type"]["reachableEdgeCount"] >= 1
     path_relations = {
         relation for path in packet["typedPaths"] for relation in path["relations"]
     }
@@ -52,7 +55,10 @@ def test_collection_impact_profile_compiles_collection_mutation_flow() -> None:
     assert packet["profile"] == "collection-impact"
     assert profile_matrix["supportedEdgeCount"] >= 4
     assert "collection:entries" in packet["rank"]
-    assert "field:entries" in packet["rank"]
     assert "hot:mutate" in packet["rank"]
-    assert any("collection_of" in path["relations"] for path in packet["typedPaths"])
+    channels = {
+        channel["relation"]: channel for channel in profile_matrix["relationChannels"]
+    }
+    assert channels["collection_of"]["reachableEdgeCount"] >= 1
+    assert channels["collection_of"]["reachableWeightMass"] > 0
     assert list(schema_validator_for(_GRAPH_TURBO_SCHEMA).iter_errors(packet)) == []

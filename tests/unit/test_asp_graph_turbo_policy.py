@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from asp_graph_turbo import TypedGraph, rank_frontier
+from asp_graph_turbo.policy import edge_weight_for
 
 
 def centrality_packet() -> dict[str, object]:
@@ -90,3 +91,30 @@ def test_kind_budget_limits_ranked_nodes_per_kind() -> None:
 
     assert ranked_owner_ids == ["owner:z"]
     assert result.kind_budgets == {"owner": 1}
+
+
+def test_edge_weight_uses_quality_fields_as_multipliers() -> None:
+    exact_fresh = edge_weight_for(
+        "matches",
+        fields={
+            "fields": {
+                "provenance": "parser",
+                "confidence": "exact",
+                "freshness": "fresh",
+            }
+        },
+    )
+    stale_heuristic = edge_weight_for(
+        "matches",
+        fields={
+            "fields": {
+                "provenance": "heuristic",
+                "confidence": "low",
+                "freshness": "stale",
+            }
+        },
+    )
+
+    assert exact_fresh > edge_weight_for("matches")
+    assert stale_heuristic < edge_weight_for("matches")
+    assert edge_weight_for("matches", explicit=2.0) == edge_weight_for("matches") * 2.0

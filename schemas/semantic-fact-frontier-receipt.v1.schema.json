@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-semantic-protocols.local/schemas/semantic-fact-frontier-receipt.v1.schema.json",
+  "title": "Semantic Fact Frontier Receipt",
+  "description": "Task-session receipt that records whether a semantic fact frontier was followed, ignored, read, tested, or edited.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaId",
+    "schemaVersion",
+    "protocolId",
+    "protocolVersion",
+    "receiptId",
+    "receiptKind",
+    "taskFingerprint",
+    "commandFingerprint",
+    "selector",
+    "owner",
+    "symbol",
+    "range",
+    "frontierReturned",
+    "frontierFollowed",
+    "codeActuallyRead",
+    "testCommand",
+    "testResult",
+    "editTouchedOwner",
+    "outputFingerprint"
+  ],
+  "properties": {
+    "schemaId": {
+      "const": "agent.semantic-protocols.semantic-fact-frontier-receipt"
+    },
+    "schemaVersion": {
+      "const": "1"
+    },
+    "protocolId": {
+      "const": "agent.semantic-protocols.semantic-fact-frontier-feedback"
+    },
+    "protocolVersion": {
+      "const": "1"
+    },
+    "receiptId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:-]*$"
+    },
+    "receiptKind": {
+      "enum": ["frontier", "read", "failure", "test", "edit"]
+    },
+    "taskFingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "commandFingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "selector": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "owner": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "symbol": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "range": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sourceRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "frontierReturned": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/frontierItem"
+      }
+    },
+    "frontierFollowed": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/frontierItem"
+      }
+    },
+    "codeActuallyRead": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/codeRead"
+      }
+    },
+    "testCommand": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/command"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "testResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/testResult"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "editTouchedOwner": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outputFingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/fingerprint"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["integer", "number", "string", "boolean", "null"]
+      }
+    },
+    "fields": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "fingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "startLine", "endLine"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "frontierItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "action"],
+      "properties": {
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "selector": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "owner": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "symbol": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sourceRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "enum": ["exact", "high", "medium", "low", "heuristic"]
+        },
+        "freshness": {
+          "enum": ["fresh", "cache-hit", "stale", "unknown"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "codeRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector", "owner", "range", "readKind", "fromFrontier"],
+      "properties": {
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "range": {
+          "$ref": "#/$defs/sourceRange"
+        },
+        "readKind": {
+          "enum": ["exact-selector", "direct-source-read", "raw-read", "manual-window"]
+        },
+        "fromFrontier": {
+          "type": "boolean"
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "workdir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        }
+      }
+    },
+    "testResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary"],
+      "properties": {
+        "status": {
+          "enum": ["passed", "failed", "skipped", "unknown"]
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

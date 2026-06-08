@@ -30,6 +30,18 @@ class Edge:
     fields: Mapping[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class OrientedEdge:
+    source: str
+    target: str
+    relation: str
+    original_source: str
+    original_target: str
+    reversed: bool
+    weight: float = 1.0
+    fields: Mapping[str, Any] = field(default_factory=dict)
+
+
 class TypedGraph:
     """A small typed heterogeneous graph built from schema-backed ASP facts."""
 
@@ -105,12 +117,12 @@ def _edge_from_mapping(item: Mapping[str, Any]) -> Edge:
     source = _string_field(item, "source")
     target = _string_field(item, "target")
     relation = _string_field(item, "relation")
-    weight = edge_weight_for(relation, item.get("weight"))
     fields = {
         key: value
         for key, value in item.items()
         if key not in {"source", "target", "relation", "weight"}
     }
+    weight = edge_weight_for(relation, item.get("weight"), fields)
     return Edge(source, target, relation, weight, fields)
 
 

@@ -106,15 +106,19 @@ def test_read_loop_guard_projects_repeated_code_followups() -> None:
     packet = result_to_packet(result)
     metrics = packet["algorithmMetrics"]
 
-    assert (
-        "\navoid=raw-read,repeat-owner,broad-fzf,duplicate-read,manual-window-scan\n"
-    ) in compact
-    assert "readLoop=code:4|duplicate:1|adjacent:2|sameOwner:2" in compact
-    assert metrics["readLoopDirectCodeActionCount"] == 4
-    assert metrics["readLoopDuplicateSelectorCount"] == 1
+    assert "\navoid=raw-read,repeat-owner,broad-fzf,manual-window-scan\n" in compact
+    assert "readLoop=code:3|duplicate:0|adjacent:2|sameOwner:2" in compact
+    assert "readLoopSecondPass=duplicate:1|sameOwner:0" in compact
+    assert metrics["readLoopDirectCodeActionCount"] == 3
+    assert metrics["readLoopDuplicateSelectorCount"] == 0
     assert metrics["readLoopAdjacentRangeWindowCount"] == 2
     assert metrics["readLoopSameOwnerScanCount"] == 2
+    assert metrics["readLoopSecondPassSuppressedCount"] == 1
+    assert metrics["readLoopDuplicateSelectorSuppressedCount"] == 1
+    assert metrics["readLoopSameOwnerSuppressedCount"] == 0
+    assert "item:body-dup" not in packet["rank"]
     assert any(step.step == "read-loop-guard" for step in result.algorithm_trace)
+    assert any(step.step == "read-loop-second-pass" for step in result.algorithm_trace)
     assert list(schema_validator_for(_GRAPH_TURBO_SCHEMA).iter_errors(packet)) == []
 
 

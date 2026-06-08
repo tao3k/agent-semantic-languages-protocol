@@ -92,10 +92,7 @@ def _first_key(
             key
             for key in keys
             if str(key.get("method") or "") == method
-            and (
-                not require_target
-                or target_like(str(key.get("subject") or ""))
-            )
+            and (not require_target or target_like(str(key.get("subject") or "")))
         ),
         None,
     )

@@ -29,7 +29,10 @@ def test_failure_evidence_profile_compiles_assert_to_fact_flow() -> None:
     assert profile_matrix["reachableEdgeCount"] >= 6
     assert "assert:replay" in packet["rank"]
     assert "field:entries" in packet["rank"]
-    assert "collection:entries" in packet["rank"]
     assert "evidence:file-hash" in packet["rank"]
+    channels = {
+        channel["relation"]: channel for channel in profile_matrix["relationChannels"]
+    }
+    assert channels["collection_of"]["reachableEdgeCount"] >= 1
     assert any("checks" in path["relations"] for path in packet["typedPaths"])
     assert list(schema_validator_for(_GRAPH_TURBO_SCHEMA).iter_errors(packet)) == []

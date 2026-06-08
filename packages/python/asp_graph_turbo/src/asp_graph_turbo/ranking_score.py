@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from .backend import (
-    multi_source_hop_lengths,
-    reachable_edges,
-    typed_personalized_pagerank,
-)
+from .backend import multi_source_hop_lengths, reachable_edges
 from .cache import cached_sparse_backend
-from .model import Edge, GraphCache, GraphProfile, ReceiptAdjustment, TypedGraph
+from .model import GraphCache, GraphProfile, OrientedEdge, ReceiptAdjustment, TypedGraph
+from .pagerank import (
+    GraphTurboPprResult,
+    graph_turbo_typed_personalized_pagerank_result,
+)
 from .policy import node_kind_bonus
 from .query_weights import query_node_match_bonus, query_token_weights
 from .receipt import receipt_score_adjustments
@@ -37,22 +37,23 @@ def collect_scores(
 ) -> tuple[
     dict[str, float],
     dict[str, int],
-    dict[tuple[str, str, str], Edge],
+    dict[tuple[str, str, str], OrientedEdge],
     GraphCache,
     tuple[ReceiptAdjustment, ...],
+    GraphTurboPprResult,
 ]:
     backend, graph_cache = cached_sparse_backend(
         graph, profile, fingerprint, enabled=cache_enabled
     )
     best_depth = multi_source_hop_lengths(backend, seed_ids, profile.max_depth)
-    pagerank = typed_personalized_pagerank(backend, seed_ids)
-    scores = score_nodes(graph, profile, seed_ids, best_depth, pagerank)
+    pagerank = graph_turbo_typed_personalized_pagerank_result(backend, seed_ids)
+    scores = score_nodes(graph, profile, seed_ids, best_depth, pagerank.scores)
     receipt_adjustments, receipt_facts = receipt_score_adjustments(graph)
     for node_id, score_delta in receipt_adjustments.items():
         if node_id in scores:
             scores[node_id] += score_delta
     selected_edges = reachable_edges(backend, best_depth)
-    return scores, best_depth, selected_edges, graph_cache, receipt_facts
+    return scores, best_depth, selected_edges, graph_cache, receipt_facts, pagerank
 
 
 def score_nodes(

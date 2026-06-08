@@ -8,19 +8,22 @@ from .cache import packet_fingerprint
 from .constants import compact_omissions_for_profile
 from .evidence import rank_explanations
 from .model import (
-    Edge,
     GraphCache,
     GraphProfile,
     GraphResult,
     Node,
+    OrientedEdge,
     ReceiptAdjustment,
     TypedGraph,
 )
+from .pagerank import GraphTurboPprResult
 from .profiles import DEFAULT_PROFILES
 from .ranking_projection import (
     build_path_projection,
     build_ranked_projection,
 )
+from .relation_contribution import graph_turbo_relation_reasons_by_node
+from .read_loop_guard import GraphTurboReadLoopSecondPass
 from .receipt import receipt_adjustment_counts, receipt_reasons_by_node
 from .ranking_trace import build_trace_projection, compact_avoid_actions
 
@@ -62,11 +65,13 @@ def build_graph_result(
     fingerprint: str,
     scores: Mapping[str, float],
     best_depth: Mapping[str, int],
-    selected_edges: Mapping[tuple[str, str, str], Edge],
+    selected_edges: Mapping[tuple[str, str, str], OrientedEdge],
     graph_cache: GraphCache,
     receipt_adjustments: tuple[ReceiptAdjustment, ...],
+    pagerank: GraphTurboPprResult,
     ranked: tuple[Node, ...],
     read_memory_suppressed_count: int = 0,
+    read_loop_second_pass: GraphTurboReadLoopSecondPass = GraphTurboReadLoopSecondPass(),
 ) -> GraphResult:
     ranked_projection = build_ranked_projection(
         graph=graph,
@@ -96,6 +101,7 @@ def build_graph_result(
         seed_ids,
         normalized_kind_budgets,
         receipt_reasons_by_node(receipt_adjustments),
+        graph_turbo_relation_reasons_by_node(selected_edges.values(), ranked),
     )
     trace_projection = build_trace_projection(
         graph,
@@ -105,9 +111,15 @@ def build_graph_result(
         best_depth=best_depth,
         ranked=ranked,
         path_count=len(path_projection.paths),
+        path_backend=path_projection.backend,
+        path_fallback_count=path_projection.fallback_count,
+        path_pair_count=path_projection.pair_count,
+        path_candidate_count=path_projection.candidate_count,
         read_memory_suppressed_count=read_memory_suppressed_count,
         receipt_boost_count=receipt_counts[0],
         receipt_penalty_count=receipt_counts[1],
+        pagerank=pagerank,
+        read_loop_second_pass=read_loop_second_pass,
     )
     return GraphResult(
         selected_profile,

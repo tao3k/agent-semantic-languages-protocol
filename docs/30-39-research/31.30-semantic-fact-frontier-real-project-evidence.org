@@ -1,0 +1,289 @@
+#+TITLE: Semantic Fact Frontier RFC 014 Real-Project Evidence
+#+DATE: 2026-06-07
+#+RFC: 014
+#+STATUS: evidence
+#+SEE_ALSO: rfcs/semantic-fact-frontier-feedback.org
+#+SEE_ALSO: schemas/semantic-fact-frontier-receipt.v1.schema.json
+#+SEE_ALSO: schemas/semantic-fact-frontier-receipt.fixtures.v1.json
+
+* Scope
+
+This records the first real-project evidence pass for the RFC 014 semantic
+fact frontier feedback loop.  The run uses this repository as the real project
+and exercises the public =asp python= search facade, graph-turbo ranking, one
+exact frontier read, and the focused frontier receipt schema validation test.
+
+This record proves that the P1 receipt shape can describe an actual
+agent-facing graph-turbo frontier loop.  It does not claim benchmark scoring,
+learned rank weights, or cross-language receipt emission.
+
+* Evidence record
+
+- project :: =agent-semantic-protocols=
+- provider :: =asp python= through =py-harness=
+- graph-turbo profile :: =owner-query=
+- graph-turbo backend :: =scipy-csr=
+- cache status :: =hit=
+- output fingerprint :: =sha256:4b91c14c768ea48778b1c695306f5f0b3382fb0c271c38e0356bb9621e4a5be5=
+- fixture :: =schemas/semantic-fact-frontier-receipt.fixtures.v1.json=
+- receipt id :: =agent-semantic-protocols.rfc014.frontier-receipt-real-project=
+- runtime receipt id :: =agent-semantic-protocols.rfc014.frontier-receipt-runtime=
+- ASP runtime receipt id :: =asp.search-frontier.python-semantic-fact-frontier-receipt-relationchannels-ppr=
+
+The search returned a compact graph-turbo frontier rather than the Rust
+fallback renderer:
+
+#+begin_example
+[graph-frontier] profile=owner-query alg=typed-ppr-diverse seed=Q budget=10
+frontier=Q.fzf,I.syntax,H.code,I2.syntax,I3.syntax,H2.code,H3.code,I4.syntax,I5.syntax,I6.syntax
+cache=hit:backend=scipy-csr:entries=482:key=sha256:20fb015516e5
+metrics=nodes=188,edges=258,selectedEdges=8,reachable=129,ranked=10,paths=5,windows=0,cache=hit,readLoop=code:3|duplicate:0|adjacent:0|sameOwner:0,relationChannels=9,ppr=iter:100|residual:1.75e-07|mass:1.00
+avoid=raw-read,repeat-owner,broad-fzf
+#+end_example
+
+The receipt fixture records:
+
+- =frontierReturnedCount= :: 10
+- =frontierFollowedCount= :: 1
+- =frontierFollowRate= :: 0.1
+- =codeActuallyReadCount= :: 1
+- =rawReadFallbackCount= :: 0
+- =duplicateSelectorCount= :: 0
+- =sameOwnerScanCount= :: 0
+- =relationChannelCount= :: 9
+- =pprIterations= :: 100
+- =pprResidual= :: 0.000000174953
+- =stdoutBytesToFrontier= :: 5017
+- =commandsToFirstUsefulLocator= :: 1
+- =commandsToValidation= :: 3
+
+The fixture catalog also records a runtime command fixture emitted by
+=asp-graph-turbo receipt=.  That receipt was generated from the graph-turbo
+sample request through the installed console entrypoint, then validated against
+=semantic-fact-frontier-receipt.v1.schema.json=.
+
+- runtime output fingerprint :: =sha256:334014b9e114442b9467ead7c50df1b514b11a77ffa666174d9ad009e6286580=
+- runtime =frontierReturnedCount= :: 5
+- runtime =frontierFollowedCount= :: 1
+- runtime =frontierFollowRate= :: 0.2
+- runtime =codeActuallyReadCount= :: 1
+- runtime =rawReadFallbackCount= :: 0
+- runtime =relationChannelCount= :: 9
+- runtime =pprIterations= :: 65
+- runtime =pprResidual= :: 0.0000000009053049976337491
+- runtime =commandsToFirstUsefulLocator= :: 1
+- runtime =commandsToValidation= :: 3
+
+The fixture catalog now also records public ASP runtime capture through
+=asp python search ... --frontier-receipt-out=.  That path writes a
+schema-valid receipt without routing the runtime flag into =py-harness= and
+keeps stdout as the normal compact =[graph-frontier]= surface.
+
+- ASP runtime output fingerprint :: =sha256:691f79bb9b09306d56aa7a14fd522065fb529e792e4c3ebdd983a968c499b598=
+- ASP runtime stdout bytes :: 5326
+- ASP runtime =frontierReturnedCount= :: 10
+- ASP runtime =frontierFollowedCount= :: 0
+- ASP runtime =codeActuallyReadCount= :: 0
+- ASP runtime =rawReadFallbackCount= :: 0
+- ASP runtime =relationChannelCount= :: 9
+- ASP runtime =pprIterations= :: 100
+- ASP runtime =pprResidual= :: 0.00000017495347254259386
+
+* Commands
+
+The measured commands were:
+
+#+begin_example
+asp python search fzf \
+  'semantic-fact-frontier-receipt relationChannels PPR' \
+  owner tests --view seeds .
+# exit 0
+# stdout bytes: 5017
+# stdout sha256: 4b91c14c768ea48778b1c695306f5f0b3382fb0c271c38e0356bb9621e4a5be5
+
+asp python query --from-hook direct-source-read \
+  --selector tests/unit/test_semantic_fact_frontier_receipt_schema.py:9-29 \
+  --code .
+# exit 0
+# stdout bytes: 660
+# stdout sha256: bb08ac2a0af9f6ac9702fa2fc952ec3c8b2f329a6263546ec4e9834611db30f2
+
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+uv run --project packages/python/asp_graph_turbo --frozen pytest -q \
+  -c /dev/null \
+  -o cache_dir=/Users/guangtao/ghq/github.com/tao3k/agent-semantic-protocols/.pytest_cache \
+  tests/unit/test_semantic_fact_frontier_receipt_schema.py
+# 4 passed in 0.08s
+# stdout sha256: f87e1ec159e73ceaff96b34a3bc29b017111816d05b56b64e23a829128ce891b
+
+PYTHONPATH=packages/python/asp_graph_turbo/src:tests \
+uv run --project packages/python/asp_graph_turbo --frozen python - <<'PY' | \
+PYTHONPATH=packages/python/asp_graph_turbo/src \
+uv run --project packages/python/asp_graph_turbo --frozen \
+  asp-graph-turbo receipt \
+    --receipt-id agent-semantic-protocols.rfc014.frontier-receipt-runtime \
+    --task-fingerprint real-project:agent-semantic-protocols:rfc014-runtime-capture \
+    --command-fingerprint command:asp-graph-turbo-receipt:rfc014 \
+    --follow-node item:collect \
+    --read-selector src/cli.py:10:20 \
+    --test-argv-json '["pytest", "unit-cli"]' \
+    --test-status passed \
+    --test-summary 'focused test passed' \
+    --test-exit-code 0 \
+    --commands-to-first-useful-locator 1 \
+    --commands-to-validation 3 \
+    - >/tmp/rfc014-runtime-receipt.json
+import json
+from unit._asp_graph_turbo_common import sample_request
+print(json.dumps(sample_request()))
+PY
+# schema validation errors: 0
+# output fingerprint:
+# sha256:334014b9e114442b9467ead7c50df1b514b11a77ffa666174d9ad009e6286580
+
+rm -f /tmp/rfc014-asp-search-frontier-receipt.json \
+  /tmp/rfc014-asp-search-frontier.stdout
+direnv exec . cargo run -q -p agent-semantic-protocol --bin asp -- \
+  python search fzf \
+  'semantic-fact-frontier-receipt relationChannels PPR' \
+  owner tests --view seeds \
+  --frontier-receipt-out /tmp/rfc014-asp-search-frontier-receipt.json \
+  . >/tmp/rfc014-asp-search-frontier.stdout
+# receipt schema validation errors: 0
+# stdout starts with: [graph-frontier]
+# stdout bytes: 5326
+# output fingerprint:
+# sha256:691f79bb9b09306d56aa7a14fd522065fb529e792e4c3ebdd983a968c499b598
+#+end_example
+
+* Benchmark record
+
+The graph-turbo benchmark command now emits
+=semantic-graph-turbo-benchmark.v1=.  This gives the sandtable a stable packet
+for ranking latency and path-frontier width instead of relying on one-off
+Python snippets.
+
+Fixture:
+
+- packet :: =sandtables/fixtures/asp/graph-turbo-owner-query.json=
+- profile :: =owner-query=
+- graph size :: =nodes=6=, =edges=6=
+- typed path backend :: =python-bfs-small=
+- typed path pairs :: =6=
+- typed path candidates :: =5=
+- typed path fallbacks :: =0=
+- projected typed paths :: =4=
+- relation channels :: =9=
+- PPR iterations :: =65=
+- PPR residual :: =0.0000000009053049976337491=
+
+Measured with the public package entrypoint:
+
+#+begin_example
+uv run --project packages/python python -m asp_graph_turbo benchmark \
+  sandtables/fixtures/asp/graph-turbo-owner-query.json \
+  --runs 30 --warmup-runs 3 --cache-mode disabled --format json
+# schemaId: agent.semantic-protocols.semantic-graph-turbo-benchmark
+# durationMs: min=1.478834 mean=1.741482 median=1.542083 p95=2.755084 max=3.142583
+# cacheStatus: disabled
+
+uv run --project packages/python python -m asp_graph_turbo benchmark \
+  sandtables/fixtures/asp/graph-turbo-owner-query.json \
+  --runs 30 --warmup-runs 3 --cache-mode enabled --format json
+# schemaId: agent.semantic-protocols.semantic-graph-turbo-benchmark
+# durationMs: min=1.230834 mean=1.372810 median=1.267271 p95=1.870416 max=2.435167
+# cacheStatus: hit
+
+uv run --project packages/python python -m asp_graph_turbo benchmark \
+  sandtables/fixtures/asp/graph-turbo-owner-query.json \
+  --runs 10 --warmup-runs 1 --cache-mode disabled --format text
+# [graph-benchmark] profile=owner-query runs=10 warmup=1 cacheMode=disabled medianMs=1.609833 p95Ms=2.549458
+# metrics=pathBackend=python-bfs-small,pathPairs=6,pathCandidates=5,pathFallbacks=0,pprIterations=65,cache=disabled
+#+end_example
+
+The benchmark packet can be joined with a frontier receipt into a single
+sandtable row:
+
+#+begin_example
+tmp_benchmark=$(mktemp /tmp/graph-turbo-benchmark.XXXXXX.json)
+uv run --project packages/python python -m asp_graph_turbo benchmark \
+  sandtables/fixtures/asp/graph-turbo-owner-query.json \
+  --runs 30 --warmup-runs 3 --cache-mode disabled --format json \
+  > "$tmp_benchmark"
+uv run --project packages/python python -m asp_graph_turbo sandtable-summary \
+  --benchmark "$tmp_benchmark" \
+  --receipt schemas/semantic-fact-frontier-receipt.fixtures.v1.json \
+  --scenario rfc014-owner-query-fixture \
+  --format text
+# [graph-sandtable-summary] scenario=rfc014-owner-query-fixture profile=owner-query medianMs=1.500812 p95Ms=1.537667
+# benchmark=pathBackend=python-bfs-small,pathPairs=6,pathCandidates=5,pathFallbacks=0,pprIterations=65,cache=disabled
+# receipt=followRate=0.1,rawReadFallbacks=0,duplicateSelectors=0,sameOwnerScans=0,commandsToValidation=3
+#+end_example
+
+The offline comparison table is now fixed as a schema-owned fixture catalog:
+
+- report fixture :: =schemas/semantic-fact-frontier-benchmark-report.fixtures.v1.json=
+- report schema :: =schemas/semantic-fact-frontier-benchmark-report.v1.schema.json=
+- scenarios :: =task-session-frontier-read-test=,
+  =graph-turbo-runtime-receipt=, =asp-runtime-frontier-only=
+- summary :: =scenarioCount=3=, =runtimeCaptureScenarioCount=2=,
+  =calibrationReadyScenarioCount=0=
+- next action :: add a followed/read/test ASP runtime scenario before relation
+  weight calibration
+
+The same metric surface was also exercised against a synthetic large
+=field-impact= graph to force =scipy-yen=:
+
+- graph size :: =nodes=64=, =edges=4=
+- typed path backend :: =scipy-yen=
+- typed path pairs :: =3=
+- typed path candidates :: =4=
+- typed path fallbacks :: =0=
+- projected typed paths :: =4=
+- no-cache duration :: =n=100=, =min=1.9678ms=, =mean=2.0765ms=,
+  =median=2.0522ms=, =p95=2.2316ms=, =max=2.9434ms=
+
+* Observations
+
+- The search path now exercises Python graph-turbo directly.  Earlier fallback
+  symptoms were fixed before this record by restoring the PPR result API and
+  making =relationChannels= packet-visible.
+- The compact frontier exposed exact selector actions.  The agent followed
+  =H2.code= into
+  =tests/unit/test_semantic_fact_frontier_receipt_schema.py:9-29= instead of
+  falling back to raw source reads or broad file scans.
+- The receipt fixture is intentionally separated from the inline schema unit
+  cases.  The unit test validates the fixture catalog against
+  =semantic-fact-frontier-receipt.v1.schema.json= and checks that recorded
+  counts match the arrays in the receipt.
+- Graph-turbo now has an explicit =asp-graph-turbo receipt= runtime capture
+  command.  The command ranks a graph-turbo request, preserves node selector
+  fields from the in-memory =GraphResult=, and emits the receipt schema from
+  caller-supplied followed/read/test facts.
+- ASP search now has an explicit =--frontier-receipt-out= runtime capture
+  trigger for graph-turbo frontier search commands.  The protocol facade
+  strips this flag before provider execution and rejects non graph-turbo
+  renderer paths instead of preserving legacy =[search-*]= replay behavior.
+- Graph-turbo now has an explicit =benchmark= command.  The command emits
+  schema-owned latency and typed-path width metrics so future sandtables can
+  compare path backend, pair count, candidate count, and fallback count without
+  parsing debug text.
+- Graph-turbo now has an explicit =sandtable-summary= command.  The command
+  joins =semantic-graph-turbo-benchmark.v1= with a
+  =semantic-fact-frontier-receipt.v1= receipt or fixture catalog into a single
+  schema-owned comparison row.
+- The offline benchmark report fixture now joins the task-session receipt,
+  graph-turbo runtime receipt, and ASP runtime frontier-only receipt into one
+  schema-owned table.  It is enough to compare current evidence without parsing
+  debug text, but not enough to calibrate ranking weights or benchmark
+  thresholds.
+
+* Next
+
+- Add a followed/read/test ASP runtime scenario to the benchmark report so the
+  public =asp <language> search --frontier-receipt-out= path is represented by
+  actual frontier use, not only frontier emission.
+- Add live sandtable runs only after the offline benchmark and receipt packets
+  can be compared without losing parser-owned frontier precision.
+- Use those receipts to decide whether graph-turbo ranking needs calibrated
+  relation weights beyond the deterministic sparse matrix bank.

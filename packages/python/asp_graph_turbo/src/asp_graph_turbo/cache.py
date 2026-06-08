@@ -84,7 +84,9 @@ def cached_sparse_backend(
 ) -> tuple[SparseGraphBackend, GraphCache]:
     if not enabled:
         backend = build_sparse_backend(graph, profile)
-        return backend, GraphCache(fingerprint, "disabled", "scipy-csr", len(_BACKEND_CACHE))
+        return backend, GraphCache(
+            fingerprint, "disabled", "scipy-csr", len(_BACKEND_CACHE)
+        )
     cached = _BACKEND_CACHE.get(fingerprint)
     if cached is not None:
         _BACKEND_CACHE.move_to_end(fingerprint)
@@ -92,7 +94,9 @@ def cached_sparse_backend(
     persistent = _load_persistent_backend(fingerprint)
     if persistent is not None:
         _remember_backend(fingerprint, persistent)
-        return persistent, GraphCache(fingerprint, "hit", "scipy-csr", _persistent_entry_count())
+        return persistent, GraphCache(
+            fingerprint, "hit", "scipy-csr", _persistent_entry_count()
+        )
     backend = build_sparse_backend(graph, profile)
     _remember_backend(fingerprint, backend)
     _store_persistent_backend(fingerprint, backend)

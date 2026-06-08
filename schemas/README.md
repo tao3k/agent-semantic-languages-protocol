@@ -5,6 +5,17 @@ provider registry. It records the semantic language protocol, language ids,
 provider ids, executable binaries, callable methods, structured method
 descriptors, and packet schemas.
 
+`software-criterion-catalog.v1.schema.json` is the shared software criterion
+canon: criterion ids, criterion-domain vocabulary, evidence kinds, repair
+recipe shape, and severity promotion policy.
+`software-criterion-extension-report.v1.schema.json` is the optional
+ecosystem/profile criterion envelope for provider-owned packs such as
+`typescript.extension.effect`, `rust.extension.tokio`,
+`julia.extension.moshi`, and `julia.profile.sciml`. The core canon supplies
+navigation vocabulary; extension reports carry ecosystem-specific activation
+evidence, parser/compiler facts, source doctrine, and repair recipes without
+turning Effect, Tokio, Moshi, or SciML into cross-language mapping rules.
+
 `semantic-search-packet.v1.schema.json` is the shared JSON contract for search
 output across semantic language providers. Compact text stays the default
 prompt surface; JSON is the validation, cache, and artifact shape. Agent-facing
@@ -55,6 +66,20 @@ fact graph output rather than `semantic-graph.v1`. The companion
 matrix executable: `Vec`/`HashMap`, `Array`/`Map`, `list`/`dict`, and
 `Vector`/`Dict` must validate through the same schema before graph-turbo ranking
 or sparse relation banks consume those facts.
+`semantic-fact-frontier-receipt.v1.schema.json` records whether a task-session
+frontier was returned, followed, read, tested, or edited. Its top-level fields
+stay present with `null` or empty-array values when a receipt kind does not use
+that field, so benchmark conversion can distinguish not-applicable from
+not-recorded.
+`semantic-fact-frontier-receipt.fixtures.v1.json` keeps the first real-project
+receipt fixture for this shape, covering a graph-turbo frontier, one exact
+frontier read, and the focused receipt schema test.
+`semantic-fact-frontier-benchmark-report.v1.schema.json` owns the offline
+comparison packet that joins receipt metrics with graph-turbo benchmark metrics
+before live sandtable scoring. Its fixture catalog,
+`semantic-fact-frontier-benchmark-report.fixtures.v1.json`, fixes the current
+task-session, graph-turbo runtime, and ASP runtime frontier-only scenarios so
+calibration remains blocked until a followed/read/test ASP runtime case exists.
 
 `semantic-compact-graph-render.v1.schema.json` is the shared prompt-facing
 render template for compact graph search output. It owns the view-native

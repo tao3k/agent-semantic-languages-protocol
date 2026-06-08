@@ -123,9 +123,7 @@ def _status(measurable: bool, rank: int | None) -> str:
 
 def _top_count(rows: Iterable[dict[str, object]], top_k: int) -> int:
     return sum(
-        1
-        for row in rows
-        if row["rank"] is not None and int(row["rank"]) <= top_k
+        1 for row in rows if row["rank"] is not None and int(row["rank"]) <= top_k
     )
 
 
@@ -137,11 +135,7 @@ def _rank_distribution(rows: Iterable[dict[str, object]]) -> dict[str, int]:
 def _examples(
     rows: Iterable[dict[str, object]], status: str, examples: int
 ) -> list[dict[str, object]]:
-    return [
-        _label_example(row)
-        for row in rows
-        if row["status"] == status
-    ][:examples]
+    return [_label_example(row) for row in rows if row["status"] == status][:examples]
 
 
 def _label_example(row: dict[str, object]) -> dict[str, object]:

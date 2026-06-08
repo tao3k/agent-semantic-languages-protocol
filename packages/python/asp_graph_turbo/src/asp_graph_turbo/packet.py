@@ -43,6 +43,9 @@ def result_to_packet(result: GraphResult) -> dict[str, object]:
                 "target": edge.target,
                 "relation": edge.relation,
                 "weight": edge.weight,
+                "originalSource": edge.original_source,
+                "originalTarget": edge.original_target,
+                "reversed": edge.reversed,
             }
             for edge in result.selected_edges
         ],
@@ -106,6 +109,10 @@ def result_to_packet(result: GraphResult) -> dict[str, object]:
             "reachableNodeCount": result.algorithm_metrics.reachable_node_count,
             "rankedNodeCount": result.algorithm_metrics.ranked_node_count,
             "pathCount": result.algorithm_metrics.path_count,
+            "pathBackend": result.algorithm_metrics.path_backend,
+            "pathFallbackCount": result.algorithm_metrics.path_fallback_count,
+            "pathPairCount": result.algorithm_metrics.path_pair_count,
+            "pathCandidateCount": result.algorithm_metrics.path_candidate_count,
             "mergedWindowCount": result.algorithm_metrics.merged_window_count,
             "cacheStatus": result.algorithm_metrics.cache_status,
             "readLoopDirectCodeActionCount": (
@@ -125,6 +132,20 @@ def result_to_packet(result: GraphResult) -> dict[str, object]:
             ),
             "receiptBoostCount": result.algorithm_metrics.receipt_boost_count,
             "receiptPenaltyCount": result.algorithm_metrics.receipt_penalty_count,
+            "relationChannelCount": result.algorithm_metrics.relation_channel_count,
+            "pprIterations": result.algorithm_metrics.ppr_iterations,
+            "pprResidual": result.algorithm_metrics.ppr_residual,
+            "pprDanglingMassLast": (result.algorithm_metrics.ppr_dangling_mass_last),
+            "pprMassSum": result.algorithm_metrics.ppr_mass_sum,
+            "readLoopSecondPassSuppressedCount": (
+                result.algorithm_metrics.read_loop_second_pass_suppressed_count
+            ),
+            "readLoopDuplicateSelectorSuppressedCount": (
+                result.algorithm_metrics.read_loop_duplicate_selector_suppressed_count
+            ),
+            "readLoopSameOwnerSuppressedCount": (
+                result.algorithm_metrics.read_loop_same_owner_suppressed_count
+            ),
         },
         "omit": list(result.omit),
         "avoid": list(result.avoid),
@@ -179,6 +200,16 @@ def _profile_matrix_to_packet(entry: ProfileMatrixSummary) -> dict[str, object]:
         "supportedEdgeCount": entry.supported_edge_count,
         "reachableEdgeCount": entry.reachable_edge_count,
         "density": entry.density,
+        "relationChannels": [
+            {
+                "relation": channel.relation,
+                "supportedEdgeCount": channel.supported_edge_count,
+                "reachableEdgeCount": channel.reachable_edge_count,
+                "weightMass": channel.weight_mass,
+                "reachableWeightMass": channel.reachable_weight_mass,
+            }
+            for channel in entry.relation_channels
+        ],
     }
 
 

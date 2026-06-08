@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .model import Edge, Node, ProfileCompatibility
+from .model import Node, OrientedEdge, ProfileCompatibility
 from .profiles import DEFAULT_PROFILES, frontier_action
 
 
 def profile_compatibility(
-    edges: Iterable[Edge], ranked_nodes: Iterable[Node]
+    edges: Iterable[OrientedEdge], ranked_nodes: Iterable[Node]
 ) -> tuple[ProfileCompatibility, ...]:
     selected_relations = {edge.relation for edge in edges}
     ranked = tuple(ranked_nodes)

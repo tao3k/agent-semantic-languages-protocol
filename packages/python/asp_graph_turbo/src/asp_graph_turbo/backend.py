@@ -9,8 +9,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, diags
 from scipy.sparse.csgraph import dijkstra
 
-from .constants import DEFAULT_PAGERANK_ALPHA
-from .model import Edge, GraphProfile, TypedGraph
+from .model import Edge, GraphProfile, OrientedEdge, TypedGraph
 from .profiles import allowed_oriented_edges
 
 
@@ -19,25 +18,100 @@ class SparseGraphBackend:
     node_ids: tuple[str, ...]
     index_by_id: Mapping[str, int]
     adjacency: csr_matrix
-    selected_edges: tuple[Edge, ...]
+    transition: csr_matrix
+    relation_matrices: Mapping[str, csr_matrix]
+    relation_edge_counts: Mapping[str, int]
+    relation_weight_mass: Mapping[str, float]
+    selected_edges: tuple[OrientedEdge, ...]
 
 
-def build_sparse_backend(graph: TypedGraph, profile: GraphProfile) -> SparseGraphBackend:
+def build_sparse_backend(
+    graph: TypedGraph, profile: GraphProfile
+) -> SparseGraphBackend:
     node_ids = tuple(graph.nodes)
     index_by_id = {node_id: index for index, node_id in enumerate(node_ids)}
     rows: list[int] = []
     cols: list[int] = []
     weights: list[float] = []
-    selected_edges: dict[tuple[str, str, str], Edge] = {}
+    relation_rows: dict[str, list[int]] = {}
+    relation_cols: dict[str, list[int]] = {}
+    relation_weights: dict[str, list[float]] = {}
+    relation_weight_mass: dict[str, float] = {}
+    selected_edges: dict[tuple[str, str, str, str, str], OrientedEdge] = {}
     for source_id, target_id, edge in allowed_oriented_edges(graph, profile):
         source = index_by_id[source_id]
         target = index_by_id[target_id]
+        oriented_edge = _oriented_edge(source_id, target_id, edge)
         rows.append(source)
         cols.append(target)
         weights.append(edge.weight)
-        selected_edges[(edge.source, edge.target, edge.relation)] = edge
-    adjacency = csr_matrix((weights, (rows, cols)), shape=(len(node_ids), len(node_ids)))
-    return SparseGraphBackend(node_ids, index_by_id, adjacency, tuple(selected_edges.values()))
+        relation_rows.setdefault(edge.relation, []).append(source)
+        relation_cols.setdefault(edge.relation, []).append(target)
+        relation_weights.setdefault(edge.relation, []).append(edge.weight)
+        relation_weight_mass[edge.relation] = (
+            relation_weight_mass.get(edge.relation, 0.0) + edge.weight
+        )
+        selected_edges[
+            (source_id, target_id, edge.relation, edge.source, edge.target)
+        ] = oriented_edge
+    adjacency = csr_matrix(
+        (weights, (rows, cols)), shape=(len(node_ids), len(node_ids))
+    )
+    return SparseGraphBackend(
+        node_ids=node_ids,
+        index_by_id=index_by_id,
+        adjacency=adjacency,
+        transition=_row_stochastic_transition(adjacency),
+        relation_matrices=_relation_matrices(
+            relation_rows,
+            relation_cols,
+            relation_weights,
+            node_count=len(node_ids),
+        ),
+        relation_edge_counts={
+            relation: len(values) for relation, values in relation_weights.items()
+        },
+        relation_weight_mass=relation_weight_mass,
+        selected_edges=tuple(selected_edges.values()),
+    )
+
+
+def sparse_backend_from_parts(
+    node_ids: tuple[str, ...],
+    adjacency: csr_matrix,
+    selected_edges: tuple[OrientedEdge, ...],
+) -> SparseGraphBackend:
+    index_by_id = {node_id: index for index, node_id in enumerate(node_ids)}
+    relation_rows: dict[str, list[int]] = {}
+    relation_cols: dict[str, list[int]] = {}
+    relation_weights: dict[str, list[float]] = {}
+    relation_weight_mass: dict[str, float] = {}
+    for edge in selected_edges:
+        if edge.source not in index_by_id or edge.target not in index_by_id:
+            continue
+        relation_rows.setdefault(edge.relation, []).append(index_by_id[edge.source])
+        relation_cols.setdefault(edge.relation, []).append(index_by_id[edge.target])
+        relation_weights.setdefault(edge.relation, []).append(edge.weight)
+        relation_weight_mass[edge.relation] = (
+            relation_weight_mass.get(edge.relation, 0.0) + edge.weight
+        )
+    return SparseGraphBackend(
+        node_ids=node_ids,
+        index_by_id=index_by_id,
+        adjacency=adjacency,
+        transition=_row_stochastic_transition(adjacency),
+        relation_matrices=_relation_matrices(
+            relation_rows,
+            relation_cols,
+            relation_weights,
+            node_count=len(node_ids),
+        ),
+        relation_edge_counts={
+            relation: len(values) for relation, values in relation_weights.items()
+        },
+        relation_weight_mass=relation_weight_mass,
+        selected_edges=selected_edges,
+    )
 
 
 def multi_source_hop_lengths(
@@ -62,40 +136,9 @@ def multi_source_hop_lengths(
     }
 
 
-def typed_personalized_pagerank(
-    backend: SparseGraphBackend,
-    seed_ids: Iterable[str],
-    *,
-    alpha: float = DEFAULT_PAGERANK_ALPHA,
-    max_iter: int = 100,
-    tolerance: float = 1e-9,
-) -> dict[str, float]:
-    node_count = len(backend.node_ids)
-    if node_count == 0:
-        return {}
-    personalization = _personalization_vector(backend, seed_ids)
-    if node_count == 1:
-        return {backend.node_ids[0]: 1.0}
-    transition = _row_stochastic_transition(backend.adjacency)
-    dangling = np.asarray(backend.adjacency.sum(axis=1)).ravel() == 0.0
-    rank = personalization.copy()
-    for _ in range(max_iter):
-        dangling_mass = float(rank[dangling].sum()) if dangling.any() else 0.0
-        next_rank = alpha * ((transition.T @ rank) + (dangling_mass * personalization))
-        next_rank += (1.0 - alpha) * personalization
-        if np.abs(next_rank - rank).sum() < tolerance:
-            rank = next_rank
-            break
-        rank = next_rank
-    return {
-        node_id: float(rank[index])
-        for index, node_id in enumerate(backend.node_ids)
-    }
-
-
 def reachable_edges(
     backend: SparseGraphBackend, best_depth: Mapping[str, int]
-) -> dict[tuple[str, str, str], Edge]:
+) -> dict[tuple[str, str, str], OrientedEdge]:
     return {
         (edge.source, edge.target, edge.relation): edge
         for edge in backend.selected_edges
@@ -103,25 +146,14 @@ def reachable_edges(
     }
 
 
-def _seed_indexes(backend: SparseGraphBackend, seed_ids: Iterable[str]) -> tuple[int, ...]:
-    return tuple(
-        backend.index_by_id[node_id] for node_id in seed_ids if node_id in backend.index_by_id
-    )
-
-
-def _personalization_vector(
+def _seed_indexes(
     backend: SparseGraphBackend, seed_ids: Iterable[str]
-) -> np.ndarray:
-    node_count = len(backend.node_ids)
-    vector = np.zeros(node_count, dtype=float)
-    seed_indexes = _seed_indexes(backend, seed_ids)
-    if seed_indexes:
-        seed_weight = 1.0 / len(seed_indexes)
-        for index in seed_indexes:
-            vector[index] = seed_weight
-    else:
-        vector.fill(1.0 / node_count)
-    return vector
+) -> tuple[int, ...]:
+    return tuple(
+        backend.index_by_id[node_id]
+        for node_id in seed_ids
+        if node_id in backend.index_by_id
+    )
 
 
 def _row_stochastic_transition(adjacency: csr_matrix) -> csr_matrix:
@@ -129,3 +161,35 @@ def _row_stochastic_transition(adjacency: csr_matrix) -> csr_matrix:
     inverse = np.zeros_like(row_sums, dtype=float)
     np.divide(1.0, row_sums, out=inverse, where=row_sums > 0.0)
     return diags(inverse).dot(adjacency).tocsr()
+
+
+def _relation_matrices(
+    relation_rows: Mapping[str, list[int]],
+    relation_cols: Mapping[str, list[int]],
+    relation_weights: Mapping[str, list[float]],
+    *,
+    node_count: int,
+) -> Mapping[str, csr_matrix]:
+    return {
+        relation: csr_matrix(
+            (
+                relation_weights[relation],
+                (relation_rows[relation], relation_cols[relation]),
+            ),
+            shape=(node_count, node_count),
+        )
+        for relation in sorted(relation_weights)
+    }
+
+
+def _oriented_edge(source_id: str, target_id: str, edge: Edge) -> OrientedEdge:
+    return OrientedEdge(
+        source=source_id,
+        target=target_id,
+        relation=edge.relation,
+        original_source=edge.source,
+        original_target=edge.target,
+        reversed=source_id != edge.source or target_id != edge.target,
+        weight=edge.weight,
+        fields=edge.fields,
+    )

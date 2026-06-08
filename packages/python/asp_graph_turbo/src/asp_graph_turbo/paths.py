@@ -5,8 +5,23 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Mapping
 
-from .model import Edge, FlowLite, GraphProfile, SourceSinkFrontier, TypedGraph, TypedPath
+from .model import (
+    Edge,
+    FlowLite,
+    GraphProfile,
+    SourceSinkFrontier,
+    TypedGraph,
+    TypedPath,
+)
+from .path_scipy import (
+    GraphTurboPathCandidate,
+    graph_turbo_scipy_path_candidates,
+    graph_turbo_scipy_yen_path_candidates,
+)
 from .profiles import allowed_oriented_edges, frontier_action
+
+_SCIPY_PATH_NODE_THRESHOLD = 48
+_SCIPY_PATH_PAIR_THRESHOLD = 16
 
 
 def source_sink_frontier(
@@ -18,7 +33,8 @@ def source_sink_frontier(
     sinks = tuple(
         node_id
         for node_id in ranked_node_ids
-        if node_id not in seed_ids and frontier_action(profile, graph.nodes[node_id]) is not None
+        if node_id not in seed_ids
+        and frontier_action(profile, graph.nodes[node_id]) is not None
     )
     return SourceSinkFrontier(seed_ids, sinks)
 
@@ -32,13 +48,103 @@ def typed_paths(
     path_budget: int,
     max_hops: int,
 ) -> tuple[TypedPath, ...]:
+    paths, _backend, _fallback_count, _pair_count, _candidate_count = (
+        typed_paths_with_backend(
+            graph,
+            profile,
+            frontier,
+            scores,
+            path_budget=path_budget,
+            max_hops=max_hops,
+        )
+    )
+    return paths
+
+
+def typed_paths_with_backend(
+    graph: TypedGraph,
+    profile: GraphProfile,
+    frontier: SourceSinkFrontier,
+    scores: Mapping[str, float],
+    *,
+    path_budget: int,
+    max_hops: int,
+) -> tuple[tuple[TypedPath, ...], str, int, int, int]:
+    backend = _path_backend_for(graph, frontier)
+    pair_count = len(frontier.source_ids) * len(frontier.sink_ids)
+    fallback_count = 0
+    if backend == "scipy-yen":
+        candidates = list(
+            graph_turbo_scipy_yen_path_candidates(
+                graph,
+                profile,
+                frontier,
+                max_hops=max_hops,
+                path_budget=path_budget,
+            )
+        )
+        if candidates:
+            return (
+                _typed_paths_from_candidates(candidates, scores, path_budget),
+                backend,
+                fallback_count,
+                pair_count,
+                len(candidates),
+            )
+        backend = "scipy-dijkstra"
+        fallback_count += 1
+    if backend == "scipy-dijkstra":
+        candidates = list(
+            graph_turbo_scipy_path_candidates(
+                graph,
+                profile,
+                frontier,
+                max_hops=max_hops,
+            )
+        )
+        if candidates:
+            return (
+                _typed_paths_from_candidates(candidates, scores, path_budget),
+                backend,
+                fallback_count,
+                pair_count,
+                len(candidates),
+            )
+        backend = "python-bfs-fallback"
+        fallback_count += 1
+    candidates = _python_bfs_path_candidates(graph, profile, frontier, max_hops)
+    return (
+        _typed_paths_from_candidates(candidates, scores, path_budget),
+        backend,
+        fallback_count,
+        pair_count,
+        len(candidates),
+    )
+
+
+def _python_bfs_path_candidates(
+    graph: TypedGraph,
+    profile: GraphProfile,
+    frontier: SourceSinkFrontier,
+    max_hops: int,
+) -> list[GraphTurboPathCandidate]:
     adjacency = _adjacency(graph, profile)
-    candidates: list[tuple[str, str, tuple[str, ...], tuple[str, ...], float]] = []
+    candidates: list[GraphTurboPathCandidate] = []
     for source in frontier.source_ids:
         for sink in frontier.sink_ids:
             candidates.extend(_simple_paths(adjacency, source, sink, max_hops))
+    return candidates
+
+
+def _typed_paths_from_candidates(
+    candidates: list[GraphTurboPathCandidate],
+    scores: Mapping[str, float],
+    path_budget: int,
+) -> tuple[TypedPath, ...]:
     unique_candidates = _dedupe_paths(candidates)
-    unique_candidates.sort(key=lambda item: (item[4], len(item[2]), item[0], item[1], item[2]))
+    unique_candidates.sort(
+        key=lambda item: (item[4], len(item[2]), item[0], item[1], item[2])
+    )
     typed: list[TypedPath] = []
     for index, candidate in enumerate(unique_candidates[:path_budget], start=1):
         source, sink, node_ids, relations, cost = candidate
@@ -73,14 +179,27 @@ def typed_paths(
     )
 
 
+def _path_backend_for(graph: TypedGraph, frontier: SourceSinkFrontier) -> str:
+    pair_count = len(frontier.source_ids) * len(frontier.sink_ids)
+    if len(graph.nodes) >= _SCIPY_PATH_NODE_THRESHOLD:
+        return "scipy-yen"
+    if pair_count >= _SCIPY_PATH_PAIR_THRESHOLD:
+        return "scipy-yen"
+    return "python-bfs-small"
+
+
 def flow_lite(paths: tuple[TypedPath, ...]) -> FlowLite:
-    return FlowLite(tuple(path.id for path in sorted(paths, key=lambda item: item.rank)))
+    return FlowLite(
+        tuple(path.id for path in sorted(paths, key=lambda item: item.rank))
+    )
 
 
 def _adjacency(
     graph: TypedGraph, profile: GraphProfile
 ) -> dict[str, list[tuple[str, Edge]]]:
-    adjacency: dict[str, list[tuple[str, Edge]]] = {node_id: [] for node_id in graph.nodes}
+    adjacency: dict[str, list[tuple[str, Edge]]] = {
+        node_id: [] for node_id in graph.nodes
+    }
     for source, target, edge in allowed_oriented_edges(graph, profile):
         adjacency[source].append((target, edge))
     for neighbors in adjacency.values():
@@ -93,7 +212,7 @@ def _simple_paths(
     source: str,
     sink: str,
     max_hops: int,
-) -> list[tuple[str, str, tuple[str, ...], tuple[str, ...]]]:
+) -> list[GraphTurboPathCandidate]:
     if source not in adjacency or sink not in adjacency:
         return []
     queue: deque[tuple[str, tuple[str, ...], tuple[str, ...], float]] = deque(
@@ -122,8 +241,8 @@ def _simple_paths(
 
 
 def _dedupe_paths(
-    candidates: list[tuple[str, str, tuple[str, ...], tuple[str, ...], float]]
-) -> list[tuple[str, str, tuple[str, ...], tuple[str, ...], float]]:
+    candidates: list[GraphTurboPathCandidate],
+) -> list[GraphTurboPathCandidate]:
     seen: set[tuple[str, ...]] = set()
     unique: list[tuple[str, str, tuple[str, ...], tuple[str, ...], float]] = []
     for candidate in candidates:

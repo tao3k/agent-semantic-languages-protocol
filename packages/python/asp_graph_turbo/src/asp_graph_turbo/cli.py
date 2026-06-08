@@ -26,7 +26,11 @@ def _rank_packet(packet: Mapping[str, object], args: argparse.Namespace) -> Grap
     _validate_algorithm(packet)
     profile = args.profile or _string_packet_field(packet, "profile", "owner-query")
     seeds = args.seed or _string_list_packet_field(packet, "seedIds")
-    limit = args.limit if args.limit is not None else _positive_int_packet_field(packet, "budget", 8)
+    limit = (
+        args.limit
+        if args.limit is not None
+        else _positive_int_packet_field(packet, "budget", 8)
+    )
     kind_budgets = _kind_budgets_packet_field(packet)
     window_merge = _window_merge_packet_field(packet)
     path_budget = _positive_int_packet_field(packet, "pathBudget", 4)
@@ -91,9 +95,7 @@ def _validate_algorithm(packet: Mapping[str, object]) -> None:
         raise SystemExit(f"unsupported graph turbo algorithm: {algorithm}")
 
 
-def _string_packet_field(
-    packet: Mapping[str, object], name: str, default: str
-) -> str:
+def _string_packet_field(packet: Mapping[str, object], name: str, default: str) -> str:
     value = packet.get(name, default)
     if not isinstance(value, str) or not value:
         raise SystemExit(f"graph turbo {name} must be a non-empty string")
@@ -137,7 +139,9 @@ def _window_merge_packet_field(packet: Mapping[str, object]) -> dict[str, int | 
     if not isinstance(enabled, bool):
         raise SystemExit("graph turbo windowMerge.enabled must be a boolean")
     if not isinstance(max_gap_lines, int) or max_gap_lines < 0:
-        raise SystemExit("graph turbo windowMerge.maxGapLines must be a non-negative integer")
+        raise SystemExit(
+            "graph turbo windowMerge.maxGapLines must be a non-negative integer"
+        )
     return {"enabled": enabled, "maxGapLines": max_gap_lines}
 
 

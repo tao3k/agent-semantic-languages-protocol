@@ -16,16 +16,21 @@ def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_semantic_fact_graph_schema_validates_fixture_derived_provider_packets() -> None:
+def test_semantic_fact_graph_schema_validates_fixture_derived_provider_packets() -> (
+    None
+):
     schema = _load_json(_SCHEMA_PATH)
     fixtures = _load_json(_FIXTURES_PATH)["fixtures"]
     validator = Draft202012Validator(schema)
 
     for fixture in fixtures:
         packet = _runtime_packet(fixture)
-        errors = sorted(validator.iter_errors(packet), key=lambda error: list(error.path))
+        errors = sorted(
+            validator.iter_errors(packet), key=lambda error: list(error.path)
+        )
         assert not errors, [
-            f"{fixture['fixtureId']} {list(error.path)}: {error.message}" for error in errors
+            f"{fixture['fixtureId']} {list(error.path)}: {error.message}"
+            for error in errors
         ]
 
 
@@ -135,10 +140,32 @@ def test_semantic_fact_graph_schema_accepts_build_test_package_graph() -> None:
             },
         ],
         "edges": [
-            {"source": "owner:cache", "target": "package:cache", "relation": "belongs_to"},
-            {"source": "package:cache", "target": "build:cache-tests", "relation": "builds"},
-            {"source": "build:cache-tests", "target": "test:cache", "relation": "tests"},
-            {"source": "package:cache", "target": "dependency:serde", "relation": "depends_on"},
+            {
+                "source": "owner:cache",
+                "target": "package:cache",
+                "relation": "belongs_to",
+                "weight": 1.1,
+                "fields": {
+                    "provenance": "parser",
+                    "confidence": "exact",
+                    "freshness": "fresh",
+                },
+            },
+            {
+                "source": "package:cache",
+                "target": "build:cache-tests",
+                "relation": "builds",
+            },
+            {
+                "source": "build:cache-tests",
+                "target": "test:cache",
+                "relation": "tests",
+            },
+            {
+                "source": "package:cache",
+                "target": "dependency:serde",
+                "relation": "depends_on",
+            },
         ],
     }
 

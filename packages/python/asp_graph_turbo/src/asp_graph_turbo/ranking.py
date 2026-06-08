@@ -9,6 +9,7 @@ from .model import GraphProfile, GraphResult, TypedGraph
 from .profiles import resolve_profile
 from .ranking_build import build_graph_result, rank_fingerprint
 from .ranking_score import collect_scores, seed_ids as resolve_seed_ids
+from .read_loop_guard import graph_turbo_apply_read_loop_second_pass
 
 
 def rank_frontier(
@@ -39,7 +40,14 @@ def rank_frontier(
         window_merge_enabled,
         window_merge_max_gap_lines,
     )
-    scores, best_depth, selected_edges, graph_cache, receipt_adjustments = collect_scores(
+    (
+        scores,
+        best_depth,
+        selected_edges,
+        graph_cache,
+        receipt_adjustments,
+        pagerank,
+    ) = collect_scores(
         graph,
         selected_profile,
         seed_ids,
@@ -47,20 +55,27 @@ def rank_frontier(
         cache_enabled=cache_enabled,
     )
     read_memory_selectors = frozenset(
-        selector for selector in seen_selectors if isinstance(selector, str) and selector
+        selector
+        for selector in seen_selectors
+        if isinstance(selector, str) and selector
     )
     read_memory_suppressed_count = sum(
         1
         for node_id in scores
         if selector_for_node(graph.nodes[node_id]) in read_memory_selectors
     )
-    ranked = rank_nodes(
+    ranked_candidates = rank_nodes(
         graph,
         scores,
         best_depth,
-        limit,
+        _candidate_limit(limit),
         normalized_kind_budgets,
         read_memory_selectors,
+    )
+    ranked, read_loop_second_pass = graph_turbo_apply_read_loop_second_pass(
+        selected_profile,
+        ranked_candidates,
+        limit=limit,
     )
     return build_graph_result(
         graph,
@@ -78,6 +93,12 @@ def rank_frontier(
         selected_edges,
         graph_cache,
         receipt_adjustments,
+        pagerank,
         ranked,
         read_memory_suppressed_count,
+        read_loop_second_pass,
     )
+
+
+def _candidate_limit(limit: int) -> int:
+    return max(limit, limit + min(max(limit, 3), 8))

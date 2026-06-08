@@ -79,7 +79,9 @@ def _test_targets(packet: Mapping[str, Any]) -> tuple[str, ...]:
 
 
 def _dependency_targets(packet: Mapping[str, Any]) -> tuple[str, ...]:
-    values = _targets_by_kind(packet.get("nextActions"), {"deps", "dependency", "import"})
+    values = _targets_by_kind(
+        packet.get("nextActions"), {"deps", "dependency", "import"}
+    )
     return _unique(values)
 
 
@@ -131,7 +133,11 @@ def _owner_paths(items: Any) -> list[str]:
 
 
 def _string_list(value: Any) -> list[str]:
-    return [item for item in value if isinstance(item, str) and item] if isinstance(value, list) else []
+    return (
+        [item for item in value if isinstance(item, str) and item]
+        if isinstance(value, list)
+        else []
+    )
 
 
 def _unique(values: Iterable[str]) -> tuple[str, ...]:

@@ -312,6 +312,15 @@
         "weight": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "originalSource": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "originalTarget": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "reversed": {
+          "type": "boolean"
         }
       }
     },
@@ -435,7 +444,8 @@
         "transitionCount",
         "supportedEdgeCount",
         "reachableEdgeCount",
-        "density"
+        "density",
+        "relationChannels"
       ],
       "properties": {
         "profile": {
@@ -471,6 +481,45 @@
           "minimum": 0
         },
         "density": {
+          "type": "number",
+          "minimum": 0
+        },
+        "relationChannels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relationChannelSummary"
+          }
+        }
+      }
+    },
+    "relationChannelSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation",
+        "supportedEdgeCount",
+        "reachableEdgeCount",
+        "weightMass",
+        "reachableWeightMass"
+      ],
+      "properties": {
+        "relation": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "supportedEdgeCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reachableEdgeCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weightMass": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reachableWeightMass": {
           "type": "number",
           "minimum": 0
         }
@@ -693,8 +742,20 @@
         "reachableNodeCount",
         "rankedNodeCount",
         "pathCount",
+        "pathBackend",
+        "pathFallbackCount",
+        "pathPairCount",
+        "pathCandidateCount",
         "mergedWindowCount",
-        "cacheStatus"
+        "cacheStatus",
+        "relationChannelCount",
+        "pprIterations",
+        "pprResidual",
+        "pprDanglingMassLast",
+        "pprMassSum",
+        "readLoopSecondPassSuppressedCount",
+        "readLoopDuplicateSelectorSuppressedCount",
+        "readLoopSameOwnerSuppressedCount"
       ],
       "properties": {
         "nodeCount": {
@@ -718,6 +779,26 @@
           "minimum": 0
         },
         "pathCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathBackend": {
+          "enum": [
+            "python-bfs-small",
+            "scipy-yen",
+            "scipy-dijkstra",
+            "python-bfs-fallback"
+          ]
+        },
+        "pathFallbackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathPairCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathCandidateCount": {
           "type": "integer",
           "minimum": 0
         },
@@ -757,6 +838,38 @@
           "minimum": 0
         },
         "receiptPenaltyCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationChannelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pprIterations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pprResidual": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pprDanglingMassLast": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pprMassSum": {
+          "type": "number",
+          "minimum": 0
+        },
+        "readLoopSecondPassSuppressedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readLoopDuplicateSelectorSuppressedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readLoopSameOwnerSuppressedCount": {
           "type": "integer",
           "minimum": 0
         }

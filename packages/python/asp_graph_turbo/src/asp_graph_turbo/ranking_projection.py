@@ -7,12 +7,12 @@ from dataclasses import dataclass
 
 from .compatibility import profile_compatibility
 from .model import (
-    Edge,
     FlowLite,
     FrontierEntry,
     GraphProfile,
     MergedWindow,
     Node,
+    OrientedEdge,
     ProfileCompatibility,
     ProfileMatrixSummary,
     ReadLoopGuard,
@@ -20,7 +20,7 @@ from .model import (
     TypedGraph,
     TypedPath,
 )
-from .paths import flow_lite, source_sink_frontier, typed_paths
+from .paths import flow_lite, source_sink_frontier, typed_paths_with_backend
 from .profile_matrix import profile_matrix_bank
 from .profiles import frontier_action
 from .read_loop_guard import evaluate_read_loop_guard
@@ -30,10 +30,10 @@ from .windows import merge_ranked_windows
 @dataclass(frozen=True, slots=True)
 class RankedProjection:
     frontier: tuple[FrontierEntry, ...]
-    edges: tuple[Edge, ...]
+    edges: tuple[OrientedEdge, ...]
     merged_windows: tuple[MergedWindow, ...]
     read_loop_guard: ReadLoopGuard
-    compatibility: ProfileCompatibility
+    compatibility: tuple[ProfileCompatibility, ...]
     matrices: tuple[ProfileMatrixSummary, ...]
     ranked_ids: tuple[str, ...]
 
@@ -43,6 +43,10 @@ class PathProjection:
     source_sink: SourceSinkFrontier
     paths: tuple[TypedPath, ...]
     flow: FlowLite
+    backend: str
+    fallback_count: int
+    pair_count: int
+    candidate_count: int
 
 
 def build_ranked_projection(
@@ -50,7 +54,7 @@ def build_ranked_projection(
     graph: TypedGraph,
     selected_profile: GraphProfile,
     scores: Mapping[str, float],
-    selected_edges: Iterable[Edge],
+    selected_edges: Iterable[OrientedEdge],
     best_depth: Mapping[str, int],
     ranked: tuple[Node, ...],
     window_merge_enabled: bool,
@@ -88,15 +92,25 @@ def build_path_projection(
     path_max_hops: int,
 ) -> PathProjection:
     source_sink = source_sink_frontier(graph, selected_profile, seed_ids, ranked_ids)
-    paths = typed_paths(
-        graph,
-        selected_profile,
-        source_sink,
-        scores,
-        path_budget=path_budget,
-        max_hops=path_max_hops,
+    paths, backend, fallback_count, pair_count, candidate_count = (
+        typed_paths_with_backend(
+            graph,
+            selected_profile,
+            source_sink,
+            scores,
+            path_budget=path_budget,
+            max_hops=path_max_hops,
+        )
     )
-    return PathProjection(source_sink, paths, flow_lite(paths))
+    return PathProjection(
+        source_sink,
+        paths,
+        flow_lite(paths),
+        backend,
+        fallback_count,
+        pair_count,
+        candidate_count,
+    )
 
 
 def _frontier_entries(
@@ -111,7 +125,9 @@ def _frontier_entries(
     return tuple(entries)
 
 
-def _ranked_edges(edges: Iterable[Edge], ranked: Iterable[Node]) -> tuple[Edge, ...]:
+def _ranked_edges(
+    edges: Iterable[OrientedEdge], ranked: Iterable[Node]
+) -> tuple[OrientedEdge, ...]:
     ranked_ids = {node.id for node in ranked}
     return tuple(
         edge

@@ -1,0 +1,754 @@
+{
+  "schemaId": "agent.semantic-protocols.semantic-fact-frontier-receipt.fixtures",
+  "schemaVersion": "1",
+  "fixtures": [
+    {
+      "fixtureId": "agent-semantic-protocols.graph-turbo-frontier-receipt",
+      "description": "Real-project graph-turbo search, exact frontier read, and focused receipt schema test from this repository.",
+      "receipt": {
+        "schemaId": "agent.semantic-protocols.semantic-fact-frontier-receipt",
+        "schemaVersion": "1",
+        "protocolId": "agent.semantic-protocols.semantic-fact-frontier-feedback",
+        "protocolVersion": "1",
+        "receiptId": "agent-semantic-protocols.rfc014.frontier-receipt-real-project",
+        "receiptKind": "frontier",
+        "taskFingerprint": "real-project:agent-semantic-protocols:rfc014-frontier-receipt",
+        "commandFingerprint": "command:asp-python-search-fzf:semantic-fact-frontier-receipt-relationchannels-ppr",
+        "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:9:29",
+        "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+        "symbol": "semantic-fact-frontier-receipt",
+        "range": {
+          "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+          "startLine": 9,
+          "endLine": 29
+        },
+        "frontierReturned": [
+          {
+            "nodeId": "Q",
+            "action": "fzf",
+            "selector": null,
+            "owner": null,
+            "symbol": "semantic-fact-frontier-receipt relationChannels PPR",
+            "range": null,
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "I",
+            "action": "syntax",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:17:17",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 17,
+              "endLine": 17
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "H",
+            "action": "code",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py:90:110",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py",
+            "symbol": "ppr",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py",
+              "startLine": 90,
+              "endLine": 110
+            },
+            "confidence": "high",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "I2",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py:21:21",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py",
+            "symbol": "relationchannels",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py",
+              "startLine": 21,
+              "endLine": 21
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "I3",
+            "action": "syntax",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:67:67",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 67,
+              "endLine": 67
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "H2",
+            "action": "code",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:9:29",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 9,
+              "endLine": 29
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "H3",
+            "action": "code",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:59:79",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 59,
+              "endLine": 79
+            },
+            "confidence": "high",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "I4",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/model.py:11:11",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/model.py",
+            "symbol": "relationchannels",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/model.py",
+              "startLine": 11,
+              "endLine": 11
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "I5",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/packet.py:190:190",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/packet.py",
+            "symbol": "relationchannels",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/packet.py",
+              "startLine": 190,
+              "endLine": 190
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          },
+          {
+            "nodeId": "I6",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/profile_matrix.py:64:64",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/profile_matrix.py",
+            "symbol": "relationchannels",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/profile_matrix.py",
+              "startLine": 64,
+              "endLine": 64
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          }
+        ],
+        "frontierFollowed": [
+          {
+            "nodeId": "H2",
+            "action": "code",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:9:29",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 9,
+              "endLine": 29
+            },
+            "confidence": "exact",
+            "freshness": "cache-hit"
+          }
+        ],
+        "codeActuallyRead": [
+          {
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:9:29",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 9,
+              "endLine": 29
+            },
+            "readKind": "direct-source-read",
+            "fromFrontier": true
+          }
+        ],
+        "testCommand": {
+          "argv": [
+            "env",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1",
+            "uv",
+            "run",
+            "--project",
+            "packages/python/asp_graph_turbo",
+            "--frozen",
+            "pytest",
+            "-q",
+            "-c",
+            "/dev/null",
+            "-o",
+            "cache_dir=/Users/guangtao/ghq/github.com/tao3k/agent-semantic-protocols/.pytest_cache",
+            "tests/unit/test_semantic_fact_frontier_receipt_schema.py"
+          ],
+          "workdir": ".",
+          "fingerprint": "command:pytest:semantic-fact-frontier-receipt-schema"
+        },
+        "testResult": {
+          "status": "passed",
+          "exitCode": 0,
+          "summary": "4 receipt schema tests passed in 0.08s"
+        },
+        "editTouchedOwner": [],
+        "outputFingerprint": "sha256:4b91c14c768ea48778b1c695306f5f0b3382fb0c271c38e0356bb9621e4a5be5",
+        "metrics": {
+          "frontierReturnedCount": 10,
+          "frontierFollowedCount": 1,
+          "frontierFollowRate": 0.1,
+          "codeActuallyReadCount": 1,
+          "rawReadFallbackCount": 0,
+          "duplicateSelectorCount": 0,
+          "sameOwnerScanCount": 0,
+          "relationChannelCount": 9,
+          "pprIterations": 100,
+          "pprResidual": 0.000000174953,
+          "stdoutBytesToFrontier": 5017,
+          "commandsToFirstUsefulLocator": 1,
+          "commandsToValidation": 3
+        },
+        "fields": {
+          "project": "agent-semantic-protocols",
+          "languageId": "python",
+          "providerId": "py-harness",
+          "searchOutputSha256": "4b91c14c768ea48778b1c695306f5f0b3382fb0c271c38e0356bb9621e4a5be5",
+          "readOutputSha256": "bb08ac2a0af9f6ac9702fa2fc952ec3c8b2f329a6263546ec4e9834611db30f2",
+          "testOutputSha256": "f87e1ec159e73ceaff96b34a3bc29b017111816d05b56b64e23a829128ce891b",
+          "cacheStatus": "hit",
+          "graphTurboBackend": "scipy-csr",
+          "graphTurboCacheKey": "sha256:20fb015516e5",
+          "searchCommand": "asp python search fzf 'semantic-fact-frontier-receipt relationChannels PPR' owner tests --view seeds .",
+          "readCommand": "asp python query --from-hook direct-source-read --selector tests/unit/test_semantic_fact_frontier_receipt_schema.py:9-29 --code ."
+        }
+      }
+    },
+    {
+      "fixtureId": "agent-semantic-protocols.graph-turbo-frontier-receipt-runtime",
+      "description": "Runtime asp-graph-turbo receipt command output generated from this repository's graph-turbo sample request.",
+      "receipt": {
+        "schemaId": "agent.semantic-protocols.semantic-fact-frontier-receipt",
+        "schemaVersion": "1",
+        "protocolId": "agent.semantic-protocols.semantic-fact-frontier-feedback",
+        "protocolVersion": "1",
+        "receiptId": "agent-semantic-protocols.rfc014.frontier-receipt-runtime",
+        "receiptKind": "frontier",
+        "taskFingerprint": "real-project:agent-semantic-protocols:rfc014-runtime-capture",
+        "commandFingerprint": "command:asp-graph-turbo-receipt:rfc014",
+        "selector": "src/cli.py:10:20",
+        "owner": "src/cli.py",
+        "symbol": "collect_actions",
+        "range": {
+          "path": "src/cli.py",
+          "startLine": 10,
+          "endLine": 20
+        },
+        "frontierReturned": [
+          {
+            "nodeId": "item:collect",
+            "action": "code",
+            "selector": "src/cli.py:10:20",
+            "owner": "src/cli.py",
+            "symbol": "collect_actions",
+            "range": {
+              "path": "src/cli.py",
+              "startLine": 10,
+              "endLine": 20
+            }
+          },
+          {
+            "nodeId": "owner:cli",
+            "action": "owner",
+            "selector": null,
+            "owner": null,
+            "symbol": "src/cli.py",
+            "range": null
+          },
+          {
+            "nodeId": "q:parser",
+            "action": "fzf",
+            "selector": null,
+            "owner": null,
+            "symbol": "parser",
+            "range": null
+          },
+          {
+            "nodeId": "hot:command",
+            "action": "code",
+            "selector": "src/cli.py:24:28",
+            "owner": "src/cli.py",
+            "symbol": "command_intent",
+            "range": {
+              "path": "src/cli.py",
+              "startLine": 24,
+              "endLine": 28
+            }
+          },
+          {
+            "nodeId": "test:cli",
+            "action": "tests",
+            "selector": null,
+            "owner": null,
+            "symbol": "tests/test_cli.py",
+            "range": null
+          }
+        ],
+        "frontierFollowed": [
+          {
+            "nodeId": "item:collect",
+            "action": "code",
+            "selector": "src/cli.py:10:20",
+            "owner": "src/cli.py",
+            "symbol": "collect_actions",
+            "range": {
+              "path": "src/cli.py",
+              "startLine": 10,
+              "endLine": 20
+            }
+          }
+        ],
+        "codeActuallyRead": [
+          {
+            "selector": "src/cli.py:10:20",
+            "owner": "src/cli.py",
+            "range": {
+              "path": "src/cli.py",
+              "startLine": 10,
+              "endLine": 20
+            },
+            "readKind": "exact-selector",
+            "fromFrontier": true
+          }
+        ],
+        "testCommand": {
+          "argv": [
+            "pytest",
+            "unit-cli"
+          ]
+        },
+        "testResult": {
+          "status": "passed",
+          "exitCode": 0,
+          "summary": "focused test passed"
+        },
+        "editTouchedOwner": [],
+        "outputFingerprint": "sha256:334014b9e114442b9467ead7c50df1b514b11a77ffa666174d9ad009e6286580",
+        "metrics": {
+          "frontierReturnedCount": 5,
+          "frontierFollowedCount": 1,
+          "frontierFollowRate": 0.2,
+          "codeActuallyReadCount": 1,
+          "rawReadFallbackCount": 0,
+          "duplicateSelectorCount": 0,
+          "sameOwnerScanCount": 0,
+          "relationChannelCount": 9,
+          "pprIterations": 65,
+          "pprResidual": 9.053049976337491E-10,
+          "stdoutBytesToFrontier": 2845,
+          "commandsToFirstUsefulLocator": 1,
+          "commandsToValidation": 3
+        },
+        "fields": {
+          "project": "agent-semantic-protocols",
+          "entrypoint": "asp-graph-turbo receipt",
+          "packetSource": "unit._asp_graph_turbo_common.sample_request"
+        }
+      }
+    },
+    {
+      "fixtureId": "agent-semantic-protocols.asp-search-frontier-receipt-runtime",
+      "description": "Source-built asp python search --frontier-receipt-out output captured through the public ASP language facade.",
+      "receipt": {
+        "schemaId": "agent.semantic-protocols.semantic-fact-frontier-receipt",
+        "schemaVersion": "1",
+        "protocolId": "agent.semantic-protocols.semantic-fact-frontier-feedback",
+        "protocolVersion": "1",
+        "receiptId": "asp.search-frontier.python-semantic-fact-frontier-receipt-relationchannels-ppr",
+        "receiptKind": "frontier",
+        "taskFingerprint": "task:asp-fast-search:python-semantic-fact-frontier-receipt-relationchannels-ppr",
+        "commandFingerprint": "command:asp-fast-search:python-semantic-fact-frontier-receipt-relationchannels-ppr",
+        "selector": null,
+        "owner": null,
+        "symbol": "semantic-fact-frontier-receipt relationChannels PPR",
+        "range": null,
+        "frontierReturned": [
+          {
+            "nodeId": "query:semantic-fact-frontier-receipt-relationchannels-ppr",
+            "action": "fzf",
+            "selector": null,
+            "owner": null,
+            "symbol": "semantic-fact-frontier-receipt relationChannels PPR",
+            "range": null
+          },
+          {
+            "nodeId": "item:packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py-semantic-fact-frontier-receipt-79",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:79:79",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+              "startLine": 79,
+              "endLine": 79
+            }
+          },
+          {
+            "nodeId": "hot:packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py-ppr-98",
+            "action": "code",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py:90:110",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py",
+            "symbol": "ppr",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/artifact_timeline_targets.py",
+              "startLine": 90,
+              "endLine": 110
+            }
+          },
+          {
+            "nodeId": "item:packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py-relationchannels-21",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py:21:21",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py",
+            "symbol": "relationchannels",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py",
+              "startLine": 21,
+              "endLine": 21
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-26",
+            "action": "syntax",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:26:26",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 26,
+              "endLine": 26
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_semantic_fact_frontier_receipt_schema.py-semantic-fact-frontier-receipt-18",
+            "action": "syntax",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:18:18",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 18,
+              "endLine": 18
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-96",
+            "action": "syntax",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:96:96",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 96,
+              "endLine": 96
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_semantic_fact_frontier_receipt_schema.py-semantic-fact-frontier-receipt-19",
+            "action": "syntax",
+            "selector": "tests/unit/test_semantic_fact_frontier_receipt_schema.py:19:19",
+            "owner": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_semantic_fact_frontier_receipt_schema.py",
+              "startLine": 19,
+              "endLine": 19
+            }
+          },
+          {
+            "nodeId": "hot:packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py-semantic-fact-frontier-receipt-79",
+            "action": "code",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:71:91",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+              "startLine": 71,
+              "endLine": 91
+            }
+          },
+          {
+            "nodeId": "hot:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-26",
+            "action": "code",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:18:38",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 18,
+              "endLine": 38
+            }
+          }
+        ],
+        "frontierFollowed": [],
+        "codeActuallyRead": [],
+        "testCommand": null,
+        "testResult": null,
+        "editTouchedOwner": [],
+        "outputFingerprint": "sha256:691f79bb9b09306d56aa7a14fd522065fb529e792e4c3ebdd983a968c499b598",
+        "metrics": {
+          "frontierReturnedCount": 10,
+          "frontierFollowedCount": 0,
+          "frontierFollowRate": 0.0,
+          "codeActuallyReadCount": 0,
+          "rawReadFallbackCount": 0,
+          "duplicateSelectorCount": 0,
+          "sameOwnerScanCount": 0,
+          "relationChannelCount": 9,
+          "pprIterations": 100,
+          "pprResidual": 1.7495347254259386E-7,
+          "stdoutBytesToFrontier": 5327,
+          "commandsToFirstUsefulLocator": null,
+          "commandsToValidation": null
+        },
+        "fields": {
+          "project": "agent-semantic-protocols",
+          "entrypoint": "asp python search --frontier-receipt-out",
+          "captureSource": "asp graph render",
+          "stdoutBytes": 5326,
+          "stdoutHeader": "[graph-frontier] profile=owner-query alg=typed-ppr-diverse seed=Q budget=10"
+        }
+      }
+    },
+    {
+      "fixtureId": "agent-semantic-protocols.asp-search-frontier-receipt-followed-runtime",
+      "description": "Public ASP search runtime receipt capture with a followed graph-turbo code frontier, exact provider read, and focused pytest validation.",
+      "receipt": {
+        "schemaId": "agent.semantic-protocols.semantic-fact-frontier-receipt",
+        "schemaVersion": "1",
+        "protocolId": "agent.semantic-protocols.semantic-fact-frontier-feedback",
+        "protocolVersion": "1",
+        "receiptId": "asp.search-frontier.python-semantic-fact-frontier-receipt-relationchannels-ppr",
+        "receiptKind": "frontier",
+        "taskFingerprint": "task:asp-fast-search:python-semantic-fact-frontier-receipt-relationchannels-ppr",
+        "commandFingerprint": "command:asp-fast-search:python-semantic-fact-frontier-receipt-relationchannels-ppr",
+        "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:71:91",
+        "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+        "symbol": "semantic-fact-frontier-receipt",
+        "range": {
+          "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+          "startLine": 71,
+          "endLine": 91
+        },
+        "frontierReturned": [
+          {
+            "nodeId": "query:semantic-fact-frontier-receipt-relationchannels-ppr",
+            "action": "fzf",
+            "selector": null,
+            "owner": null,
+            "symbol": "semantic-fact-frontier-receipt relationChannels PPR",
+            "range": null
+          },
+          {
+            "nodeId": "item:packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py-semantic-fact-frontier-receipt-79",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:79:79",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+              "startLine": 79,
+              "endLine": 79
+            }
+          },
+          {
+            "nodeId": "hot:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-26",
+            "action": "code",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:18:38",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 18,
+              "endLine": 38
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_asp_graph_turbo_sandtable_summary_cli.py-semantic-fact-frontier-receipt-185",
+            "action": "syntax",
+            "selector": "tests/unit/test_asp_graph_turbo_sandtable_summary_cli.py:185:185",
+            "owner": "tests/unit/test_asp_graph_turbo_sandtable_summary_cli.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_sandtable_summary_cli.py",
+              "startLine": 185,
+              "endLine": 185
+            }
+          },
+          {
+            "nodeId": "item:packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py-relationchannels-21",
+            "action": "syntax",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py:21:21",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py",
+            "symbol": "relationchannels",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/__init__.py",
+              "startLine": 21,
+              "endLine": 21
+            }
+          },
+          {
+            "nodeId": "item:languages/python-lang-project-harness/src/python_lang_project_harness/pytest_plugin.py-ppr-82",
+            "action": "syntax",
+            "selector": "languages/python-lang-project-harness/src/python_lang_project_harness/pytest_plugin.py:82:82",
+            "owner": "languages/python-lang-project-harness/src/python_lang_project_harness/pytest_plugin.py",
+            "symbol": "ppr",
+            "range": {
+              "path": "languages/python-lang-project-harness/src/python_lang_project_harness/pytest_plugin.py",
+              "startLine": 82,
+              "endLine": 82
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-26",
+            "action": "syntax",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:26:26",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 26,
+              "endLine": 26
+            }
+          },
+          {
+            "nodeId": "item:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-96",
+            "action": "syntax",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:96:96",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 96,
+              "endLine": 96
+            }
+          },
+          {
+            "nodeId": "hot:packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py-semantic-fact-frontier-receipt-79",
+            "action": "code",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:71:91",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+              "startLine": 71,
+              "endLine": 91
+            }
+          },
+          {
+            "nodeId": "hot:tests/unit/test_asp_graph_turbo_frontier_receipt.py-semantic-fact-frontier-receipt-96",
+            "action": "code",
+            "selector": "tests/unit/test_asp_graph_turbo_frontier_receipt.py:88:108",
+            "owner": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "tests/unit/test_asp_graph_turbo_frontier_receipt.py",
+              "startLine": 88,
+              "endLine": 108
+            }
+          }
+        ],
+        "frontierFollowed": [
+          {
+            "nodeId": "hot:packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py-semantic-fact-frontier-receipt-79",
+            "action": "code",
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:71:91",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+            "symbol": "semantic-fact-frontier-receipt",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+              "startLine": 71,
+              "endLine": 91
+            }
+          }
+        ],
+        "codeActuallyRead": [
+          {
+            "selector": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py:71:91",
+            "readKind": "direct-source-read",
+            "owner": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+            "range": {
+              "path": "packages/python/asp_graph_turbo/src/asp_graph_turbo/frontier_receipt.py",
+              "startLine": 71,
+              "endLine": 91
+            },
+            "fromFrontier": true
+          }
+        ],
+        "testCommand": {
+          "argv": [
+            "uv",
+            "run",
+            "--project",
+            "packages/python/asp_graph_turbo",
+            "--frozen",
+            "pytest",
+            "-q",
+            "-c",
+            "/dev/null",
+            "-o",
+            "cache_dir=/Users/guangtao/ghq/github.com/tao3k/agent-semantic-protocols/.pytest_cache",
+            "tests/unit/test_asp_graph_turbo_frontier_receipt.py"
+          ]
+        },
+        "testResult": {
+          "status": "passed",
+          "summary": "2 passed in 0.53s",
+          "exitCode": 0
+        },
+        "editTouchedOwner": [],
+        "outputFingerprint": "sha256:ac03643663a1dad983150b6537205f51bf3efd67e6e168be1e26593616addad9",
+        "metrics": {
+          "frontierReturnedCount": 10,
+          "frontierFollowedCount": 1,
+          "frontierFollowRate": 0.1,
+          "codeActuallyReadCount": 1,
+          "rawReadFallbackCount": 0,
+          "duplicateSelectorCount": 0,
+          "sameOwnerScanCount": 0,
+          "relationChannelCount": 9,
+          "pprIterations": 100,
+          "pprResidual": 1.7495347254259386E-7,
+          "stdoutBytesToFrontier": 5460,
+          "commandsToFirstUsefulLocator": 1,
+          "commandsToValidation": 3
+        },
+        "fields": {
+          "captureSource": "asp fast search"
+        }
+      }
+    }
+  ]
+}

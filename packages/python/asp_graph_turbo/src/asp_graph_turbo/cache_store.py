@@ -9,8 +9,8 @@ from pathlib import Path
 
 from scipy.sparse import load_npz, save_npz
 
-from .backend import SparseGraphBackend
-from .model import Edge
+from .backend import SparseGraphBackend, sparse_backend_from_parts
+from .model import OrientedEdge
 
 _CACHE_NAMESPACE = "agent-semantic-protocol/graph-turbo"
 
@@ -49,16 +49,13 @@ def _load_persistent_backend(fingerprint: str) -> SparseGraphBackend | None:
     try:
         metadata = json.loads(paths.metadata.read_text(encoding="utf-8"))
         node_ids = tuple(_string_items(metadata["nodeIds"]))
-        selected_edges = tuple(_edge_from_mapping(item) for item in metadata["selectedEdges"])
+        selected_edges = tuple(
+            _edge_from_mapping(item) for item in metadata["selectedEdges"]
+        )
         adjacency = load_npz(paths.matrix)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
-    return SparseGraphBackend(
-        node_ids=node_ids,
-        index_by_id={node_id: index for index, node_id in enumerate(node_ids)},
-        adjacency=adjacency,
-        selected_edges=selected_edges,
-    )
+    return sparse_backend_from_parts(node_ids, adjacency, selected_edges)
 
 
 def _store_persistent_backend(fingerprint: str, backend: SparseGraphBackend) -> None:
@@ -71,7 +68,9 @@ def _store_persistent_backend(fingerprint: str, backend: SparseGraphBackend) -> 
         payload = {
             "fingerprint": fingerprint,
             "nodeIds": list(backend.node_ids),
-            "selectedEdges": [_edge_to_mapping(edge) for edge in backend.selected_edges],
+            "selectedEdges": [
+                _edge_to_mapping(edge) for edge in backend.selected_edges
+            ],
         }
         paths.metadata.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
     except OSError:
@@ -140,21 +139,33 @@ class _PersistentBackendPaths:
         self.matrix = matrix
 
 
-def _edge_to_mapping(edge: Edge) -> dict[str, object]:
+def _edge_to_mapping(edge: OrientedEdge) -> dict[str, object]:
     return {
         "source": edge.source,
         "target": edge.target,
         "relation": edge.relation,
         "weight": edge.weight,
+        "originalSource": edge.original_source,
+        "originalTarget": edge.original_target,
+        "reversed": edge.reversed,
         "fields": dict(edge.fields),
     }
 
 
-def _edge_from_mapping(item: Mapping[str, object]) -> Edge:
-    return Edge(
+def _edge_from_mapping(item: Mapping[str, object]) -> OrientedEdge:
+    source = str(item["source"])
+    target = str(item["target"])
+    original_source = str(item.get("originalSource", source))
+    original_target = str(item.get("originalTarget", target))
+    return OrientedEdge(
         source=str(item["source"]),
         target=str(item["target"]),
         relation=str(item["relation"]),
+        original_source=original_source,
+        original_target=original_target,
+        reversed=bool(
+            item.get("reversed", original_source != source or original_target != target)
+        ),
         weight=float(item["weight"]),
         fields=dict(item.get("fields", {})),
     )

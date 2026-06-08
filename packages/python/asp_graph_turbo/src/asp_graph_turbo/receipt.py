@@ -6,8 +6,16 @@ from collections.abc import Iterable, Mapping
 from itertools import groupby
 from operator import attrgetter
 
-from .diversity import selector_for_node
 from .model import Edge, Node, ReceiptAdjustment, TypedGraph
+from .selector import (
+    GraphTurboSelectorRange,
+    graph_turbo_node_range,
+    graph_turbo_owner_path_for_node,
+    graph_turbo_parse_selector,
+    graph_turbo_range_from_fields,
+    graph_turbo_ranges_overlap,
+    graph_turbo_selector_for_node,
+)
 
 _BOOST_RELATIONS = {
     "exact-code-success",
@@ -113,7 +121,7 @@ def _extend_selector_adjustments(
     for node in graph.nodes.values():
         if node.kind == "receipt":
             continue
-        selector = selector_for_node(node)
+        selector = graph_turbo_selector_for_node(node)
         if selector not in seen_selectors:
             continue
         adjustments.append(
@@ -192,11 +200,11 @@ def _extend_overlap_adjustments(
     for node in graph.nodes.values():
         if node.kind == "receipt":
             continue
-        node_selector = selector_for_node(node)
+        node_selector = graph_turbo_selector_for_node(node)
         node_range = _node_range(node, node_selector)
         if node_range is None or node_selector == receipt_selector:
             continue
-        if not _ranges_overlap(receipt_range, node_range):
+        if not graph_turbo_ranges_overlap(receipt_range, node_range):
             continue
         adjustments.append(
             ReceiptAdjustment(
@@ -243,7 +251,9 @@ def _receipt_avoid_reasons(receipt: Node) -> frozenset[str]:
 
 
 def _overlap_penalty_enabled(reasons: frozenset[str]) -> bool:
-    return bool(reasons & {"manual-window-scan", "overlapping-range", "same-range-overlap"})
+    return bool(
+        reasons & {"manual-window-scan", "overlapping-range", "same-range-overlap"}
+    )
 
 
 def _same_owner_penalty_enabled(reasons: frozenset[str]) -> bool:
@@ -252,20 +262,24 @@ def _same_owner_penalty_enabled(reasons: frozenset[str]) -> bool:
 
 def _raw_read_penalty_enabled(receipt: Node, reasons: frozenset[str]) -> bool:
     receipt_kind = str(receipt.fields.get("receiptKind") or receipt.role)
-    return receipt_kind == "raw-read" or "raw-read" in reasons or "raw-read-fallback" in reasons
+    return (
+        receipt_kind == "raw-read"
+        or "raw-read" in reasons
+        or "raw-read-fallback" in reasons
+    )
 
 
-def _receipt_range(receipt: Node) -> tuple[str, int, int] | None:
+def _receipt_range(receipt: Node) -> GraphTurboSelectorRange | None:
     selector = _receipt_selector(receipt)
-    if selector is not None and (parsed := _parse_selector(selector)) is not None:
+    if selector is not None and (parsed := graph_turbo_parse_selector(selector)):
         return parsed
-    return _range_from_fields(receipt.fields)
+    return graph_turbo_range_from_fields(receipt.fields)
 
 
-def _node_range(node: Node, selector: str | None) -> tuple[str, int, int] | None:
-    if selector is not None and (parsed := _parse_selector(selector)) is not None:
+def _node_range(node: Node, selector: str | None) -> GraphTurboSelectorRange | None:
+    if selector is not None and (parsed := graph_turbo_parse_selector(selector)):
         return parsed
-    return _range_from_fields(node.fields)
+    return graph_turbo_node_range(node)
 
 
 def _receipt_owner_path(receipt: Node) -> str | None:
@@ -273,79 +287,12 @@ def _receipt_owner_path(receipt: Node) -> str | None:
     if isinstance(owner, str) and owner:
         return owner
     if (receipt_range := _receipt_range(receipt)) is not None:
-        return receipt_range[0]
+        return receipt_range.path
     return None
 
 
 def _node_owner_path(node: Node) -> str | None:
-    owner = node.fields.get("ownerPath") or node.fields.get("owner")
-    if isinstance(owner, str) and owner:
-        return owner
-    path = node.fields.get("path")
-    if isinstance(path, str) and path:
-        return path
-    return None
-
-
-def _range_from_fields(fields: Mapping[str, object]) -> tuple[str, int, int] | None:
-    path = fields.get("path")
-    start = fields.get("startLine") or fields.get("start")
-    end = fields.get("endLine") or fields.get("end")
-    if isinstance(path, str) and isinstance(start, int) and isinstance(end, int):
-        return path, start, end
-    return None
-
-
-def _parse_selector(selector: str) -> tuple[str, int, int] | None:
-    path, start, end = _parse_colon_range(selector)
-    if path is not None:
-        return path, start, end
-    path, start, end = _parse_dash_range(selector)
-    if path is not None:
-        return path, start, end
-    return None
-
-
-def _parse_colon_range(selector: str) -> tuple[str | None, int, int]:
-    path, sep, end_text = selector.rpartition(":")
-    if not sep:
-        return None, 0, 0
-    path, sep, start_text = path.rpartition(":")
-    if not sep:
-        return None, 0, 0
-    try:
-        start = int(start_text)
-        end = int(end_text)
-    except ValueError:
-        return None, 0, 0
-    if not path or end < start:
-        return None, 0, 0
-    return path, start, end
-
-
-def _parse_dash_range(selector: str) -> tuple[str | None, int, int]:
-    path, sep, range_text = selector.rpartition(":")
-    if not sep:
-        return None, 0, 0
-    start_text, sep, end_text = range_text.partition("-")
-    if not sep:
-        return None, 0, 0
-    try:
-        start = int(start_text)
-        end = int(end_text)
-    except ValueError:
-        return None, 0, 0
-    if not path or end < start:
-        return None, 0, 0
-    return path, start, end
-
-
-def _ranges_overlap(
-    left: tuple[str, int, int], right: tuple[str, int, int]
-) -> bool:
-    left_path, left_start, left_end = left
-    right_path, right_start, right_end = right
-    return left_path == right_path and left_start <= right_end and right_start <= left_end
+    return graph_turbo_owner_path_for_node(node)
 
 
 def _numeric(value: object) -> float | None:

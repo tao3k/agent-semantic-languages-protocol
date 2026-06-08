@@ -116,12 +116,63 @@ SAME_SYMBOL_NAME_PENALTY = 0.4
 SAME_KIND_OVER_BUDGET_PENALTY = 0.3
 CONTIGUOUS_WINDOW_MERGE_BONUS = 0.5
 
+PROVENANCE_WEIGHT_MULTIPLIER: Mapping[str, float] = {
+    "parser": 1.15,
+    "build": 1.05,
+    "test": 1.10,
+    "failure": 1.20,
+    "receipt": 1.25,
+    "heuristic": 0.65,
+}
 
-def edge_weight_for(relation: str, explicit: Any = None) -> float:
-    if isinstance(explicit, int | float):
-        return max(float(explicit), 0.0)
-    return EDGE_WEIGHT_BY_RELATION.get(relation, 0.0)
+CONFIDENCE_WEIGHT_MULTIPLIER: Mapping[str, float] = {
+    "exact": 1.20,
+    "high": 1.05,
+    "medium": 0.90,
+    "low": 0.65,
+    "heuristic": 0.55,
+}
+
+FRESHNESS_WEIGHT_MULTIPLIER: Mapping[str, float] = {
+    "fresh": 1.05,
+    "cache-hit": 1.00,
+    "unknown": 0.85,
+    "stale": 0.45,
+}
+
+
+def edge_weight_for(
+    relation: str, explicit: Any = None, fields: Mapping[str, Any] | None = None
+) -> float:
+    relation_weight = EDGE_WEIGHT_BY_RELATION.get(relation, 0.0)
+    if relation_weight <= 0.0:
+        return 0.0
+    explicit_weight = (
+        max(float(explicit), 0.0) if isinstance(explicit, int | float) else 1.0
+    )
+    return (
+        relation_weight
+        * explicit_weight
+        * _quality_multiplier(PROVENANCE_WEIGHT_MULTIPLIER, fields, "provenance")
+        * _quality_multiplier(CONFIDENCE_WEIGHT_MULTIPLIER, fields, "confidence")
+        * _quality_multiplier(FRESHNESS_WEIGHT_MULTIPLIER, fields, "freshness")
+    )
 
 
 def node_kind_bonus(profile_name: str, node_kind: str) -> float:
     return NODE_KIND_BONUS_BY_PROFILE.get(profile_name, {}).get(node_kind, 0.0)
+
+
+def _quality_multiplier(
+    multipliers: Mapping[str, float],
+    fields: Mapping[str, Any] | None,
+    key: str,
+) -> float:
+    if fields is None:
+        return 1.0
+    value = fields.get(key)
+    if value is None:
+        nested_fields = fields.get("fields")
+        if isinstance(nested_fields, Mapping):
+            value = nested_fields.get(key)
+    return multipliers.get(str(value), 1.0) if value is not None else 1.0

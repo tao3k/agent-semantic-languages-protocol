@@ -8,6 +8,7 @@ from collections.abc import Iterable, Mapping
 from .constants import ALGORITHM_ID
 from .model import Edge, GraphProfile, GraphResult, Node
 from .profiles import frontier_action
+from .selector import graph_turbo_selector_for_node
 
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 
@@ -416,21 +417,7 @@ def _prompt_frontier_entries(result: GraphResult):
 
 
 def _selector_for_node(node: Node) -> str | None:
-    if node.kind == "field":
-        fields = node.fields.get("fields")
-        if isinstance(fields, Mapping):
-            context_locator = fields.get("contextLocator")
-            if context_locator is not None:
-                return str(context_locator)
-    locator = node.fields.get("locator") or node.fields.get("location")
-    if locator is not None:
-        return str(locator)
-    path = node.fields.get("path")
-    start = node.fields.get("startLine") or node.fields.get("start")
-    end = node.fields.get("endLine") or node.fields.get("end")
-    if path is not None and start is not None and end is not None:
-        return f"{path}:{start}:{end}"
-    return None
+    return graph_turbo_selector_for_node(node)
 
 
 def _node_locator(node: Node) -> str:
@@ -547,6 +534,8 @@ def _render_metrics(result: GraphResult) -> str:
         f"nodes={metrics.node_count},edges={metrics.edge_count},"
         f"selectedEdges={metrics.selected_edge_count},reachable={metrics.reachable_node_count},"
         f"ranked={metrics.ranked_node_count},paths={metrics.path_count},"
+        f"pathBackend={metrics.path_backend},pathPairs={metrics.path_pair_count},"
+        f"pathCandidates={metrics.path_candidate_count},pathFallbacks={metrics.path_fallback_count},"
         f"windows={metrics.merged_window_count},cache={metrics.cache_status}"
     )
     if (
@@ -564,4 +553,17 @@ def _render_metrics(result: GraphResult) -> str:
         )
     if metrics.read_memory_suppressed_count:
         rendered += f",readMemorySuppressed={metrics.read_memory_suppressed_count}"
+    if metrics.read_loop_second_pass_suppressed_count:
+        rendered += (
+            ",readLoopSecondPass="
+            f"duplicate:{metrics.read_loop_duplicate_selector_suppressed_count}|"
+            f"sameOwner:{metrics.read_loop_same_owner_suppressed_count}"
+        )
+    if metrics.relation_channel_count:
+        rendered += f",relationChannels={metrics.relation_channel_count}"
+    if metrics.ppr_iterations:
+        rendered += (
+            f",ppr=iter:{metrics.ppr_iterations}|"
+            f"residual:{metrics.ppr_residual:.2e}|mass:{metrics.ppr_mass_sum:.2f}"
+        )
     return rendered

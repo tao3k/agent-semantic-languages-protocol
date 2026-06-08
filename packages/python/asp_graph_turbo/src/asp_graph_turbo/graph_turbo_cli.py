@@ -13,6 +13,11 @@ _COMMANDS: dict[str, tuple[str, str, str]] = {
         "main",
         "Rank a graph turbo request packet into compact frontier output.",
     ),
+    "benchmark": (
+        "asp_graph_turbo.benchmark_cli",
+        "main",
+        "Benchmark graph turbo ranking for sandtable evidence.",
+    ),
     "artifacts": (
         "asp_graph_turbo.artifacts_cli",
         "main",
@@ -27,6 +32,16 @@ _COMMANDS: dict[str, tuple[str, str, str]] = {
         "asp_graph_turbo.metrics_cli",
         "main",
         "Render real-trigger metrics for graph turbo RFC validation.",
+    ),
+    "receipt": (
+        "asp_graph_turbo.frontier_receipt_cli",
+        "main",
+        "Capture a semantic fact frontier receipt from a graph turbo request.",
+    ),
+    "sandtable-summary": (
+        "asp_graph_turbo.sandtable_summary_cli",
+        "main",
+        "Summarize benchmark and receipt packets for sandtable comparison.",
     ),
     "cache": (
         "asp_graph_turbo.cache_cli",

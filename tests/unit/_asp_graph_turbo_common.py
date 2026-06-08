@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 from asp_graph_turbo import (
@@ -18,6 +21,8 @@ __all__ = [
     "_GRAPH_TURBO_FIXTURE",
     "_GRAPH_TURBO_REQUEST_SCHEMA",
     "_GRAPH_TURBO_SCHEMA",
+    "Path",
+    "json",
     "rank_frontier",
     "render_compact",
     "result_to_packet",
@@ -25,6 +30,8 @@ __all__ = [
     "sample_packet",
     "sample_request",
     "schema_validator_for",
+    "subprocess",
+    "sys",
 ]
 
 

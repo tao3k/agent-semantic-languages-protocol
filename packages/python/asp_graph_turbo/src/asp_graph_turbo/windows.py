@@ -41,11 +41,18 @@ def _window_from_node(node: Node) -> MergedWindow | None:
         return None
     if end_line < start_line:
         return None
-    return MergedWindow(path=path, start_line=start_line, end_line=end_line, node_ids=(node.id,))
+    return MergedWindow(
+        path=path, start_line=start_line, end_line=end_line, node_ids=(node.id,)
+    )
 
 
-def _can_merge(previous: MergedWindow, current: MergedWindow, max_gap_lines: int) -> bool:
-    return previous.path == current.path and current.start_line <= previous.end_line + max_gap_lines
+def _can_merge(
+    previous: MergedWindow, current: MergedWindow, max_gap_lines: int
+) -> bool:
+    return (
+        previous.path == current.path
+        and current.start_line <= previous.end_line + max_gap_lines
+    )
 
 
 def _string_field(node: Node, name: str) -> str | None:

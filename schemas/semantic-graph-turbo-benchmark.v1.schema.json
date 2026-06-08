@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-semantic-protocols.local/schemas/semantic-graph-turbo-benchmark.v1.schema.json",
+  "title": "Semantic graph turbo benchmark result",
+  "description": "Deterministic graph-turbo ranking benchmark packet for sandtable evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaId",
+    "schemaVersion",
+    "protocolId",
+    "protocolVersion",
+    "packetKind",
+    "algorithm",
+    "profile",
+    "runs",
+    "warmupRuns",
+    "cacheMode",
+    "durationMs",
+    "lastAlgorithmMetrics",
+    "lastTypedPathTrace"
+  ],
+  "properties": {
+    "schemaId": {
+      "const": "agent.semantic-protocols.semantic-graph-turbo-benchmark"
+    },
+    "schemaVersion": {
+      "const": "1"
+    },
+    "protocolId": {
+      "const": "agent.semantic-protocols.semantic-language"
+    },
+    "protocolVersion": {
+      "const": "1"
+    },
+    "packetKind": {
+      "const": "graph-turbo-benchmark"
+    },
+    "algorithm": {
+      "const": "typed-ppr-diverse"
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runs": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warmupRuns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cacheMode": {
+      "enum": [
+        "packet",
+        "enabled",
+        "disabled"
+      ]
+    },
+    "durationMs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "mean",
+        "median",
+        "p95",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mean": {
+          "type": "number",
+          "minimum": 0
+        },
+        "median": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "lastAlgorithmMetrics": {
+      "type": "object",
+      "required": [
+        "pathBackend",
+        "pathFallbackCount",
+        "pathPairCount",
+        "pathCandidateCount",
+        "pathCount",
+        "relationChannelCount",
+        "pprIterations",
+        "pprResidual",
+        "cacheStatus"
+      ],
+      "properties": {
+        "pathBackend": {
+          "enum": [
+            "python-bfs-small",
+            "scipy-yen",
+            "scipy-dijkstra",
+            "python-bfs-fallback"
+          ]
+        },
+        "pathFallbackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathPairCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathCandidateCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationChannelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pprIterations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pprResidual": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheStatus": {
+          "enum": [
+            "hit",
+            "miss",
+            "disabled"
+          ]
+        }
+      }
+    },
+    "lastTypedPathTrace": {
+      "type": "object",
+      "required": [
+        "step",
+        "engine",
+        "fields"
+      ],
+      "properties": {
+        "step": {
+          "const": "typed-paths"
+        },
+        "engine": {
+          "enum": [
+            "python-bfs-small",
+            "scipy-yen",
+            "scipy-dijkstra",
+            "python-bfs-fallback"
+          ]
+        },
+        "fields": {
+          "type": "object",
+          "required": [
+            "candidateCount",
+            "fallbackCount",
+            "pairCount",
+            "pathCount"
+          ],
+          "properties": {
+            "candidateCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fallbackCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pairCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pathCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

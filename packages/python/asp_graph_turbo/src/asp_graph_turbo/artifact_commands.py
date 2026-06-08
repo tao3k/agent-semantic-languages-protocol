@@ -48,7 +48,9 @@ def target_like(value: str) -> bool:
 def _command_artifact_paths(root: Path | None) -> tuple[Path, ...]:
     if root is None or not root.is_dir():
         return ()
-    return tuple(sorted(path for path in root.iterdir() if path.name.endswith(".command.json")))
+    return tuple(
+        sorted(path for path in root.iterdir() if path.name.endswith(".command.json"))
+    )
 
 
 def _labels_from_packet(path: Path) -> tuple[CommandLabel, ...]:
@@ -56,9 +58,7 @@ def _labels_from_packet(path: Path) -> tuple[CommandLabel, ...]:
     if not isinstance(commands, list):
         return ()
     return tuple(
-        label
-        for command in commands
-        for label in _labels_from_command(command, path)
+        label for command in commands for label in _labels_from_command(command, path)
     )
 
 

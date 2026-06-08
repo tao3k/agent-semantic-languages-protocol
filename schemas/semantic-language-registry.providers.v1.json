@@ -142,9 +142,14 @@
           "path": "schemas/semantic-read-packet.v1.schema.json"
         },
         {
-          "schemaId": "agent.semantic-protocols.agent-quality-signal",
+          "schemaId": "agent.semantic-protocols.software-criterion-catalog",
           "schemaVersion": "1",
-          "path": "schemas/agent-quality-signal.v1.schema.json"
+          "path": "schemas/software-criterion-catalog.v1.schema.json"
+        },
+        {
+          "schemaId": "agent.semantic-protocols.software-criterion-extension-report",
+          "schemaVersion": "1",
+          "path": "schemas/software-criterion-extension-report.v1.schema.json"
         },
         {
           "schemaId": "agent.semantic-protocols.semantic-fact-graph",
@@ -296,9 +301,14 @@
           "path": "schemas/semantic-read-packet.v1.schema.json"
         },
         {
-          "schemaId": "agent.semantic-protocols.agent-quality-signal",
+          "schemaId": "agent.semantic-protocols.software-criterion-catalog",
           "schemaVersion": "1",
-          "path": "schemas/agent-quality-signal.v1.schema.json"
+          "path": "schemas/software-criterion-catalog.v1.schema.json"
+        },
+        {
+          "schemaId": "agent.semantic-protocols.software-criterion-extension-report",
+          "schemaVersion": "1",
+          "path": "schemas/software-criterion-extension-report.v1.schema.json"
         },
         {
           "schemaId": "agent.semantic-protocols.semantic-fact-graph",
@@ -450,9 +460,14 @@
           "path": "schemas/semantic-read-packet.v1.schema.json"
         },
         {
-          "schemaId": "agent.semantic-protocols.agent-quality-signal",
+          "schemaId": "agent.semantic-protocols.software-criterion-catalog",
           "schemaVersion": "1",
-          "path": "schemas/agent-quality-signal.v1.schema.json"
+          "path": "schemas/software-criterion-catalog.v1.schema.json"
+        },
+        {
+          "schemaId": "agent.semantic-protocols.software-criterion-extension-report",
+          "schemaVersion": "1",
+          "path": "schemas/software-criterion-extension-report.v1.schema.json"
         },
         {
           "schemaId": "agent.semantic-protocols.semantic-fact-graph",
@@ -595,9 +610,14 @@
           "path": "schemas/semantic-query-packet.v1.schema.json"
         },
         {
-          "schemaId": "agent.semantic-protocols.agent-quality-signal",
+          "schemaId": "agent.semantic-protocols.software-criterion-catalog",
           "schemaVersion": "1",
-          "path": "schemas/agent-quality-signal.v1.schema.json"
+          "path": "schemas/software-criterion-catalog.v1.schema.json"
+        },
+        {
+          "schemaId": "agent.semantic-protocols.software-criterion-extension-report",
+          "schemaVersion": "1",
+          "path": "schemas/software-criterion-extension-report.v1.schema.json"
         },
         {
           "schemaId": "agent.semantic-protocols.semantic-fact-graph",

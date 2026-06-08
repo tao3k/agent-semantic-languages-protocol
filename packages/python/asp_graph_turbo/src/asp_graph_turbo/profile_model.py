@@ -33,6 +33,15 @@ class ProfileCompatibility:
 
 
 @dataclass(frozen=True)
+class RelationChannelSummary:
+    relation: str
+    supported_edge_count: int
+    reachable_edge_count: int
+    weight_mass: float
+    reachable_weight_mass: float
+
+
+@dataclass(frozen=True)
 class ProfileMatrixSummary:
     profile: str
     relation_count: int
@@ -40,3 +49,4 @@ class ProfileMatrixSummary:
     supported_edge_count: int
     reachable_edge_count: int
     density: float
+    relation_channels: tuple[RelationChannelSummary, ...] = ()

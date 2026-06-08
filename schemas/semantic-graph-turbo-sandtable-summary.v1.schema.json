@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-semantic-protocols.local/schemas/semantic-graph-turbo-sandtable-summary.v1.schema.json",
+  "title": "Semantic graph turbo sandtable summary",
+  "description": "Comparable sandtable row that combines graph-turbo benchmark and frontier receipt metrics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaId",
+    "schemaVersion",
+    "protocolId",
+    "protocolVersion",
+    "packetKind",
+    "scenario",
+    "profile",
+    "benchmark",
+    "receipt"
+  ],
+  "properties": {
+    "schemaId": {
+      "const": "agent.semantic-protocols.semantic-graph-turbo-sandtable-summary"
+    },
+    "schemaVersion": {
+      "const": "1"
+    },
+    "protocolId": {
+      "const": "agent.semantic-protocols.semantic-language"
+    },
+    "protocolVersion": {
+      "const": "1"
+    },
+    "packetKind": {
+      "const": "graph-turbo-sandtable-summary"
+    },
+    "scenario": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs",
+        "warmupRuns",
+        "cacheMode",
+        "medianMs",
+        "p95Ms",
+        "pathBackend",
+        "pathPairCount",
+        "pathCandidateCount",
+        "pathFallbackCount",
+        "pathCount",
+        "relationChannelCount",
+        "pprIterations",
+        "cacheStatus"
+      ],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmupRuns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheMode": {
+          "enum": [
+            "packet",
+            "enabled",
+            "disabled"
+          ]
+        },
+        "medianMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95Ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pathBackend": {
+          "enum": [
+            "python-bfs-small",
+            "scipy-yen",
+            "scipy-dijkstra",
+            "python-bfs-fallback"
+          ]
+        },
+        "pathPairCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathCandidateCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathFallbackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pathCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "relationChannelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pprIterations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheStatus": {
+          "enum": [
+            "hit",
+            "miss",
+            "disabled"
+          ]
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receiptId",
+        "frontierReturnedCount",
+        "frontierFollowedCount",
+        "frontierFollowRate",
+        "codeActuallyReadCount",
+        "rawReadFallbackCount",
+        "duplicateSelectorCount",
+        "sameOwnerScanCount",
+        "commandsToFirstUsefulLocator",
+        "commandsToValidation"
+      ],
+      "properties": {
+        "receiptId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frontierReturnedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frontierFollowedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frontierFollowRate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "codeActuallyReadCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rawReadFallbackCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicateSelectorCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sameOwnerScanCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "commandsToFirstUsefulLocator": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "commandsToValidation": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
