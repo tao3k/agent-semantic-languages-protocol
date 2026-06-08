@@ -180,6 +180,94 @@
           "minimum": 0
         }
       }
+    },
+    "benchmarkReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reportId",
+        "scenarioId",
+        "captureKind",
+        "readyForWeightCalibration"
+      ],
+      "properties": {
+        "reportId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scenarioId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "captureKind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readyForWeightCalibration": {
+          "type": "boolean"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goldFrontierCount",
+        "emittedFrontierCount",
+        "goldFrontierHitCount",
+        "followedGoldFrontierCount",
+        "goldSelectorReadCount",
+        "contextPrecision",
+        "contextRecall",
+        "contextUtilization",
+        "exactCodeSuccess",
+        "testSelectionPrecision"
+      ],
+      "properties": {
+        "goldFrontierCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "emittedFrontierCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "goldFrontierHitCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "followedGoldFrontierCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "goldSelectorReadCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contextPrecision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "contextRecall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "contextUtilization": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "exactCodeSuccess": {
+          "type": "boolean"
+        },
+        "testSelectionPrecision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
     }
   }
 }

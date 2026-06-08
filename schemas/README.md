@@ -949,9 +949,18 @@ algorithm trace, rank explanations, supported profiles, and prompt-visible
 `omit`/`avoid` facts from the turbo ranking engine. It is ranking evidence,
 not a prompt-facing render template; provider output should still use
 `semantic-compact-graph-render.v1` and the shared `asp graph render` boundary.
+`semantic-graph-turbo-summary.v1.schema.json` is the agent-facing JSON
+projection of that result packet. It keeps ranked node locators, frontier
+actions, selected edges, typed paths, algorithm trace, algorithm metrics, and
+the active profile matrix while explicitly omitting the full score vector, full
+node fields, non-active profile matrices, and source code.
 Python MVP 11 uses a SciPy sparse CSR backend for `typed-ppr-diverse` so the
 request/response pair can represent real matrix-backed ranking, path, cache,
 trace, and sandtable metric evidence instead of a renderer-local graph format.
+`semantic-graph-turbo-sandtable-summary.v1.schema.json` can also carry
+report-derived `context` metrics and `benchmarkReport` provenance when
+`asp-graph-turbo sandtable-summary` consumes a calibration-ready benchmark
+report scenario.
 Python MVP 12 requires relation-owned default edge weights and profile-owned
 typed transition masks before PageRank/path ranking. The result packet exposes
 edge weights plus each profile's allowed transitions and node-kind bonuses in

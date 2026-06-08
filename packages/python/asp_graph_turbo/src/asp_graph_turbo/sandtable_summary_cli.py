@@ -15,8 +15,14 @@ from .cli import _load_packet
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     benchmark = _load_benchmark(args)
-    receipt = _load_receipt(args.receipt, args.receipt_fixture_id)
-    summary = _summary_packet(benchmark, receipt, args.scenario)
+    report_scenario = _load_report_scenario(args.benchmark_report, args.report_scenario)
+    if report_scenario is None:
+        if args.receipt is None:
+            raise SystemExit("--receipt is required unless --benchmark-report is provided")
+        receipt = _load_receipt(args.receipt, args.receipt_fixture_id)
+    else:
+        receipt = _receipt_from_report_scenario(report_scenario)
+    summary = _summary_packet(benchmark, receipt, args.scenario, report_scenario)
     if args.format == "json":
         sys.stdout.write(json.dumps(summary, sort_keys=True) + "\n")
     else:
@@ -40,13 +46,20 @@ def _load_benchmark(args: argparse.Namespace) -> Mapping[str, object]:
 
 
 def _summary_packet(
-    benchmark: Mapping[str, object], receipt: Mapping[str, object], scenario: str | None
+    benchmark: Mapping[str, object],
+    receipt: Mapping[str, object],
+    scenario: str | None,
+    report_scenario: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     benchmark_metrics = _mapping(benchmark.get("lastAlgorithmMetrics"))
     receipt_metrics = _mapping(receipt.get("metrics"))
     duration = _mapping(benchmark.get("durationMs"))
-    scenario_name = scenario or str(receipt.get("taskFingerprint") or "graph-turbo")
-    return {
+    scenario_name = scenario or str(
+        _mapping(report_scenario).get("scenarioId")
+        or receipt.get("taskFingerprint")
+        or "graph-turbo"
+    )
+    packet = {
         "schemaId": "agent.semantic-protocols.semantic-graph-turbo-sandtable-summary",
         "schemaVersion": "1",
         "protocolId": "agent.semantic-protocols.semantic-language",
@@ -84,12 +97,22 @@ def _summary_packet(
             "commandsToValidation": receipt_metrics.get("commandsToValidation"),
         },
     }
+    if report_scenario is not None:
+        readiness = _mapping(report_scenario.get("benchmarkReadiness"))
+        packet["benchmarkReport"] = {
+            "reportId": report_scenario.get("reportId"),
+            "scenarioId": report_scenario.get("scenarioId"),
+            "captureKind": report_scenario.get("captureKind"),
+            "readyForWeightCalibration": readiness.get("readyForWeightCalibration"),
+        }
+        packet["context"] = dict(_mapping(report_scenario.get("contextMetrics")))
+    return packet
 
 
 def _render_text(packet: Mapping[str, object]) -> str:
     benchmark = _mapping(packet.get("benchmark"))
     receipt = _mapping(packet.get("receipt"))
-    return (
+    output = (
         "[graph-sandtable-summary] "
         f"scenario={packet.get('scenario')} profile={packet.get('profile')} "
         f"medianMs={benchmark.get('medianMs')} p95Ms={benchmark.get('p95Ms')}\n"
@@ -107,6 +130,17 @@ def _render_text(packet: Mapping[str, object]) -> str:
         f"sameOwnerScans={receipt.get('sameOwnerScanCount')},"
         f"commandsToValidation={receipt.get('commandsToValidation')}"
     )
+    context = _mapping(packet.get("context"))
+    if context:
+        output += (
+            "\ncontext="
+            f"precision={context.get('contextPrecision')},"
+            f"recall={context.get('contextRecall')},"
+            f"utilization={context.get('contextUtilization')},"
+            f"exactCode={context.get('exactCodeSuccess')},"
+            f"testPrecision={context.get('testSelectionPrecision')}"
+        )
+    return output
 
 
 def _load_receipt(path: str, fixture_id: str | None) -> Mapping[str, object]:
@@ -132,6 +166,57 @@ def _load_receipt(path: str, fixture_id: str | None) -> Mapping[str, object]:
     ):
         raise SystemExit("receipt fixture entry must contain a receipt object")
     return fixture["receipt"]
+
+
+def _load_report_scenario(
+    path: str | None, scenario_id: str | None
+) -> Mapping[str, object] | None:
+    if path is None:
+        return None
+    packet = _load_json(path)
+    reports = packet.get("reports")
+    if not isinstance(reports, list) or not reports:
+        raise SystemExit("benchmark report fixture must contain reports")
+    report = reports[0]
+    if not isinstance(report, Mapping):
+        raise SystemExit("benchmark report entry must be an object")
+    scenarios = report.get("scenarios")
+    if not isinstance(scenarios, list) or not scenarios:
+        raise SystemExit("benchmark report entry must contain scenarios")
+    if scenario_id is None:
+        scenario = next(
+            (
+                item
+                for item in scenarios
+                if isinstance(item, Mapping)
+                and _mapping(item.get("benchmarkReadiness")).get(
+                    "readyForWeightCalibration"
+                )
+                is True
+            ),
+            scenarios[0],
+        )
+    else:
+        scenario = next(
+            (
+                item
+                for item in scenarios
+                if isinstance(item, Mapping) and item.get("scenarioId") == scenario_id
+            ),
+            None,
+        )
+    if not isinstance(scenario, Mapping):
+        raise SystemExit(f"benchmark report scenario not found: {scenario_id}")
+    scenario_packet = dict(scenario)
+    scenario_packet["reportId"] = report.get("reportId")
+    return scenario_packet
+
+
+def _receipt_from_report_scenario(scenario: Mapping[str, object]) -> Mapping[str, object]:
+    return {
+        "receiptId": scenario.get("receiptId"),
+        "metrics": dict(_mapping(scenario.get("receiptMetrics"))),
+    }
 
 
 def _load_json(path: str) -> Mapping[str, object]:
@@ -160,8 +245,10 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--profile", default=None)
     parser.add_argument("--seed", action="append", default=[])
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--receipt", required=True)
+    parser.add_argument("--receipt")
     parser.add_argument("--receipt-fixture-id")
+    parser.add_argument("--benchmark-report")
+    parser.add_argument("--report-scenario")
     parser.add_argument("--scenario")
     parser.add_argument("--format", choices=["json", "text"], default="json")
     return parser.parse_args(argv)

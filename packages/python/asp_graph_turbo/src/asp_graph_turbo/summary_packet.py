@@ -55,8 +55,13 @@ def result_to_summary_packet(result: GraphResult) -> dict[str, object]:
         "profileCompatibility": [
             _profile_compatibility_summary(entry)
             for entry in result.profile_compatibility
+            if entry.profile == result.profile.name
         ],
-        "profileMatrices": full["profileMatrices"],
+        "profileMatrices": [
+            entry
+            for entry in full["profileMatrices"]
+            if entry["profile"] == result.profile.name
+        ],
         "algorithmMetrics": full["algorithmMetrics"],
         "omit": list(result.omit),
         "avoid": list(result.avoid),
@@ -74,6 +79,7 @@ def result_to_summary_packet(result: GraphResult) -> dict[str, object]:
                 "full-score-vector",
                 "full-node-fields",
                 "profile-transition-tables",
+                "non-active-profile-matrices",
                 "source-code",
             ],
         },

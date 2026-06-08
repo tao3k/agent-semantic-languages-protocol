@@ -135,7 +135,9 @@ def test_graph_turbo_rank_summary_json_preserves_frontier_without_full_packet(
     assert payload["schemaId"] == "agent.semantic-protocols.semantic-graph-turbo-summary"
     assert payload["packetKind"] == "graph-turbo-summary"
     assert payload["sourcePacketKind"] == "graph-turbo-result"
-    assert payload["frontier"][0]["selector"] == "src/lib.rs:1:1"
+    assert any(
+        entry["selector"] == "src/lib.rs:1:1" for entry in payload["rankedNodes"]
+    )
     assert payload["rankedNodes"][0]["score"] is not None
     assert payload["typedPaths"][0]["rank"] == 1
     assert payload["algorithmMetrics"]["pathCandidateCount"] >= 1

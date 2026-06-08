@@ -21,6 +21,9 @@ def graph_turbo_selector_for_node(node: Node) -> str | None:
         context_locator = fields.get("contextLocator")
         if isinstance(context_locator, str) and context_locator:
             return context_locator
+        locator = fields.get("locator") or fields.get("location")
+        if isinstance(locator, str) and locator:
+            return locator
     locator = node.fields.get("locator") or node.fields.get("location")
     if isinstance(locator, str) and locator:
         return locator
@@ -43,6 +46,9 @@ def graph_turbo_selector_for_node_without_range(node: Node) -> str | None:
         context_locator = fields.get("contextLocator")
         if isinstance(context_locator, str) and context_locator:
             return context_locator
+        locator = fields.get("locator") or fields.get("location")
+        if isinstance(locator, str) and locator:
+            return locator
     locator = node.fields.get("locator") or node.fields.get("location")
     if isinstance(locator, str) and locator:
         return locator

@@ -246,6 +246,15 @@ final backend candidate count before budgeted typed-path projection. This keeps
 the sparse bank and typed-path algorithm choice inspectable before learned
 weights or alternative backends are introduced.
 
+The agent-facing compact JSON contract is
+=schemas/semantic-graph-turbo-summary.v1.schema.json=.  It projects the active
+profile frontier with ranked node locators, selected edges, typed paths,
+algorithm trace, algorithm metrics, and the active
+=profileMatrices[].relationChannels= row.  It explicitly omits the full score
+vector, full node fields, non-active profile matrices, and source code so
+sandtables can measure token cost without losing the current frontier's exact
+next-action facts.
+
 * Build, test, and package graph
 
 Parser facts are not enough for repository-level agents.  The next fact graph
@@ -425,6 +434,9 @@ Only the followed/read/test ASP runtime scenario is marked ready for weight
 calibration, and =tests/unit/test_semantic_fact_frontier_benchmark_report_schema.py=
 recomputes scoring metrics from the source receipt fixtures so report rows
 cannot drift from recorded evidence.
+=schemas/semantic-graph-turbo-sandtable-summary.v1.schema.json= accepts the
+live scoring row that consumes a calibration-ready report scenario through
+=asp-graph-turbo sandtable-summary --benchmark-report ... --report-scenario ...=.
 
 * Lightweight scoring
 
@@ -601,6 +613,8 @@ P1 audit should answer:
 - Recompute =contextPrecision=, =contextRecall=, =contextUtilization=,
   =exactCodeSuccess=, and =testSelectionPrecision= from =goldContext= plus the
   source receipt fixture in schema tests.
+- Run a live sandtable summary row that consumes the calibration-ready report
+  scenario before allowing scoring changes to count as an optimization.
 - Run one real-project scenario before allowing scoring changes to count as an
   optimization.
 
@@ -635,4 +649,4 @@ The RFC is considered landed only when:
 | default agent-facing outputs stay compact with exact follow-up actions | closed | graph-turbo seed/render tests plus =tests/unit/semantic_sandtable/test_expectations_pipe_flow_drift.py= enforcing primary selector actions without broad executable branch spam |
 | receipt runtime capture is schema-owned and public-facade reachable | closed | =schemas/semantic-fact-frontier-receipt.fixtures.v1.json= records task-session, =asp-graph-turbo receipt=, and =asp <language> search --frontier-receipt-out= fixtures validated by =tests/unit/test_semantic_fact_frontier_receipt_schema.py= |
 | real-project receipt plus benchmark table fixes scoring input | closed | =schemas/semantic-fact-frontier-benchmark-report.fixtures.v1.json= fixes the four-scenario receipt+benchmark report, including a calibration-ready ASP runtime followed/read/test scenario; =tests/unit/test_semantic_fact_frontier_benchmark_report_schema.py= recomputes gold context metrics from source receipts |
-| live sandtable scoring drives ranking-weight changes | pending | next gate is a live sandtable scoring row that consumes the calibration-ready ASP runtime scenario before any relation-weight change counts as optimization |
+| live sandtable scoring drives ranking-weight changes | closed | =tests/unit/test_asp_graph_turbo_sandtable_summary_cli.py= covers =--benchmark-report --report-scenario=, and =docs/30-39-research/31.30-semantic-fact-frontier-real-project-evidence.org= records a schema-valid live row with =contextPrecision=0.1=, =contextRecall=1.0=, and =contextUtilization=0.1= |

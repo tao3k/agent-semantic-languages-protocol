@@ -287,6 +287,39 @@ The offline comparison table is now fixed as a schema-owned fixture catalog:
 - next action :: run live sandtable scoring with the calibration-ready ASP
   runtime scenario before changing relation weights
 
+The live sandtable scoring row now consumes that report scenario directly:
+
+#+begin_example
+uv run --project packages/python python -m asp_graph_turbo sandtable-summary \
+  --benchmark-packet sandtables/fixtures/asp/graph-turbo-owner-query.json \
+  --benchmark-runs 5 \
+  --benchmark-warmup-runs 1 \
+  --benchmark-cache-mode disabled \
+  --benchmark-report schemas/semantic-fact-frontier-benchmark-report.fixtures.v1.json \
+  --report-scenario asp-runtime-followed-read-test \
+  --format json >/tmp/rfc014-live-sandtable-scoring.json
+# schema validation errors: 0
+# scenario: asp-runtime-followed-read-test
+# benchmarkReport.readyForWeightCalibration: true
+# contextPrecision: 0.1
+# contextRecall: 1.0
+# contextUtilization: 0.1
+# exactCodeSuccess: true
+# testSelectionPrecision: 1.0
+# medianMs: 1.566292
+# p95Ms: 1.674666
+#+end_example
+
+The graph-turbo result flow now validates the agent-facing
+=semantic-graph-turbo-summary.v1= projection instead of the full
+=semantic-graph-turbo-result.v1= packet.  The summary keeps active profile
+relation channels, selected edges, typed paths, frontier/rank metadata, and
+algorithm metrics, while explicitly omitting full score vectors, full node
+fields, non-active profile matrices, and source code.  On the owner-query
+fixture this lowers the first sandtable packet from =34378= bytes to =9894=
+bytes, and total scenario stdout from about =36732= bytes to about =12248=
+bytes.
+
 The same metric surface was also exercised against a synthetic large
 =field-impact= graph to force =scipy-yen=:
 
@@ -331,14 +364,12 @@ The same metric surface was also exercised against a synthetic large
 - The offline benchmark report fixture now joins the task-session receipt,
   graph-turbo runtime receipt, ASP runtime frontier-only receipt, and ASP
   runtime followed/read/test receipt into one schema-owned table.  It is enough
-  to gate first scoring decisions without parsing debug text; relation weight
-  changes still need live sandtable scoring against this report.
+  to gate first scoring decisions without parsing debug text, and the live
+  sandtable summary row now consumes its calibration-ready ASP runtime scenario.
 
 * Next
 
-- Run live sandtable scoring with the calibration-ready ASP runtime scenario
-  before allowing relation weight changes to count as optimization.
-- Add live sandtable runs only after the offline benchmark and receipt packets
-  can be compared without losing parser-owned frontier precision.
+- Compare the live sandtable scoring row against a second real-project task
+  before changing relation weights.
 - Use those receipts to decide whether graph-turbo ranking needs calibrated
   relation weights beyond the deterministic sparse matrix bank.
