@@ -1,287 +1,417 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agent-semantic-protocols.local/schemas/semantic-graph-turbo-sandtable-summary.v1.schema.json",
-  "title": "Semantic graph turbo sandtable summary",
-  "description": "Comparable sandtable row that combines graph-turbo benchmark and frontier receipt metrics.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schemaId",
-    "schemaVersion",
-    "protocolId",
-    "protocolVersion",
-    "packetKind",
-    "scenario",
-    "profile",
-    "benchmark",
-    "receipt"
-  ],
-  "properties": {
-    "schemaId": {
-      "const": "agent.semantic-protocols.semantic-graph-turbo-sandtable-summary"
-    },
-    "schemaVersion": {
-      "const": "1"
-    },
-    "protocolId": {
-      "const": "agent.semantic-protocols.semantic-language"
-    },
-    "protocolVersion": {
-      "const": "1"
-    },
-    "packetKind": {
-      "const": "graph-turbo-sandtable-summary"
-    },
-    "scenario": {
-      "type": "string",
-      "minLength": 1
-    },
-    "profile": {
-      "type": "string",
-      "minLength": 1
-    },
-    "benchmark": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "runs",
-        "warmupRuns",
-        "cacheMode",
-        "medianMs",
-        "p95Ms",
-        "pathBackend",
-        "pathPairCount",
-        "pathCandidateCount",
-        "pathFallbackCount",
-        "pathCount",
-        "relationChannelCount",
-        "pprIterations",
-        "cacheStatus"
-      ],
-      "properties": {
-        "runs": {
-          "type": "integer",
-          "minimum": 1
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://agent-semantic-protocols.local/schemas/semantic-graph-turbo-sandtable-summary.v1.schema.json",
+    "title": "Semantic graph turbo sandtable summary",
+    "description": "Comparable sandtable row that combines graph-turbo benchmark and frontier receipt metrics.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schemaId",
+        "schemaVersion",
+        "protocolId",
+        "protocolVersion",
+        "packetKind",
+        "scenario",
+        "profile",
+        "benchmark",
+        "receipt",
+        "qualityGate"
+    ],
+    "properties": {
+        "schemaId": {
+            "const": "agent.semantic-protocols.semantic-graph-turbo-sandtable-summary"
         },
-        "warmupRuns": {
-          "type": "integer",
-          "minimum": 0
+        "schemaVersion": {
+            "const": "1"
         },
-        "cacheMode": {
-          "enum": [
-            "packet",
-            "enabled",
-            "disabled"
-          ]
+        "protocolId": {
+            "const": "agent.semantic-protocols.semantic-language"
         },
-        "medianMs": {
-          "type": "number",
-          "minimum": 0
+        "protocolVersion": {
+            "const": "1"
         },
-        "p95Ms": {
-          "type": "number",
-          "minimum": 0
+        "packetKind": {
+            "const": "graph-turbo-sandtable-summary"
         },
-        "pathBackend": {
-          "enum": [
-            "python-bfs-small",
-            "scipy-yen",
-            "scipy-dijkstra",
-            "python-bfs-fallback"
-          ]
+        "scenario": {
+            "type": "string",
+            "minLength": 1
         },
-        "pathPairCount": {
-          "type": "integer",
-          "minimum": 0
+        "profile": {
+            "type": "string",
+            "minLength": 1
         },
-        "pathCandidateCount": {
-          "type": "integer",
-          "minimum": 0
+        "benchmark": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "runs",
+                "warmupRuns",
+                "cacheMode",
+                "medianMs",
+                "p95Ms",
+                "pathBackend",
+                "pathPairCount",
+                "pathCandidateCount",
+                "pathFallbackCount",
+                "pathCount",
+                "relationChannelCount",
+                "relationCount",
+                "relationMatrixCount",
+                "zeroEdgeRelationCount",
+                "transitionNonZeroCount",
+                "transitionWeightMass",
+                "pprIterations",
+                "pprResidual",
+                "pprMassSum",
+                "pprDanglingMassLast",
+                "readLoopDirectCodeActionCount",
+                "readLoopDuplicateSelectorCount",
+                "readLoopSameOwnerScanCount",
+                "readMemorySuppressedCount",
+                "readLoopSecondPassSuppressedCount",
+                "readLoopDuplicateSelectorSuppressedCount",
+                "readLoopAdjacentRangeMergedCount",
+                "readLoopSameOwnerSuppressedCount",
+                "receiptBoostCount",
+                "receiptPenaltyCount",
+                "cacheStatus"
+            ],
+            "properties": {
+                "runs": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "warmupRuns": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "cacheMode": {
+                    "enum": [
+                        "packet",
+                        "enabled",
+                        "disabled"
+                    ]
+                },
+                "medianMs": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "p95Ms": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "pathBackend": {
+                    "enum": [
+                        "python-bfs-small",
+                        "scipy-yen",
+                        "scipy-dijkstra",
+                        "python-bfs-fallback"
+                    ]
+                },
+                "pathPairCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "pathCandidateCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "pathFallbackCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "pathCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "relationChannelCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "relationCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "relationMatrixCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "zeroEdgeRelationCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "transitionNonZeroCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "transitionWeightMass": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "pprIterations": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "pprResidual": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "pprMassSum": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "pprDanglingMassLast": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "readLoopDirectCodeActionCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readLoopDuplicateSelectorCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readLoopSameOwnerScanCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readMemorySuppressedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readLoopSecondPassSuppressedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readLoopDuplicateSelectorSuppressedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readLoopAdjacentRangeMergedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "readLoopSameOwnerSuppressedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "receiptBoostCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "receiptPenaltyCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "cacheStatus": {
+                    "enum": [
+                        "hit",
+                        "miss",
+                        "disabled"
+                    ]
+                }
+            }
         },
-        "pathFallbackCount": {
-          "type": "integer",
-          "minimum": 0
+        "receipt": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "receiptId",
+                "frontierReturnedCount",
+                "frontierFollowedCount",
+                "frontierFollowRate",
+                "codeActuallyReadCount",
+                "rawReadFallbackCount",
+                "duplicateSelectorCount",
+                "sameOwnerScanCount",
+                "commandsToFirstUsefulLocator",
+                "commandsToValidation"
+            ],
+            "properties": {
+                "receiptId": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "frontierReturnedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "frontierFollowedCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "frontierFollowRate": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "codeActuallyReadCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "rawReadFallbackCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "duplicateSelectorCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "sameOwnerScanCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "commandsToFirstUsefulLocator": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "commandsToValidation": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
         },
-        "pathCount": {
-          "type": "integer",
-          "minimum": 0
+        "qualityGate": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "status",
+                "failures"
+            ],
+            "properties": {
+                "status": {
+                    "enum": [
+                        "pass",
+                        "fail"
+                    ]
+                },
+                "failures": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "field",
+                            "actual",
+                            "expected"
+                        ],
+                        "properties": {
+                            "field": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "actual": true,
+                            "expected": {
+                                "type": "string",
+                                "minLength": 1
+                            }
+                        }
+                    }
+                }
+            }
         },
-        "relationChannelCount": {
-          "type": "integer",
-          "minimum": 0
+        "benchmarkReport": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "reportId",
+                "scenarioId",
+                "captureKind",
+                "readyForWeightCalibration"
+            ],
+            "properties": {
+                "reportId": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "scenarioId": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "captureKind": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "readyForWeightCalibration": {
+                    "type": "boolean"
+                }
+            }
         },
-        "pprIterations": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "cacheStatus": {
-          "enum": [
-            "hit",
-            "miss",
-            "disabled"
-          ]
+        "context": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "goldFrontierCount",
+                "emittedFrontierCount",
+                "goldFrontierHitCount",
+                "followedGoldFrontierCount",
+                "goldSelectorReadCount",
+                "contextPrecision",
+                "contextRecall",
+                "contextUtilization",
+                "exactCodeSuccess",
+                "testSelectionPrecision"
+            ],
+            "properties": {
+                "goldFrontierCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "emittedFrontierCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "goldFrontierHitCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "goldFrontierBestRank": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "minimum": 1
+                },
+                "goldSelectorActionRank": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "minimum": 1
+                },
+                "followedGoldFrontierCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "goldSelectorReadCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "contextPrecision": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "contextRecall": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "contextUtilization": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "exactCodeSuccess": {
+                    "type": "boolean"
+                },
+                "testSelectionPrecision": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                }
+            }
         }
-      }
-    },
-    "receipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "receiptId",
-        "frontierReturnedCount",
-        "frontierFollowedCount",
-        "frontierFollowRate",
-        "codeActuallyReadCount",
-        "rawReadFallbackCount",
-        "duplicateSelectorCount",
-        "sameOwnerScanCount",
-        "commandsToFirstUsefulLocator",
-        "commandsToValidation"
-      ],
-      "properties": {
-        "receiptId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "frontierReturnedCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "frontierFollowedCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "frontierFollowRate": {
-          "type": "number",
-          "minimum": 0
-        },
-        "codeActuallyReadCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "rawReadFallbackCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "duplicateSelectorCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "sameOwnerScanCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "commandsToFirstUsefulLocator": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "commandsToValidation": {
-          "type": "integer",
-          "minimum": 0
-        }
-      }
-    },
-    "benchmarkReport": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "reportId",
-        "scenarioId",
-        "captureKind",
-        "readyForWeightCalibration"
-      ],
-      "properties": {
-        "reportId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "scenarioId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "captureKind": {
-          "type": "string",
-          "minLength": 1
-        },
-        "readyForWeightCalibration": {
-          "type": "boolean"
-        }
-      }
-    },
-    "context": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "goldFrontierCount",
-        "emittedFrontierCount",
-        "goldFrontierHitCount",
-        "followedGoldFrontierCount",
-        "goldSelectorReadCount",
-        "contextPrecision",
-        "contextRecall",
-        "contextUtilization",
-        "exactCodeSuccess",
-        "testSelectionPrecision"
-      ],
-      "properties": {
-        "goldFrontierCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "emittedFrontierCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-      "goldFrontierHitCount": {
-        "type": "integer",
-        "minimum": 0
-      },
-      "goldFrontierBestRank": {
-        "type": [
-          "integer",
-          "null"
-        ],
-        "minimum": 1
-      },
-      "goldSelectorActionRank": {
-        "type": [
-          "integer",
-          "null"
-        ],
-        "minimum": 1
-      },
-      "followedGoldFrontierCount": {
-        "type": "integer",
-        "minimum": 0
-      },
-        "goldSelectorReadCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "contextPrecision": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "contextRecall": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "contextUtilization": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "exactCodeSuccess": {
-          "type": "boolean"
-        },
-        "testSelectionPrecision": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        }
-      }
     }
-  }
 }

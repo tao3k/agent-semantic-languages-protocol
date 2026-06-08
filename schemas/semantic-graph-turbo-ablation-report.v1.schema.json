@@ -1,0 +1,379 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://agent-semantic-protocols.local/schemas/semantic-graph-turbo-ablation-report.v1.schema.json",
+    "title": "Semantic graph turbo ablation report",
+    "description": "Comparable graph-turbo ablation report for profile and weight calibration.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schemaId",
+        "schemaVersion",
+        "protocolId",
+        "protocolVersion",
+        "packetKind",
+        "sourceProfile",
+        "baselineVariant",
+        "runs",
+        "warmupRuns",
+        "cacheMode",
+        "summary",
+        "qualityGate",
+        "variants"
+    ],
+    "properties": {
+        "schemaId": {
+            "const": "agent.semantic-protocols.semantic-graph-turbo-ablation-report"
+        },
+        "schemaVersion": {
+            "const": "1"
+        },
+        "protocolId": {
+            "const": "agent.semantic-protocols.semantic-language"
+        },
+        "protocolVersion": {
+            "const": "1"
+        },
+        "packetKind": {
+            "const": "graph-turbo-ablation-report"
+        },
+        "sourceProfile": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "baselineVariant": {
+            "const": "full"
+        },
+        "runs": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "warmupRuns": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "cacheMode": {
+            "enum": [
+                "packet",
+                "enabled",
+                "disabled"
+            ]
+        },
+        "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "variantCount",
+                "rankChangedVariantCount",
+                "rankChangedVariants",
+                "worstRankOverlapRatio",
+                "maxScoreDeltaL1"
+            ],
+            "properties": {
+                "variantCount": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "rankChangedVariantCount": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "rankChangedVariants": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "worstRankOverlapRatio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "maxScoreDeltaL1": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "qualityGate": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "status",
+                "thresholds",
+                "signals",
+                "failures"
+            ],
+            "properties": {
+                "status": {
+                    "enum": [
+                        "pass",
+                        "fail"
+                    ]
+                },
+                "thresholds": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "minWorstRankOverlapRatio",
+                        "maxScoreDeltaL1",
+                        "requireChannelSignals"
+                    ],
+                    "properties": {
+                        "minWorstRankOverlapRatio": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        "maxScoreDeltaL1": {
+                            "type": [
+                                "number",
+                                "null"
+                            ],
+                            "minimum": 0
+                        },
+                        "requireChannelSignals": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "signals": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "receipt",
+                        "readMemory",
+                        "qualityFields",
+                        "providerFacts"
+                    ],
+                    "properties": {
+                        "receipt": {
+                            "type": "boolean"
+                        },
+                        "readMemory": {
+                            "type": "boolean"
+                        },
+                        "qualityFields": {
+                            "type": "boolean"
+                        },
+                        "providerFacts": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "failures": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "field",
+                            "actual",
+                            "expected"
+                        ],
+                        "properties": {
+                            "field": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "actual": true,
+                            "expected": {
+                                "type": "string",
+                                "minLength": 1
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "variants": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "variant",
+                    "changes",
+                    "rank",
+                    "frontierNodeIds",
+                    "scores",
+                    "benchmark",
+                    "comparison"
+                ],
+                "properties": {
+                    "variant": {
+                        "enum": [
+                            "full",
+                            "no-receipt",
+                            "no-read-memory",
+                            "no-quality-fields",
+                            "no-provider-facts",
+                            "relation-weight-flat"
+                        ]
+                    },
+                    "changes": {
+                        "type": "object"
+                    },
+                    "rank": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "frontierNodeIds": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "scores": {
+                        "type": "object"
+                    },
+                    "benchmark": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "medianMs",
+                            "p95Ms",
+                            "profileMatrix",
+                            "algorithmMetrics"
+                        ],
+                        "properties": {
+                            "medianMs": {
+                                "type": "number",
+                                "minimum": 0
+                            },
+                            "p95Ms": {
+                                "type": "number",
+                                "minimum": 0
+                            },
+                            "profileMatrix": {
+                                "type": "object"
+                            },
+                            "algorithmMetrics": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "comparison": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "rankChanged",
+                            "firstRankedNodeChanged",
+                            "rankOverlapCount",
+                            "rankOverlapRatio",
+                            "missingBaselineNodeIds",
+                            "newRankedNodeIds",
+                            "scoreDeltaL1",
+                            "pprIterationDelta",
+                            "selectedEdgeCountDelta",
+                            "reachableNodeCountDelta",
+                            "readMemorySuppressedDelta",
+                            "receiptBoostDelta",
+                            "receiptPenaltyDelta",
+                            "transitionNonZeroDelta",
+                            "transitionWeightMassDelta"
+                        ],
+                        "properties": {
+                            "rankChanged": {
+                                "type": "boolean"
+                            },
+                            "firstRankedNodeChanged": {
+                                "type": "boolean"
+                            },
+                            "rankOverlapCount": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "rankOverlapRatio": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                            },
+                            "missingBaselineNodeIds": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                }
+                            },
+                            "newRankedNodeIds": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                }
+                            },
+                            "scoreDeltaL1": {
+                                "type": "number",
+                                "minimum": 0
+                            },
+                            "pprIterationDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "selectedEdgeCountDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "reachableNodeCountDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "readMemorySuppressedDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "receiptBoostDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "receiptPenaltyDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "transitionNonZeroDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            },
+                            "transitionWeightMassDelta": {
+                                "type": [
+                                    "integer",
+                                    "number",
+                                    "null"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

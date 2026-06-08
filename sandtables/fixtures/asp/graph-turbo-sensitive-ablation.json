@@ -1,0 +1,105 @@
+{
+  "schemaId": "agent.semantic-protocols.semantic-graph-turbo-request",
+  "schemaVersion": "1",
+  "protocolId": "agent.semantic-protocols.semantic-language",
+  "protocolVersion": "1",
+  "packetKind": "graph-turbo-request",
+  "profile": "owner-query",
+  "algorithm": "typed-ppr-diverse",
+  "seedIds": [
+    "query:calibration"
+  ],
+  "budget": 4,
+  "readMemory": {
+    "seenSelectors": [
+      "src/lib.rs:10:12"
+    ]
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "query:calibration",
+        "kind": "query",
+        "role": "term",
+        "value": "calibration",
+        "action": "fzf"
+      },
+      {
+        "id": "field:seen",
+        "kind": "field",
+        "role": "struct-field",
+        "value": "calibration seen",
+        "locator": "src/lib.rs:10:12",
+        "symbol": "seen"
+      },
+      {
+        "id": "field:receipt",
+        "kind": "field",
+        "role": "struct-field",
+        "value": "calibration receipt",
+        "locator": "src/lib.rs:20:22",
+        "symbol": "receipt"
+      },
+      {
+        "id": "field:quality",
+        "kind": "field",
+        "role": "struct-field",
+        "value": "calibration quality",
+        "locator": "src/lib.rs:30:32",
+        "symbol": "quality"
+      },
+      {
+        "id": "field:plain",
+        "kind": "field",
+        "role": "struct-field",
+        "value": "calibration plain",
+        "locator": "src/lib.rs:40:42",
+        "symbol": "plain"
+      },
+      {
+        "id": "receipt:boost",
+        "kind": "receipt",
+        "role": "frontier-success",
+        "value": "used field:receipt",
+        "receiptKind": "frontier-success",
+        "selector": "src/lib.rs:20:22",
+        "effect": "boost",
+        "scoreDelta": 1.5
+      }
+    ],
+    "edges": [
+      {
+        "source": "query:calibration",
+        "target": "field:seen",
+        "relation": "matches",
+        "confidence": "exact",
+        "freshness": "fresh",
+        "provenance": "parser"
+      },
+      {
+        "source": "query:calibration",
+        "target": "field:receipt",
+        "relation": "matches",
+        "confidence": "high",
+        "freshness": "fresh",
+        "provenance": "parser"
+      },
+      {
+        "source": "query:calibration",
+        "target": "field:quality",
+        "relation": "matches",
+        "confidence": "exact",
+        "freshness": "fresh",
+        "provenance": "parser"
+      },
+      {
+        "source": "query:calibration",
+        "target": "field:plain",
+        "relation": "matches",
+        "confidence": "low",
+        "freshness": "stale",
+        "provenance": "heuristic"
+      }
+    ]
+  }
+}

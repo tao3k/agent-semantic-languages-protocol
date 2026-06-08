@@ -92,10 +92,14 @@ def repair_query_token_coverage(
     return repaired
 
 
-def _missing_query_tokens(nodes: list[Node], query_tokens: tuple[str, ...]) -> tuple[str, ...]:
+def _missing_query_tokens(
+    nodes: list[Node], query_tokens: tuple[str, ...]
+) -> tuple[str, ...]:
     covered = set()
     for node in nodes:
-        covered.update(query_tokens_for_node(node, query_tokens, include_query_node=False))
+        covered.update(
+            query_tokens_for_node(node, query_tokens, include_query_node=False)
+        )
     return tuple(token for token in query_tokens if token not in covered)
 
 
@@ -161,8 +165,6 @@ def _query_token_replacement_index(
 def _node_text(node: Node) -> str:
     return " ".join(
         [
-            node.kind,
-            node.role,
             node.value,
             _value_text(node.fields),
         ]

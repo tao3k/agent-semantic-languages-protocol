@@ -993,6 +993,15 @@ Completed:
   =--view graph-turbo-request= surface exists only for schema validation and
   debugging of the =semantic-graph-turbo-request.v1= packet sent to the ranking
   boundary.
+- [X] =asp <language> search pipe <query> --surface <classes> --view seeds
+  <root>= selects prompt-facing graph projection classes before the graph-turbo
+  request is ranked.  Supported classes are =owner=, =items=, =tests=, and
+  =deps=, with the default =owner,items,tests=.  This option is a surface
+  selector, not a pipeline expression: it chooses which owner/item/test/
+  dependency fact channels enter the schema-owned request and compact
+  projection.  It must not emit runnable branch commands beyond the primary
+  selector projection, and it must not reintroduce pipeline DSL syntax into
+  agent-facing output.
 - [X] Default fast-search request packets carry candidate hot range facts and
   =item->hot= edges when locators are available, and graph-turbo warm ranking is
   protected by persistent-cache, schema-validation, and query/search

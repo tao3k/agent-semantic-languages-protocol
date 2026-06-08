@@ -44,6 +44,28 @@ def benchmark_packet(
     seed: Sequence[str] = (),
     limit: int | None = None,
 ) -> dict[str, object]:
+    benchmark, _last_result_packet = benchmark_packet_with_result(
+        packet,
+        runs=runs,
+        warmup_runs=warmup_runs,
+        cache_mode=cache_mode,
+        profile=profile,
+        seed=seed,
+        limit=limit,
+    )
+    return benchmark
+
+
+def benchmark_packet_with_result(
+    packet: Mapping[str, object],
+    *,
+    runs: int,
+    warmup_runs: int,
+    cache_mode: str,
+    profile: str | None = None,
+    seed: Sequence[str] = (),
+    limit: int | None = None,
+) -> tuple[dict[str, object], dict[str, object]]:
     packet = _packet_with_cache_mode(packet, cache_mode)
     rank_args = _rank_args(profile=profile, seed=seed, limit=limit)
     for _ in range(warmup_runs):
@@ -58,21 +80,25 @@ def benchmark_packet(
     if last_packet is None:
         raise SystemExit("graph turbo benchmark runs must be positive")
     metrics = last_packet["algorithmMetrics"]
-    return {
-        "schemaId": "agent.semantic-protocols.semantic-graph-turbo-benchmark",
-        "schemaVersion": "1",
-        "protocolId": "agent.semantic-protocols.semantic-language",
-        "protocolVersion": "1",
-        "packetKind": "graph-turbo-benchmark",
-        "algorithm": ALGORITHM_ID,
-        "profile": last_packet["profile"],
-        "runs": runs,
-        "warmupRuns": warmup_runs,
-        "cacheMode": cache_mode,
-        "durationMs": _duration_summary(durations),
-        "lastAlgorithmMetrics": metrics,
-        "lastTypedPathTrace": _last_typed_path_trace(last_packet),
-    }
+    return (
+        {
+            "schemaId": "agent.semantic-protocols.semantic-graph-turbo-benchmark",
+            "schemaVersion": "1",
+            "protocolId": "agent.semantic-protocols.semantic-language",
+            "protocolVersion": "1",
+            "packetKind": "graph-turbo-benchmark",
+            "algorithm": ALGORITHM_ID,
+            "profile": last_packet["profile"],
+            "runs": runs,
+            "warmupRuns": warmup_runs,
+            "cacheMode": cache_mode,
+            "durationMs": _duration_summary(durations),
+            "lastAlgorithmMetrics": metrics,
+            "lastProfileMatrix": _profile_matrix(last_packet),
+            "lastTypedPathTrace": _last_typed_path_trace(last_packet),
+        },
+        last_packet,
+    )
 
 
 def _duration_summary(durations: list[float]) -> dict[str, float]:
@@ -98,6 +124,18 @@ def _last_typed_path_trace(packet: Mapping[str, object]) -> Mapping[str, object]
         if isinstance(step, Mapping) and step.get("step") == "typed-paths":
             return step
     return {}
+
+
+def _profile_matrix(packet: Mapping[str, object]) -> Mapping[str, object]:
+    profile = packet.get("profile")
+    matrices = packet.get("profileMatrices")
+    if not isinstance(matrices, list):
+        return {}
+    for matrix in matrices:
+        if isinstance(matrix, Mapping) and matrix.get("profile") == profile:
+            return matrix
+    first = matrices[0] if matrices else {}
+    return first if isinstance(first, Mapping) else {}
 
 
 def _rank_args(

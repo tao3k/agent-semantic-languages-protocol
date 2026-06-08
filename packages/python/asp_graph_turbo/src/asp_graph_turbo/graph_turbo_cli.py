@@ -18,6 +18,16 @@ _COMMANDS: dict[str, tuple[str, str, str]] = {
         "main",
         "Benchmark graph turbo ranking for sandtable evidence.",
     ),
+    "ablate": (
+        "asp_graph_turbo.ablation_cli",
+        "main",
+        "Generate graph turbo ablation packet variants for sandtable calibration.",
+    ),
+    "ablation-report": (
+        "asp_graph_turbo.ablation_report_cli",
+        "main",
+        "Compare graph turbo ablation variants for ranking calibration.",
+    ),
     "artifacts": (
         "asp_graph_turbo.artifacts_cli",
         "main",

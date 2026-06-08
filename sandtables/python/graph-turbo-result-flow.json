@@ -16,10 +16,10 @@
   ],
   "workdir": ".",
     "budgets": {
-        "maxCommands": 3,
-        "maxTotalLinesWarn": 3,
+        "maxCommands": 4,
+        "maxTotalLinesWarn": 4,
         "maxTotalElapsedMsWarn": 10000,
-        "maxTotalStdoutBytesWarn": 14000
+        "maxTotalStdoutBytesWarn": 30000
   },
   "evidence": {
     "source": "handwritten",
@@ -27,7 +27,7 @@
     "intentKind": "implementation-principle",
     "editBoundary": "none",
     "metrics": {
-            "recordedCommandCount": 3,
+      "recordedCommandCount": 4,
             "repeatedSearches": 0,
             "jsonSearches": 3,
             "compactSearches": 0,
@@ -44,11 +44,16 @@
                 "severity": "info",
                 "message": "Graph turbo benchmark evidence is validated as semantic-graph-turbo-benchmark with path backend and candidate width metrics."
             },
-            {
-                "kind": "graph-turbo-sandtable-summary",
-                "severity": "info",
-                "message": "Benchmark metrics and frontier receipt facts are joined into a schema-owned sandtable summary row."
-            }
+      {
+        "kind": "graph-turbo-sandtable-summary",
+        "severity": "info",
+        "message": "Benchmark metrics and frontier receipt facts are joined into a schema-owned sandtable summary row."
+      },
+      {
+        "kind": "graph-turbo-ablation-report",
+        "severity": "info",
+        "message": "Ablation calibration evidence validates provider facts, receipt, read-memory, and edge quality signals through a schema-owned quality gate."
+      }
     ]
   },
   "steps": [
@@ -184,7 +189,7 @@
                     "\"pathPairCount\""
                 ],
                 "maxStdoutLinesWarn": 1,
-                "maxStdoutBytesWarn": 3000,
+                "maxStdoutBytesWarn": 4000,
                 "maxElapsedMsWarn": 10000
             }
         },
@@ -244,6 +249,68 @@
                 ],
                 "maxStdoutLinesWarn": 1,
                 "maxStdoutBytesWarn": 3000,
+                "maxElapsedMsWarn": 10000
+        }
+        },
+        {
+            "id": "graph-turbo-ablation-report",
+            "kind": "schema-contract",
+            "coverage": [
+                "json-schema",
+                "performance",
+                "evidence-assurance"
+            ],
+            "command": [
+                "uv",
+                "run",
+                "--frozen",
+                "--project",
+                "packages/python",
+                "python",
+                "-m",
+                "tools",
+                "graph",
+                "turbo",
+                "ablation-report",
+                "sandtables/fixtures/asp/graph-turbo-sensitive-ablation.json",
+                "--runs",
+                "1",
+                "--warmup-runs",
+                "0",
+                "--cache-mode",
+                "disabled",
+                "--require-channel-signals",
+                "--min-worst-rank-overlap-ratio",
+                "0.2",
+                "--max-score-delta-l1",
+                "12.0",
+                "--fail-on-quality-gate",
+                "--format",
+                "json"
+            ],
+            "expect": {
+                "stdoutJsonSchema": "schemas/semantic-graph-turbo-ablation-report.v1.schema.json",
+                "stdoutJsonEquals": {
+                    "schemaId": "agent.semantic-protocols.semantic-graph-turbo-ablation-report",
+                    "packetKind": "graph-turbo-ablation-report",
+                    "sourceProfile": "owner-query",
+                    "cacheMode": "disabled",
+                    "qualityGate.status": "pass",
+                    "qualityGate.thresholds.requireChannelSignals": true,
+                    "qualityGate.signals.receipt": true,
+                    "qualityGate.signals.readMemory": true,
+                    "qualityGate.signals.qualityFields": true,
+                    "qualityGate.signals.providerFacts": true
+                },
+                "stdoutContains": [
+                    "\"qualityGate\"",
+                    "\"variantCount\"",
+                    "\"readMemorySuppressedDelta\"",
+                    "\"receiptBoostDelta\"",
+                    "\"scoreDeltaL1\""
+                ],
+                "maxStdoutLinesWarn": 1,
+                "maxStdoutBytesWarn": 22000,
                 "maxElapsedMsWarn": 10000
             }
         }

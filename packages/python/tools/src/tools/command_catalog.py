@@ -63,6 +63,13 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Summarize graph turbo benchmark and receipt metrics.",
     ),
     CommandSpec(
+        ("graph", "turbo", "ablation-report"),
+        "asp_graph_turbo.ablation_report_cli",
+        "main",
+        "argv",
+        "Compare graph turbo ablation variants for ranking calibration.",
+    ),
+    CommandSpec(
         ("graph", "turbo", "artifacts"),
         "asp_graph_turbo.artifacts_cli",
         "main",
