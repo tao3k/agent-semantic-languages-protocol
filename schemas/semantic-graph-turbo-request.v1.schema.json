@@ -52,6 +52,19 @@
     "algorithm": {
       "const": "typed-ppr-diverse"
     },
+    "surfaces": {
+      "type": "array",
+      "description": "Requested prompt-facing graph projection classes for the search adapter. This selects fact channels such as owner, items, tests, or deps; it is not a pipeline expression.",
+      "items": {
+        "enum": [
+          "owner",
+          "items",
+          "tests",
+          "deps"
+        ]
+      },
+      "uniqueItems": true
+    },
     "seedIds": {
       "type": "array",
       "items": {
