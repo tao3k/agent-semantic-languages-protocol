@@ -111,6 +111,19 @@ fn search_packet_replay_accepts_dependency_search_output() {
 }
 
 #[test]
+fn search_packet_replay_accepts_cross_language_dependency_search_rows() {
+    let stdout = "\
+[search-deps] q=requests@2::Session manifest=1 usage=1 versionScope=current dep=1 package=requests api=Session hit=2 view=hits requestedVersion=2\n\
+|dependency D:requests requirement=\"requests>=2\" source=project.dependencies versionScope=current requestedVersion=2 apiQuery=Session\n\
+|owner main.py role=\"root,module\" public=true exp=make_session,Session kind=module surface=source doc=false lines=3 exportKind=inferred next=tests:main.py,text:make_session,text:Session\n\
+|hit path=main.py line=1 kind=dependency score=3 reason=import-usage symbol=Session scope=module\n\
+|note kind=fact-scope message=\"deps view anchors API usage to package manifest, lockfile version, and import facts\"\n\
+|next dependency:requests,public-external-types:requests,api:requests@2::Session,text:Session,tests:Session\n";
+
+    assert!(search_output_artifact_replay_safe(stdout.as_bytes()));
+}
+
+#[test]
 fn search_packet_replay_rejects_dependency_search_source_lines() {
     let stdout = "\
 [search-deps] q=serde@1::Serialize pkg=. dep=1 own=1 api=0\n\

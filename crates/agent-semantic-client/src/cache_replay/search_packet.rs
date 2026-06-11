@@ -47,6 +47,8 @@ fn deps_search_output_replay_safe(stdout: &str) -> bool {
         && stdout.lines().skip(1).all(|line| {
             line.is_empty()
                 || line.starts_with("|dep ")
+                || line.starts_with("|dependency ")
+                || line.starts_with("|hit ")
                 || line.starts_with("|owner ")
                 || line.starts_with("|note ")
                 || line.starts_with("|next ")
