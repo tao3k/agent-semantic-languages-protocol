@@ -1698,6 +1698,19 @@ and Python facts come from =ast= plus project metadata.  This lets TypeScript,
 Rust, Julia, Python, and later harnesses preserve compiler-native facts while
 giving agent clients one JSON shape to validate and cache.
 
+Providers may also expose optional manifest-level package and extension
+capability facts without changing the packet class.  =projectPackage= is the
+provider-owned package manifest summary for the active project root, such as a
+Cargo package, Python project, Julia package, or Gerbil =gerbil.pkg= package.
+=extensions[]= is a compact provider capability projection for optional package
+extensions that are activated by manifest facts.  Shared fields are limited to
+name, activation source, package manager, package name, dependencies, and
+capability labels; language-specific package-manager details remain in
+=fields=.  For example, a Gerbil provider can expose =poo= when
+=gerbil.pkg= declares =package: clan/poo= or a =gerbil-poo= dependency, while
+the ASP client still treats =gxpkg= layout and dependency resolution as
+provider-owned facts.
+
 Compact text remains the default prompt surface.  JSON is the cross-language
 artifact and test contract.
 
