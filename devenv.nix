@@ -16,6 +16,10 @@
     pkgs.protobuf
     pkgs.just
     pkgs.codeql
+    pkgs.fd
+    pkgs.ripgrep
+    pkgs.fzf
+    pkgs.eza
   ];
 
   languages.rust = {

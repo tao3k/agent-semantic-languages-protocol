@@ -57,6 +57,94 @@ pub(crate) fn is_language_facade(language_id: &str) -> bool {
     SUPPORTED_LANGUAGES.contains(&language_id)
 }
 
+pub(crate) fn unsupported_language_facade_message(
+    requested_facade: &str,
+    command: Option<&str>,
+    runtime: Option<&HookRuntime>,
+) -> String {
+    let known_facades = SUPPORTED_LANGUAGES.join("|");
+    let active_facades = runtime
+        .map(active_language_facades)
+        .filter(|facades| !facades.is_empty());
+    let suggested_facade = runtime.and_then(|runtime| {
+        suggested_language_facade_for_request(requested_facade, &active_language_facades(runtime))
+    });
+    let mut lines = vec![
+        format!("unsupported ASP language facade `{requested_facade}`."),
+        "ASP facades are language IDs, not package or library names.".to_string(),
+        format!("Known language facades: {known_facades}."),
+    ];
+    if let Some(active_facades) = active_facades.as_deref() {
+        lines.push(format!("Active language facades: {active_facades}."));
+    }
+    if let Some(suggested_facade) = suggested_facade.as_deref() {
+        lines.push(format!("Suggested matching facade: {suggested_facade}."));
+    }
+    lines.extend([String::new(), "## Run Next".to_string()]);
+    if let Some(suggested_facade) = suggested_facade.as_deref() {
+        let command = command.unwrap_or("guide");
+        lines.push(format!("asp {suggested_facade} {command} ..."));
+    } else {
+        lines.extend([
+            "asp providers".to_string(),
+            "asp fd -query '<path-or-language-term>' '.'".to_string(),
+            "asp rg -query '<feature-term>' '<bounded-scope>'".to_string(),
+        ]);
+    }
+    lines.extend([
+        String::new(),
+        "## Rules".to_string(),
+        "Only run `asp <language> search|query` when the facade is listed and matches the target language.".to_string(),
+        "Do not switch to an unrelated active facade just because it is the only provider in this repository.".to_string(),
+        "For unsupported target-language files, use provider-neutral finder commands or install/activate a matching provider.".to_string(),
+    ]);
+    lines.join("\n")
+}
+
+fn active_language_facades(runtime: &HookRuntime) -> String {
+    runtime
+        .providers
+        .iter()
+        .map(|provider| provider.language_id.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn suggested_language_facade_for_request(
+    requested_facade: &str,
+    active_facades: &str,
+) -> Option<String> {
+    let active_facades = active_facades.split('|').collect::<Vec<_>>();
+    if requested_facade.eq_ignore_ascii_case("effect")
+        && active_facades.iter().any(|facade| *facade == "typescript")
+    {
+        return Some("typescript".to_string());
+    }
+    let matches = active_facades
+        .into_iter()
+        .filter(|facade| language_facade_alias_matches(requested_facade, facade))
+        .collect::<Vec<_>>();
+    (matches.len() == 1).then(|| matches[0].to_string())
+}
+
+fn language_facade_alias_matches(requested_facade: &str, active_facade: &str) -> bool {
+    let requested_facade = requested_facade.to_ascii_lowercase();
+    active_facade
+        .to_ascii_lowercase()
+        .split('-')
+        .any(|part| part == requested_facade)
+}
+
+fn load_activation_for_language_message() -> Option<HookRuntime> {
+    let cwd = env::current_dir().ok()?;
+    let activation_path =
+        discover_activation_path(&cwd).unwrap_or_else(|| default_activation_path(&cwd));
+    let text = fs::read_to_string(activation_path).ok()?;
+    parse_hook_activation(&text).ok()
+}
+
 pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result<(), String> {
     fn uses_client_backend(args: &[String]) -> bool {
         (args.first().is_some_and(|command| command == "search")
@@ -126,7 +214,12 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
     }
 
     if !is_language_facade(language_id) {
-        return Err(language_usage());
+        let runtime = load_activation_for_language_message();
+        return Err(unsupported_language_facade_message(
+            language_id,
+            args.first().map(String::as_str),
+            runtime.as_ref(),
+        ));
     }
     let mut command_args = args.to_vec();
     let frontier_receipt = take_frontier_receipt_request(&mut command_args)?;
@@ -472,12 +565,5 @@ fn provider_usage() -> String {
 fn guide_usage(language_id: &str) -> String {
     format!(
         "usage: asp {language_id} guide [--help] [PROJECT_ROOT]\n\nPrints the low-frequency provider-owned agent tool map.\nUse `asp {language_id} search guide .`, `asp {language_id} query guide .`, or `asp {language_id} query guide treesitter .` for focused reference guides."
-    )
-}
-
-fn language_usage() -> String {
-    format!(
-        "usage: asp <hook|ast-patch|graph|{}> ...",
-        SUPPORTED_LANGUAGES.join("|")
     )
 }

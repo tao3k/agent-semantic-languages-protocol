@@ -94,3 +94,47 @@ fn root_search_facade_requires_language_when_project_markers_are_ambiguous() {
     assert!(stderr.contains("asp <language> search"));
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn root_search_facade_rejects_unsupported_explicit_language_with_finder_recovery() {
+    let root = temp_project_root("root-search-unsupported-language");
+    write_activation(
+        &root,
+        &[
+            provider("rust", Vec::new()),
+            provider("typescript", Vec::new()),
+        ],
+    );
+
+    let output = asp_command(&root)
+        .args([
+            "search",
+            "--language",
+            "scheme",
+            "prime",
+            "--view",
+            "seeds",
+            ".",
+        ])
+        .output()
+        .expect("run asp search unsupported language");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr");
+    assert!(
+        stderr.contains("unsupported ASP language facade `scheme`"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("Active language facades: rust|typescript."),
+        "{stderr}"
+    );
+    assert!(stderr.contains("asp providers"), "{stderr}");
+    assert!(stderr.contains("asp rg -query"), "{stderr}");
+    assert!(
+        stderr.contains("Do not switch to an unrelated active facade"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("asp typescript search prime"), "{stderr}");
+    let _ = std::fs::remove_dir_all(root);
+}

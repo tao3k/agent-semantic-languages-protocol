@@ -1259,6 +1259,59 @@
         },
         "sample": {
           "type": "string"
+        },
+        "unsupportedLanguage": {
+          "$ref": "#/$defs/unsupportedLanguageDetection",
+          "description": "Advisory emitted when a user requested a language facade that is not active or not a protocol language id. It is a fail-closed routing hint, not provider evidence."
+        }
+      }
+    },
+    "unsupportedLanguageDetection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestedFacade",
+        "activeFacades",
+        "knownFacades",
+        "recoveryCommands"
+      ],
+      "properties": {
+        "requestedFacade": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activeFacades": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "knownFacades": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "suggestedFacade": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Present only when the requested facade maps to one active language facade without ambiguity."
+        },
+        "recoveryCommands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

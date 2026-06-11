@@ -14,6 +14,7 @@ use super::registry;
 
 mod after_pipe;
 mod budget;
+mod invalid_facade;
 
 #[test]
 fn stop_hook_blocks_prime_only_flow_until_search_pipe_runs() {
@@ -187,46 +188,6 @@ fn pre_tool_denies_direct_read_before_pipe() {
         decision.message.contains(
             "Do not repeat `search prime`. Do not read source or code before the pipe frontier."
         ),
-        "{}",
-        decision.message
-    );
-    let _ = fs::remove_dir_all(project_root);
-}
-
-#[test]
-fn pre_tool_denies_package_name_as_asp_facade() {
-    let project_root = temp_project_root("asp-hook-invalid-facade");
-    let runtime = runtime_for_project(&project_root);
-
-    let decision = classify_hook(
-        &runtime,
-        "claude",
-        "pre-tool",
-        &json!({
-            "hook_event_name": "PreToolUse",
-            "session_id": "session-effect",
-            "transcript_path": "transcript-effect.jsonl",
-            "tool_name": "Bash",
-            "tool_input": {
-                "command": "asp effect prime --view seeds ."
-            }
-        }),
-    );
-
-    assert_eq!(decision.decision, DecisionKind::Deny);
-    assert_eq!(decision.language_ids, vec!["typescript"]);
-    assert_eq!(decision.fields["hookFeedback"], "invalid-asp-facade");
-    assert_eq!(decision.fields["invalidFacade"], "effect");
-    assert_eq!(decision.fields["languageId"], "typescript");
-    assert!(
-        decision.message.contains("ASP facades are language IDs"),
-        "{}",
-        decision.message
-    );
-    assert!(
-        decision
-            .message
-            .contains("asp typescript search prime --view seeds ."),
         "{}",
         decision.message
     );

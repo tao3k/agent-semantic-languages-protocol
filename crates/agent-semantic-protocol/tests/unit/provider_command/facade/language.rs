@@ -142,6 +142,42 @@ fn language_facade_version_does_not_require_activation() {
 }
 
 #[test]
+fn language_facade_rejects_unsupported_language_without_unrelated_provider_recovery() {
+    let root = temp_project_root("language-unsupported-facade");
+    write_activation(
+        &root,
+        &[
+            provider("rust", Vec::new()),
+            provider("typescript", Vec::new()),
+        ],
+    );
+
+    let output = asp_command(&root)
+        .args(["scheme", "search", "prime", "--view", "seeds", "."])
+        .output()
+        .expect("run unsupported language facade");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr");
+    assert!(
+        stderr.contains("unsupported ASP language facade `scheme`"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("Active language facades: rust|typescript."), "{stderr}");
+    assert!(stderr.contains("asp providers"), "{stderr}");
+    assert!(stderr.contains("asp fd -query"), "{stderr}");
+    assert!(
+        stderr.contains("Do not switch to an unrelated active facade"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("asp typescript search prime"),
+        "{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn language_facade_uses_manifest_child_as_provider_project_hint() {
     let root = temp_project_root("child-package-search-facade");
     let bin_dir = root.join(".bin");

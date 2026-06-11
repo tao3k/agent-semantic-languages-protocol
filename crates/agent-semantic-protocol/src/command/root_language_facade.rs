@@ -8,7 +8,9 @@ use agent_semantic_hook::{
     HookRuntime, default_activation_path, discover_activation_path, parse_hook_activation,
 };
 
-use super::provider::{is_language_facade, run_language_command};
+use super::provider::{
+    is_language_facade, run_language_command, unsupported_language_facade_message,
+};
 
 pub(crate) fn run_root_language_facade(command: &str, args: &[String]) -> Result<(), String> {
     let cwd = env::current_dir()
@@ -26,14 +28,18 @@ fn root_language_and_args(
 ) -> Result<(String, Vec<String>), String> {
     let (explicit_language, provider_args) = split_root_language_arg(command, args)?;
     let provider_args = normalize_root_provider_args(command, provider_args);
+    let runtime = load_activation_runtime(cwd);
     if let Some(language) = explicit_language {
         if is_language_facade(&language) {
             return Ok((language, provider_args));
         }
-        return Err(format!("unsupported asp {command} language `{language}`"));
+        return Err(unsupported_language_facade_message(
+            &language,
+            Some(command),
+            runtime.as_ref(),
+        ));
     }
 
-    let runtime = load_activation_runtime(cwd);
     infer_root_facade_language(&provider_args, cwd, runtime.as_ref())
         .map(|language| (language, provider_args))
         .ok_or_else(|| root_facade_language_required(command, runtime.as_ref()))

@@ -65,10 +65,14 @@ fn top_level_install_is_not_a_public_surface() {
         .expect("run asp install --help");
 
     assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("usage: asp <"),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
+        stderr.contains("unsupported ASP language facade `install`"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("asp providers") && stderr.contains("asp fd -query"),
+        "stderr: {stderr}"
     );
     assert!(!root.join(".codex/config.toml").exists());
     assert!(

@@ -277,12 +277,21 @@ fn preferred_language_for_invalid_facade(
     {
         return Some("typescript".to_string());
     }
-    registry
+    let matches = registry
         .providers
         .iter()
-        .find(|provider| provider.language_id == "typescript")
-        .or_else(|| registry.providers.first())
+        .filter(|provider| language_facade_alias_matches(invalid_facade, &provider.language_id))
         .map(|provider| provider.language_id.clone())
+        .collect::<Vec<_>>();
+    (matches.len() == 1).then(|| matches[0].clone())
+}
+
+fn language_facade_alias_matches(invalid_facade: &str, active_facade: &str) -> bool {
+    let invalid_facade = invalid_facade.to_ascii_lowercase();
+    active_facade
+        .to_ascii_lowercase()
+        .split('-')
+        .any(|part| part == invalid_facade)
 }
 
 fn invalid_asp_facade_message(
@@ -296,24 +305,34 @@ fn invalid_asp_facade_message(
         .map(|provider| provider.language_id.as_str())
         .collect::<Vec<_>>()
         .join(",");
-    let run_next = preferred_language
-        .map(|language_id| format!("asp {language_id} search prime --view seeds ."))
-        .unwrap_or_else(|| "asp <language> search prime --view seeds .".to_string());
-    [
+    let mut lines = vec![
         format!("ASP hook denied unknown ASP facade `{invalid_facade}`."),
         "ASP facades are language IDs, not package or library names.".to_string(),
         format!("Active language facades: {active_languages}."),
-        String::new(),
-        "## Run Next".to_string(),
-        run_next,
+    ];
+    if let Some(language_id) = preferred_language {
+        lines.push(format!("Suggested matching facade: {language_id}."));
+    }
+    lines.extend([String::new(), "## Run Next".to_string()]);
+    if let Some(language_id) = preferred_language {
+        lines.push(format!("asp {language_id} search prime --view seeds ."));
+    } else {
+        lines.extend([
+            "asp providers".to_string(),
+            "asp fd -query '<path-or-language-term>' '.'".to_string(),
+            "asp rg -query '<feature-term>' '<bounded-scope>'".to_string(),
+        ]);
+    }
+    lines.extend([
         String::new(),
         "## Rules".to_string(),
-        "Use `asp <language> search prime --view seeds .`, then `asp <language> search pipe '<question-or-feature-term>' --view seeds .`."
-            .to_string(),
+        "Only run `asp <language> search|query` when the facade is listed and matches the target language.".to_string(),
+        "Do not switch to an unrelated active facade just because it is the only provider in this repository.".to_string(),
+        "For unsupported target-language files, use provider-neutral finder commands or install/activate a matching provider.".to_string(),
         "For the Effect package, use the TypeScript facade: `asp typescript ...`."
             .to_string(),
-    ]
-    .join("\n")
+    ]);
+    lines.join("\n")
 }
 
 fn classify_user_prompt(platform: &str, event: &str, payload: &Value) -> Option<HookDecision> {

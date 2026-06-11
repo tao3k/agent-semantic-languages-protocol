@@ -33,6 +33,21 @@ membership; those remain provider responsibilities.  When a root command cannot
 infer one language from activation facts, it must fail with a compact diagnostic
 that asks for =--language= or the explicit =asp <language>= facade.
 
+Unsupported or inactive language facades are a fail-closed discovery boundary,
+not a reason to search through a different active provider.  When a user runs a
+language facade that is not active or not a protocol language id, including root
+forms such as =asp search --language <id> ...= and language forms such as
+=asp <id> search ...= or =asp <id> query ...=, the facade must stop before
+provider execution and emit a structured advisory: the requested facade, the
+active language facades, known protocol facades, and bounded next commands.
+Only an exact or explicitly mapped active facade may be recommended as the next
+=asp <language>= command.  Otherwise the recovery route must use
+provider-neutral finder commands such as =asp fd -query ...= or
+=asp rg -query ... <bounded-scope>=, or ask the user to install/activate a
+provider.  Agents must not switch a Gerbil/Scheme, Scheme, or other unsupported
+target-language question into an unrelated TypeScript/Rust/Python search merely
+because that is the only active facade.
+
 #+begin_src shell
 asp search --language rust prime --view seeds .
 asp query --language typescript --treesitter-query '<pattern>' .
