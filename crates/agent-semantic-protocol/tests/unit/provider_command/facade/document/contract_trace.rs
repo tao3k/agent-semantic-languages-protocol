@@ -71,6 +71,25 @@ verdict=<absent>
 }
 
 #[test]
+fn org_contract_trace_schema_is_trace_only() {
+    let schema: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../schemas/semantic-org-contract-trace.v1.schema.json"
+    )))
+    .expect("parse org contract trace schema");
+    let properties = schema["properties"].as_object().expect("schema properties");
+
+    assert_eq!(schema["schemaVersion"], serde_json::Value::Null);
+    assert_eq!(schema["additionalProperties"], false);
+    assert!(properties.contains_key("schemaVersion"));
+    assert!(properties.contains_key("files"));
+    assert!(!properties.contains_key("score"));
+    assert!(!properties.contains_key("verdict"));
+    assert!(!properties.contains_key("receipt"));
+    assert!(!properties.contains_key("runtime"));
+}
+
+#[test]
 fn md_facade_rejects_contract_trace() {
     let root = temp_project_root("md-document-contract-trace");
 
