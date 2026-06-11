@@ -118,6 +118,26 @@ fn hook_overlay_for(language_id: &str) -> Option<HookProviderOverlay> {
             ),
             route_profile: RouteProfile::Julia,
         },
+        "gerbil-scheme" => HookProviderOverlay {
+            source: SourceRegistration::new(
+                &[".ss", ".ssi", ".scm", ".sld"],
+                &["gerbil.pkg", "build.ss"],
+                &[
+                    "src", "test", "tests", "doc", "docs", "examples", "tutorial",
+                ],
+                &[
+                    ".devenv",
+                    ".git",
+                    ".cache",
+                    ".run",
+                    ".gerbil",
+                    "build",
+                    "dist",
+                    "src/gambit",
+                ],
+            ),
+            route_profile: RouteProfile::Provider,
+        },
         "org" => HookProviderOverlay {
             source: SourceRegistration::new(&[".org", ".org_archive"], &[], &["docs"], &["target"]),
             route_profile: RouteProfile::Document,

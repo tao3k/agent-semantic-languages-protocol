@@ -19,3 +19,6 @@
 [submodule "languages/orgize"]
 	path = languages/orgize
 	url = https://github.com/tao3k/orgize
+[submodule "languages/gerbil-scheme-language-project-harness"]
+	path = languages/gerbil-scheme-language-project-harness
+	url = https://github.com/tao3k/gerbil-scheme-language-project-harness

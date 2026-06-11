@@ -29,7 +29,15 @@ use super::search_pipe::{FastSearchContext, is_asp_fast_search, run_asp_fast_sea
 use super::search_pipe_meta::run_asp_fast_search_meta_command;
 use super::search_pipe_provider_facts::ProviderGraphFactsContext;
 
-const SUPPORTED_LANGUAGES: &[&str] = &["rust", "typescript", "python", "julia", "org", "md"];
+const SUPPORTED_LANGUAGES: &[&str] = &[
+    "rust",
+    "typescript",
+    "python",
+    "julia",
+    "gerbil-scheme",
+    "org",
+    "md",
+];
 const SUPPORTED_COMMANDS: &[&str] = &["search", "query", "guide", "check", "ast-patch", "evidence"];
 
 macro_rules! restore_env_var {
@@ -81,6 +89,7 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         }
         let previous_prj_cache_home = env::var_os("PRJ_CACHE_HOME");
         let previous_activation_path = env::var_os("ASP_PROVIDER_ACTIVATION_PATH");
+        let previous_activation_refresh = env::var_os("ASP_PROVIDER_ACTIVATION_REFRESH");
         let previous_runtime_bin = env::var_os("ASP_RUNTIME_BIN_DIR");
         let previous_protocol_bin = env::var_os("SEMANTIC_AGENT_PROTOCOL_BIN");
         let previous_path = env::var_os("PATH");
@@ -95,6 +104,7 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
         unsafe {
             env::set_var("PRJ_CACHE_HOME", cache_home);
             env::set_var("ASP_PROVIDER_ACTIVATION_PATH", activation_path);
+            env::set_var("ASP_PROVIDER_ACTIVATION_REFRESH", "0");
             env::set_var("ASP_RUNTIME_BIN_DIR", &runtime_bin);
             env::set_var("SEMANTIC_AGENT_PROTOCOL_BIN", &protocol_bin);
             if let Some(path) = runtime_path.as_deref() {
@@ -105,6 +115,10 @@ pub(crate) fn run_language_command(language_id: &str, args: &[String]) -> Result
             run_client_backend_on_worker(language_id, client_args, project_root.to_path_buf());
         restore_env_var!("PRJ_CACHE_HOME", previous_prj_cache_home);
         restore_env_var!("ASP_PROVIDER_ACTIVATION_PATH", previous_activation_path);
+        restore_env_var!(
+            "ASP_PROVIDER_ACTIVATION_REFRESH",
+            previous_activation_refresh
+        );
         restore_env_var!("ASP_RUNTIME_BIN_DIR", previous_runtime_bin);
         restore_env_var!("SEMANTIC_AGENT_PROTOCOL_BIN", previous_protocol_bin);
         restore_env_var!("PATH", previous_path);

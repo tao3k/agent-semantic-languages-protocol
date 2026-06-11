@@ -632,6 +632,128 @@
       ]
     },
     {
+      "languageId": "gerbil-scheme",
+      "providerId": "gerbil-scheme-harness",
+      "binary": "gerbil-scheme-harness",
+      "execution": "external-process",
+      "namespace": "agent.semantic-protocols.languages.gerbil-scheme.gerbil-scheme-harness",
+      "displayName": "Gerbil Scheme Harness",
+      "methods": [
+        "search/prime",
+        "search/owner",
+        "search/fzf",
+        "search/ingest",
+        "query/direct-source-read",
+        "check/changed",
+        "guide"
+      ],
+      "methodDescriptors": [
+        {
+          "method": "search/prime",
+          "command": "search",
+          "supportsJson": false,
+          "supportsCompact": true,
+          "packetSchemas": [
+            "semantic-search-packet.v1"
+          ],
+          "view": "prime",
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-search-packet"
+          ],
+          "requiresQuery": false,
+          "acceptsStdin": false,
+          "supportsPackageScope": true
+        },
+        {
+          "method": "search/owner",
+          "command": "search",
+          "supportsJson": false,
+          "supportsCompact": true,
+          "packetSchemas": [
+            "semantic-search-packet.v1"
+          ],
+          "view": "owner",
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-search-packet"
+          ],
+          "requiresQuery": true,
+          "acceptsStdin": false,
+          "supportsPackageScope": true
+        },
+        {
+          "method": "search/fzf",
+          "command": "search",
+          "supportsJson": false,
+          "supportsCompact": true,
+          "packetSchemas": [
+            "semantic-search-packet.v1"
+          ],
+          "view": "fzf",
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-search-packet"
+          ],
+          "requiresQuery": true,
+          "acceptsStdin": false,
+          "supportsPackageScope": true
+        },
+        {
+          "method": "query/direct-source-read",
+          "command": "query",
+          "supportsJson": false,
+          "supportsCompact": true,
+          "packetSchemas": [
+            "semantic-query-packet.v1",
+            "semantic-read-packet.v1"
+          ],
+          "queryInputForms": [
+            "selector"
+          ],
+          "codeOutput": {
+            "mode": "pure-code",
+            "multiMatch": "deny",
+            "requires": [
+              "exact-selector"
+            ]
+          },
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-query-packet"
+          ]
+        },
+        {
+          "method": "check/changed",
+          "command": "check",
+          "supportsJson": false,
+          "supportsCompact": true,
+          "outputSchemaIds": [
+            "agent.semantic-protocols.semantic-verification-receipt"
+          ]
+        },
+        {
+          "method": "guide",
+          "command": "guide",
+          "supportsJson": false,
+          "supportsCompact": true
+        }
+      ],
+      "schemas": [
+        {
+          "schemaId": "agent.semantic-protocols.semantic-search-packet",
+          "schemaVersion": "1",
+          "path": "schemas/semantic-search-packet.v1.schema.json"
+        },
+        {
+          "schemaId": "agent.semantic-protocols.semantic-query-packet",
+          "schemaVersion": "1",
+          "path": "schemas/semantic-query-packet.v1.schema.json"
+        },
+        {
+          "schemaId": "agent.semantic-protocols.semantic-read-packet",
+          "schemaVersion": "1",
+          "path": "schemas/semantic-read-packet.v1.schema.json"
+        }
+      ]
+    },
+    {
       "languageId": "org",
       "providerId": "orgize",
       "binary": "asp",
