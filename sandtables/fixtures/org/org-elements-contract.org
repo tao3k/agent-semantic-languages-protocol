@@ -1,0 +1,16 @@
+#+TITLE: Org Elements Contract Fixture
+
+* Contract Root
+:PROPERTIES:
+:CUSTOM_ID: contract-root
+:END:
+
+#+name: contract-demo
+#+begin_src rust :results output :exports code
+fn main() {
+    println!("contract");
+}
+#+end_src
+
+* Notes
+This heading exists so the query must stay scoped to the source block.

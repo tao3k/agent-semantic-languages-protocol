@@ -1,0 +1,87 @@
+{
+  "id": "org.org-elements-query-packet-flow",
+  "language": "org",
+  "title": "Org elements query packet contract flow",
+  "coverage": [
+    "json-schema",
+    "search-flow",
+    "real-trigger"
+  ],
+  "tags": [
+    "org-elements",
+    "contract-org",
+    "snapshot"
+  ],
+  "workdir": {
+    "relative": "."
+  },
+  "steps": [
+    {
+      "id": "query-packet-schema",
+      "kind": "schema-contract",
+      "coverage": [
+        "json-schema",
+        "search-flow"
+      ],
+      "command": [
+        "python3",
+        "-c",
+        "import json; print(json.dumps({\"schemaVersion\":1,\"category\":\"element\",\"kind\":\"src-block\",\"affiliatedName\":\"contract-demo\",\"outlinePathPrefix\":[\"Contract Root\"],\"summaryEquals\":[{\"key\":\"language\",\"value\":\"rust\"}],\"predicate\":{\"all\":[{\"kind\":\"src-block\"},{\"affiliatedName\":\"contract-demo\"},{\"summary\":{\"key\":\"language\",\"equals\":\"rust\"}}]},\"limit\":1}, separators=(\",\",\":\")))"
+      ],
+      "expect": {
+        "stdoutJsonSchema": "schemas/semantic-org-elements-query-packet.v1.schema.json",
+        "stdoutJsonEquals": {
+          "category": "element",
+          "kind": "src-block",
+          "affiliatedName": "contract-demo",
+          "outlinePathPrefix.0": "Contract Root",
+          "summaryEquals.0.key": "language",
+          "summaryEquals.0.value": "rust",
+          "predicate.all.2.summary.equals": "rust"
+        },
+        "stdoutContains": [
+          "\"schemaVersion\":1",
+          "\"limit\":1"
+        ]
+      }
+    },
+    {
+      "id": "orgize-elements-query",
+      "kind": "command",
+      "coverage": [
+        "search-flow",
+        "real-trigger"
+      ],
+      "command": [
+        "cargo",
+        "run",
+        "--quiet",
+        "--manifest-path",
+        "languages/orgize/Cargo.toml",
+        "--",
+        "elements-query",
+        "--packet",
+        "{\"schemaVersion\":1,\"category\":\"element\",\"kind\":\"src-block\",\"affiliatedName\":\"contract-demo\",\"outlinePathPrefix\":[\"Contract Root\"],\"summaryEquals\":[{\"key\":\"language\",\"value\":\"rust\"}],\"predicate\":{\"all\":[{\"kind\":\"src-block\"},{\"affiliatedName\":\"contract-demo\"},{\"summary\":{\"key\":\"language\",\"equals\":\"rust\"}}]},\"limit\":1}",
+        "sandtables/fixtures/org/org-elements-contract.org"
+      ],
+      "expect": {
+        "stdoutJsonEquals": {
+          "0.category": "element",
+          "0.kind": "src-block",
+          "0.affiliated.name": "contract-demo",
+          "0.outlinePath.0": "Contract Root",
+          "0.summary.language": "rust"
+        },
+        "stdoutContains": [
+          "\"source\":{\"end\"",
+          "\"line\":15",
+          "\"start\":{\"column\":1,\"line\":8}",
+          "\"summary\":{\"language\":\"rust\""
+        ],
+        "stdoutNotContains": [
+          "\"category\":\"section\""
+        ]
+      }
+    }
+  ]
+}
