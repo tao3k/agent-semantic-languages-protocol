@@ -50,10 +50,11 @@ graph_action_specs! {
     "text" => "query", "term", "Q", "fzf";
     "fzf" => "query", "term", "Q", "fzf";
     "query" => "query", "term", "Q", "query";
-    "dependency" => "dependency", "pkg", "D", "deps";
+    "dependency" => "dependency", "pkg", "D", "dependency";
     "deps" => "dependency", "pkg", "D", "deps";
     "docs" => "doc", "path", "D", "docs";
-    "docs-use" => "doc", "path", "D", "docs";
+    "docs-use" => "doc-use", "path", "U", "docs-use";
+    "crate-source" => "crate-source", "pkg", "C", "crate-source";
     "feature" => "feature", "feature", "F", "features";
     "features" => "feature", "feature", "F", "features";
     "cfg" => "cfg", "cfg", "C", "cfg";

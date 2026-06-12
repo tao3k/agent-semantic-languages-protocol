@@ -241,6 +241,8 @@ fn graph_relation(node_type: &str) -> &'static str {
         "test" => "covers",
         "dependency" => "uses",
         "import" => "imports",
+        "doc-use" => "explains",
+        "crate-source" => "uses",
         "symbol" | "item" => "contains",
         "doc" => "explains",
         "finding" => "flags",

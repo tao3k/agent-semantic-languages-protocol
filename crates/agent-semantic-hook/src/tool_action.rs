@@ -687,7 +687,7 @@ fn command_source_paths(command: &str, tokens: &[String]) -> Vec<String> {
         return range_paths;
     }
     let mut paths = Vec::new();
-    for token in path_like_tokens(&tokens) {
+    for token in path_like_tokens(tokens) {
         let embedded = embedded_source_path_candidates(token);
         if embedded.is_empty() {
             if !looks_like_code_call_token(token) {

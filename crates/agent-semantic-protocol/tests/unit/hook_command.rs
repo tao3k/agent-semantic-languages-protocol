@@ -14,6 +14,7 @@ mod protocol_binary;
 use hook_enforcement::codex_enforcement_report;
 use hook_runtime_context::payload_indicates_subagent_context;
 use protocol_binary::{ensure_protocol_binary_installed_for_path, protocol_binary_on_path};
+use serde_json::json;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -144,6 +145,33 @@ fn raw_hook_flags_stay_supported() {
         hook::forwarded_hook_args(&args(&["--client", "codex", "--event", "stop"])).unwrap(),
         args(&["hook", "--client", "codex", "--event", "stop"])
     );
+}
+
+#[test]
+fn payload_subagent_detection_accepts_explicit_context_flags() {
+    assert!(payload_indicates_subagent_context(
+        &json!({"isSubagent": true})
+    ));
+    assert!(payload_indicates_subagent_context(
+        &json!({"parentAgentId": "agent-123"})
+    ));
+    assert!(payload_indicates_subagent_context(
+        &json!({"thread": {"threadKind": "child-agent"}})
+    ));
+}
+
+#[test]
+fn payload_subagent_detection_ignores_main_thread_payloads() {
+    assert!(!payload_indicates_subagent_context(&json!({
+        "session_id": "session-123",
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": "asp rust search pipe 'subagent hook' --workspace . --view seeds"
+        }
+    })));
+    assert!(!payload_indicates_subagent_context(
+        &json!({"isSubagent": false})
+    ));
 }
 
 #[test]

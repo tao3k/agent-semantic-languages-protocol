@@ -232,13 +232,13 @@ pub fn render_platform_response(decision: &HookDecision) -> Result<Value, AgentH
     let message = platform_decision_message(decision);
     let mut decision_value =
         serde_json::to_value(decision).map_err(AgentHookError::InvalidOutput)?;
-    if message.as_ref() != decision.message {
-        if let Some(object) = decision_value.as_object_mut() {
-            object.insert(
-                "message".to_string(),
-                Value::String(message.as_ref().to_string()),
-            );
-        }
+    if message.as_ref() != decision.message
+        && let Some(object) = decision_value.as_object_mut()
+    {
+        object.insert(
+            "message".to_string(),
+            Value::String(message.as_ref().to_string()),
+        );
     }
     let decision_context = format!(
         "[agent-hook-decision] {}",

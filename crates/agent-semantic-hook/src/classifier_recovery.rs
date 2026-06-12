@@ -71,7 +71,7 @@ fn runtime_user_extensions(document: &str) -> Option<&str> {
     let user_extensions = section_body(document, USER_EXTENSIONS_BEGIN, USER_EXTENSIONS_END)?;
     let has_visible_content = user_extensions.lines().any(|line| {
         let trimmed = line.trim();
-        !trimmed.is_empty() && !(trimmed.starts_with("<!--") && trimmed.ends_with("-->"))
+        !(trimmed.is_empty() || trimmed.starts_with("<!--") && trimmed.ends_with("-->"))
     });
     has_visible_content.then_some(user_extensions)
 }

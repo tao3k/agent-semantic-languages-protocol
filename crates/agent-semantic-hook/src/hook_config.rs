@@ -262,7 +262,7 @@ impl RuleMatch {
             && source_tokens.iter().any(|path| {
                 self.argv_source_any
                     .iter()
-                    .any(|expected| path == &expected || path.ends_with(expected))
+                    .any(|expected| path == expected || path.ends_with(expected))
             });
         let glob_match = self
             .argv_source_glob_any
