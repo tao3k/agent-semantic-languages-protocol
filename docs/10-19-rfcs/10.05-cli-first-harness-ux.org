@@ -1,6 +1,8 @@
 #+TITLE: RFC: CLI-First Harness UX — stable commands, local daemon, no MCP
 #+AUTHOR: agent-semantic-protocols
 #+DATE: 2026-01-18
+#+PROPERTY: ID 10.05-cli-first-harness-ux
+#+PROPERTY: RFC 10.05
 #+RFC: 005
 #+DEPENDS: docs/10-19-rfcs/10.03-code-intelligence-lane.org (003), docs/10-19-rfcs/10.04-structural-quality-config-policy.org (004)
 #+SEE_ALSO: docs/10-19-rfcs/10.06-agent-compact-graph-feature.org (006) — graph feature
@@ -43,6 +45,8 @@ always-read document.
 - [[file:10.05-cli-first-harness-ux/10.05.50-agent-flow-config.org][Agent Flow Config And Layout]] :: Agent search flow: structured, not chaotic through Failure mode reference.
 - [[file:10.05-cli-first-harness-ux/10.05.60-agent-cli-sandtable.org][Agent CLI Sandtable]] :: Scenario-owned agent CLI replay for Claude Code and provider env profiles.
 - [[file:10.05-cli-first-harness-ux/10.05.70-failure-frontier-sandtable.org][Failure Frontier Sandtable]] :: Receipt/trace gates for proving fewer validation rounds without losing hot blocks.
+- [[file:10.05-cli-first-harness-ux/10.05.80-language-evidence-search-namespaces.org][Language Evidence Search Namespaces]] :: Runtime, source, extension, std, pattern, and compare namespaces.
+- [[file:10.05-cli-first-harness-ux/10.05.90-gerbil-scheme-style-conventions.org][Gerbil Scheme Style Conventions]] :: Gerbil-specific source, t/ test, naming, and control-flow policy.
 - [[file:10.05-cli-first-harness-ux/10.05.90-readiness-history.org][Readiness History And Bottom Line]] :: MVP order: M1–M7 through The bottom line.
 
 * Include order
@@ -61,4 +65,6 @@ they do not rely on Org include expansion.
 #+INCLUDE: "10.05-cli-first-harness-ux/10.05.50-agent-flow-config.org"
 #+INCLUDE: "10.05-cli-first-harness-ux/10.05.60-agent-cli-sandtable.org"
 #+INCLUDE: "10.05-cli-first-harness-ux/10.05.70-failure-frontier-sandtable.org"
+#+INCLUDE: "10.05-cli-first-harness-ux/10.05.80-language-evidence-search-namespaces.org"
+#+INCLUDE: "10.05-cli-first-harness-ux/10.05.90-gerbil-scheme-style-conventions.org"
 #+INCLUDE: "10.05-cli-first-harness-ux/10.05.90-readiness-history.org"

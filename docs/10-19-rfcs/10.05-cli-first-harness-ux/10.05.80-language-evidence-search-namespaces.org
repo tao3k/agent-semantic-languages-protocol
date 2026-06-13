@@ -196,6 +196,28 @@ The shared packet contract is
 providers may add provider-owned details under facts, but the language-neutral
 contract keeps the runtime/source/acquisition mapping explicit.
 
+Runtime-source packets may also expose agent-facing code lookup metadata at the
+packet top level:
+
+- =selectorResolver= :: the logical source selector scheme, ASP state namespace,
+  active runtime version key, structural index owner, and output mode.  This
+  tells the agent how a selector such as
+  =gerbil-runtime-source://src/std/sugar.ss#defrule= becomes a source-backed
+  exact read after ASP has acquired and indexed the checkout.
+- =sourceExamples= :: structured minimal forms derived from real source
+  selectors.  Examples must be mappings such as head, operands, keywords,
+  symbol, role, and selector; they must not be unstructured prose blobs.
+- =sourceComments= :: comment extraction contracts for the selected source
+  windows.  The provider should expose the extractor and fallback behavior so
+  absence of useful comments is itself visible evidence instead of silently
+  becoming model memory.
+
+The non-JSON compact render should project these fields as
+=|selectorResolver=, =|sourceExample=, and =|sourceComment= lines before an
+agent follows =query --selector ... --code=.  The JSON packet remains the
+machine contract, while the compact lines are the default agent workflow.  Both
+surfaces must avoid developer-local checkout paths.
+
 Executable extension patterns use
 =schemas/semantic-extension-pattern-mapping.v1.schema.json=.  Provider
 registries must advertise both =search/pattern= and =search/runtime-source=
