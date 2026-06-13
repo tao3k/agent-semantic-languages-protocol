@@ -86,6 +86,12 @@
         "$ref": "#/$defs/symbol"
       }
     },
+    "syntaxFacts": {
+      "type": "array",
+      "items": {
+        "$ref": "semantic-native-syntax-fact-index.v1.schema.json#/$defs/nativeSyntaxFact"
+      }
+    },
     "dependencyUsages": {
       "type": "array",
       "items": {

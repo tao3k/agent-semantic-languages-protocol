@@ -3,6 +3,7 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process;
 
 const SEMANTIC_AGENT_PROTOCOL_BIN: &str = "asp";
 const SEMANTIC_AGENT_BIN_DIR_ENV: &str = "SEMANTIC_AGENT_BIN_DIR";
@@ -67,7 +68,10 @@ pub(crate) fn protocol_binary_on_path() -> Option<PathBuf> {
     })
 }
 
-fn install_protocol_binary(source: &Path, target: &Path) -> Result<&'static str, String> {
+pub(crate) fn install_protocol_binary(
+    source: &Path,
+    target: &Path,
+) -> Result<&'static str, String> {
     if same_file(source, target) {
         return Ok("already-present");
     }
@@ -80,13 +84,41 @@ fn install_protocol_binary(source: &Path, target: &Path) -> Result<&'static str,
         fs::create_dir_all(parent)
             .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
     }
-    fs::copy(source, target).map_err(|error| {
+    let temp = temporary_protocol_binary_path(target);
+    if temp.exists() {
+        fs::remove_file(&temp)
+            .map_err(|error| format!("failed to remove stale {}: {error}", temp.display()))?;
+    }
+    fs::copy(source, &temp).map_err(|error| {
+        format!(
+            "failed to stage {SEMANTIC_AGENT_PROTOCOL_BIN} at {}: {error}",
+            temp.display()
+        )
+    })?;
+    let permissions = fs::metadata(source)
+        .map_err(|error| format!("failed to inspect {}: {error}", source.display()))?
+        .permissions();
+    fs::set_permissions(&temp, permissions)
+        .map_err(|error| format!("failed to chmod {}: {error}", temp.display()))?;
+    if target.exists() {
+        fs::remove_file(target)
+            .map_err(|error| format!("failed to replace {}: {error}", target.display()))?;
+    }
+    fs::rename(&temp, target).map_err(|error| {
         format!(
             "failed to install {SEMANTIC_AGENT_PROTOCOL_BIN} to {}: {error}",
             target.display()
         )
     })?;
     Ok(status)
+}
+
+fn temporary_protocol_binary_path(target: &Path) -> PathBuf {
+    let file_name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(SEMANTIC_AGENT_PROTOCOL_BIN);
+    target.with_file_name(format!(".{file_name}.{}.tmp", process::id()))
 }
 
 fn require_path_contains_dir(dir: &Path) -> Result<(), String> {

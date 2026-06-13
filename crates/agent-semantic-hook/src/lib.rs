@@ -44,7 +44,7 @@ pub use event_state::{
 };
 pub use hook_config::{
     ClientHookConfig, default_client_config_path, default_client_config_template,
-    load_client_config,
+    default_client_config_template_for_source_extensions, load_client_config,
 };
 pub use profile_registry::remove_legacy_codex_hook_cache_files;
 pub use protocol::{

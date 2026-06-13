@@ -10,7 +10,8 @@ pub use hook_client_config::{
     HookClientConfigFile, HookClientConfigReasonKind, HookClientConfigRouteKind,
     HookClientConfigStdinMode, HookClientRuleConfig, HookClientRuleMatchConfig,
     HookClientRuleRouteConfig, default_hook_client_config_path,
-    default_hook_client_config_template, load_hook_client_config_file,
+    default_hook_client_config_template, default_hook_client_config_template_for_source_extensions,
+    load_hook_client_config_file,
 };
 pub use layout::{
     PRJ_CACHE_HOME_ENV, ProjectCacheSource, ProjectRuntimeEnv, ProjectRuntimeLayout,

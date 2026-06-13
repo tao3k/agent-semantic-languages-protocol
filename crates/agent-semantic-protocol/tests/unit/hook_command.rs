@@ -13,7 +13,9 @@ mod protocol_binary;
 
 use hook_enforcement::codex_enforcement_report;
 use hook_runtime_context::payload_indicates_subagent_context;
-use protocol_binary::{ensure_protocol_binary_installed_for_path, protocol_binary_on_path};
+use protocol_binary::{
+    ensure_protocol_binary_installed_for_path, install_protocol_binary, protocol_binary_on_path,
+};
 use serde_json::json;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -198,6 +200,28 @@ fn asp_is_the_only_hook_binary_target() {
     );
 }
 
+#[test]
+fn protocol_binary_install_replaces_existing_target_file() {
+    let root = temp_project_root("protocol-binary-replace");
+    let source = root.join("source-asp");
+    let target = root.join("asp");
+    std::fs::write(&source, "new asp").expect("write source");
+    std::fs::write(&target, "old asp").expect("write target");
+    #[cfg(unix)]
+    let old_inode = target_inode(&target);
+
+    let status = install_protocol_binary(&source, &target).expect("install binary");
+
+    assert_eq!(status, "updated");
+    assert_eq!(
+        std::fs::read_to_string(&target).expect("read target"),
+        "new asp"
+    );
+    #[cfg(unix)]
+    assert_ne!(old_inode, target_inode(&target));
+    let _ = std::fs::remove_dir_all(root);
+}
+
 fn workspace_root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -215,6 +239,13 @@ fn temp_project_root(name: &str) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("agent-semantic-protocol-{name}-{unique}"));
     std::fs::create_dir_all(&root).expect("create temp project root");
     root
+}
+
+#[cfg(unix)]
+fn target_inode(path: &std::path::Path) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+
+    std::fs::metadata(path).expect("target metadata").ino()
 }
 
 fn package_bin_targets(metadata: &serde_json::Value, package_name: &str) -> Vec<String> {

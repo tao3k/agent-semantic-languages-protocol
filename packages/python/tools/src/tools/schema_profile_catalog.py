@@ -37,6 +37,7 @@ _CORE_QUERY_SCHEMAS = (
     "semantic-fact-ontology.v1.schema.json",
     "semantic-dependency-topology.v1.schema.json",
     "semantic-structural-index.v1.schema.json",
+    "semantic-native-syntax-fact-index.v1.schema.json",
     "semantic-graph.v1.schema.json",
     "semantic-type-surface.v1.schema.json",
     "semantic-handle.v1.schema.json",
@@ -66,7 +67,6 @@ LANGUAGE_SCHEMA_PROFILES: tuple[LanguageSchemaProfile, ...] = (
         shared_schema_files=(
             *_CORE_QUERY_SCHEMAS,
             "semantic-invariant-candidate.v1.schema.json",
-            "semantic-native-syntax-fact-index.v1.schema.json",
             *_AGENT_REASONING_SCHEMAS,
             "semantic-compare-packet.v1.schema.json",
             "rust-ast-patch-real-project-evidence.v1.schema.json",
@@ -96,7 +96,6 @@ LANGUAGE_SCHEMA_PROFILES: tuple[LanguageSchemaProfile, ...] = (
         package_root="languages/JuliaLangProjectHarness.jl",
         shared_schema_files=(
             *_CORE_QUERY_SCHEMAS,
-            "semantic-native-syntax-fact-index.v1.schema.json",
             *_AGENT_REASONING_SCHEMAS,
         ),
         provider_schema_files=(),

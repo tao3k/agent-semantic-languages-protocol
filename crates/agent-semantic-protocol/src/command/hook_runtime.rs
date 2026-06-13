@@ -12,15 +12,16 @@ use super::{
 use agent_semantic_hook::{
     ActiveContextRecord, DecisionKind, DecisionSubject, HOOK_DECISION_SCHEMA_ID,
     HOOK_DECISION_SCHEMA_VERSION, HOOK_PROTOCOL_ID, HOOK_PROTOCOL_VERSION,
-    HOOK_TRIGGER_PROMPT_FILE_NAME, HookClassificationRequest, HookDecision, ROOT_BLOCK_BEGIN,
-    ROOT_BLOCK_END, ReasonKind, RuntimeProviderHealthStatus, append_hook_event_state,
-    apply_repeated_deny_replay, classify_hook_with_config, claude_hook_block, codex_hook_block,
-    codex_user_trust_state_status, default_activation_path, default_claude_settings_path,
-    default_client_config_path, default_client_config_template,
-    default_hook_trigger_prompt_message, discover_activation_path, has_recorded_subagent_context,
-    install_codex_user_trust_state, load_activation, load_client_config,
-    load_or_refresh_default_activation, load_or_sync_activation, merge_claude_settings,
-    merge_codex_config, merge_hook_trigger_prompt_document, parse_payload, record_active_context,
+    HOOK_TRIGGER_PROMPT_FILE_NAME, HookActivation, HookClassificationRequest, HookDecision,
+    ROOT_BLOCK_BEGIN, ROOT_BLOCK_END, ReasonKind, RuntimeProviderHealthStatus,
+    append_hook_event_state, apply_repeated_deny_replay, classify_hook_with_config,
+    claude_hook_block, codex_hook_block, codex_user_trust_state_status, default_activation_path,
+    default_claude_settings_path, default_client_config_path,
+    default_client_config_template_for_source_extensions, default_hook_trigger_prompt_message,
+    discover_activation_path, has_recorded_subagent_context, install_codex_user_trust_state,
+    load_activation, load_client_config, load_or_refresh_default_activation,
+    load_or_sync_activation, merge_claude_settings, merge_codex_config,
+    merge_hook_trigger_prompt_document, parse_payload, record_active_context,
     remove_incompatible_hook_event_state, remove_legacy_codex_hook_cache_files,
     render_hook_trigger_prompt_document, render_platform_response, runtime_profiles_for_activation,
     runtime_profiles_for_runtime, subagent_deny_message, validate_claude_settings_json,
@@ -646,7 +647,7 @@ fn run_install(args: &[String]) -> Result<(), String> {
     remove_incompatible_hook_event_state(&project_root)?;
     timings.mark("event-state");
     let client_config_path = default_client_config_path(&project_root.to_string_lossy());
-    install_default_client_config(&client_config_path)?;
+    install_default_client_config(&client_config_path, &activation)?;
     timings.mark("client-config");
     let skill_path =
         install_agent_semantic_protocols_skill(&project_root, &activation, &runtime_profiles)?;
@@ -815,22 +816,61 @@ fn install_claude_project_hooks(
     ))
 }
 
-fn install_default_client_config(path: &Path) -> Result<(), String> {
+fn install_default_client_config(path: &Path, activation: &HookActivation) -> Result<(), String> {
+    let rendered = default_client_config_template_for_source_extensions(
+        activation.providers.iter().flat_map(|provider| {
+            provider
+                .coverage
+                .source_extensions
+                .iter()
+                .map(String::as_str)
+        }),
+    );
     if path.is_file() {
+        let existing = fs::read_to_string(path)
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         load_client_config(path)
             .map(|_| ())
             .map_err(|error| format!("refusing to keep invalid client hook config: {error}"))?;
+        if should_refresh_generated_client_config(&existing) && existing != rendered {
+            fs::write(path, rendered.as_bytes())
+                .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
+            load_client_config(path)
+                .map(|_| ())
+                .map_err(|error| format!("generated invalid client hook config: {error}"))?;
+        }
         return Ok(());
     }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
     }
-    fs::write(path, default_client_config_template())
+    fs::write(path, rendered.as_bytes())
         .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
     load_client_config(path)
         .map(|_| ())
         .map_err(|error| format!("generated invalid client hook config: {error}"))
+}
+
+fn should_refresh_generated_client_config(contents: &str) -> bool {
+    if !contents.contains("# Semantic agent client hook config.") {
+        return false;
+    }
+    let Ok(config) = toml::from_str::<toml::Value>(contents) else {
+        return false;
+    };
+    let Some(rules) = config.get("rules").and_then(toml::Value::as_array) else {
+        return false;
+    };
+    if rules.len() != 1 {
+        return false;
+    }
+    rules
+        .first()
+        .and_then(toml::Value::as_table)
+        .and_then(|rule| rule.get("id"))
+        .and_then(toml::Value::as_str)
+        == Some("deny-shell-source-argv")
 }
 
 fn project_root_arg(args: &[String]) -> Result<PathBuf, String> {

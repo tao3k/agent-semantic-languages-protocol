@@ -106,6 +106,41 @@ owner, selector, rule id, risk kind, corrective action, and witness.  Renderer
 text can summarize the result, but the underlying evidence should remain
 machine-checkable.
 
+** Govern language capabilities instead of banning them
+
+Gerbil Scheme macros and higher-order forms are language capabilities, not
+mistakes.  The harness should not globally ban =defsyntax=, =syntax-case=,
+=syntax-rules=, =case-lambda=, =cut=, =for/fold=, or POO protocol patterns.
+Those constructs are the right way to express local DSLs, arity-polymorphic
+APIs, structured aggregation, and extension dispatch when ordinary first-order
+functions would produce repetitive or low-quality code.
+
+The harness boundary is governance, not suppression.  Harness-owned source can
+use advanced Gerbil features when the owner is explicit and tests cover the
+behavior.  Generated or agent-authored macro forms require a POO
+=macro-governance= policy override with a clear user explanation and a witness,
+such as an expansion test, roundtrip test, or selector-backed review note.
+Short placeholder explanations remain findings.  This keeps the language
+expressive while making cheap agent escape paths visible and auditable.
+
+** Use POO as the policy extension mechanism
+
+POO is the right extension system for policy because it can model policy as a
+protocol instead of a hard-coded ban list.  A policy implementation should be
+able to answer:
+
+- whether the rule applies to this owner and source kind
+- whether user override is allowed
+- which explanation and witness are required
+- how the finding should render for the agent
+- which search/json facts make the decision auditable
+
+The default harness implementation stays strict for generated or agent-authored
+code.  User-level policy may override that default, but the override must remain
+parser-owned and visible in search, JSON, and self-apply snapshots.  This gives
+users enough room to program in a non-rigid way while preventing agents from
+turning policy into a cheap bypass.
+
 * Policy mapping
 
 | Reference practice | Harness policy |
@@ -116,6 +151,7 @@ machine-checkable.
 | Directional conversion names | search guidance should prefer =A<-B= names for converter APIs |
 | Vague helper names | =GERBIL-SCHEME-AGENT-R004= warns on =helper=, =process=, =handle=, =convert=, and similar definition names |
 | No runtime effects at source top level | =GERBIL-SCHEME-AGENT-R005= warns on executable calls at =src/*.ss= top level |
+| Macro capability governance | =GERBIL-SCHEME-CHECKER-W002= permits harness-owned macros but requires POO =macro-governance= policy, explanation, and witness for generated or agent-authored macro forms |
 
 * Agent-facing guidance
 

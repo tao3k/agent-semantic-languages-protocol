@@ -18,6 +18,28 @@ pub const CLIENT_HOOK_CONFIG_SCHEMA_VERSION: &str = "1";
 const HOOK_PROTOCOL_ID: &str = "agent.semantic-protocols.hook";
 const HOOK_PROTOCOL_VERSION: &str = "1";
 
+const DEFAULT_HOOK_CLIENT_SOURCE_EXTENSIONS: &[&str] = &[
+    ".rs",
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mts",
+    ".cts",
+    ".mjs",
+    ".cjs",
+    ".ss",
+    ".ssi",
+    ".scm",
+    ".sld",
+    ".jl",
+    ".org",
+    ".org_archive",
+    ".md",
+    ".markdown",
+];
+
 /// Parsed and validated project-local hook client config.
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -168,6 +190,18 @@ pub fn default_hook_client_config_path(project_root: impl AsRef<Path>) -> PathBu
 
 /// Render the seed project-local hook config file.
 pub fn default_hook_client_config_template() -> String {
+    default_hook_client_config_template_for_source_extensions(DEFAULT_HOOK_CLIENT_SOURCE_EXTENSIONS)
+}
+
+/// Render the seed project-local hook config file for active provider source extensions.
+pub fn default_hook_client_config_template_for_source_extensions<I, S>(
+    source_extensions: I,
+) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let argv_source_globs = render_argv_source_globs(source_extensions);
     format!(
         r#"# Semantic agent client hook config.
 # Loaded by `asp hook` on every client hook invocation.
@@ -194,24 +228,48 @@ message = "Use the language harness instead of shell argv source reads."
 tool = "Bash"
 commandAny = ["sed", "perl", "rg", "wl"]
 argvSourceGlobAny = [
-  "*.rs", "**/*.rs",
-  "*.py", "**/*.py",
-  "*.ts", "**/*.ts",
-  "*.tsx", "**/*.tsx",
-  "*.js", "**/*.js",
-  "*.jsx", "**/*.jsx",
-  "*.mts", "**/*.mts",
-  "*.cts", "**/*.cts",
-  "*.mjs", "**/*.mjs",
-  "*.cjs", "**/*.cjs",
-  "*.ss", "**/*.ss",
-  "*.scm", "**/*.scm",
-  "*.sld", "**/*.sld",
-  "*.jl", "**/*.jl",
+{argv_source_globs}
 ]
 argvSourceExcludeFlagAny = ["--output", "--output-file", "--out", "-o"]
 "#
     )
+}
+
+fn render_argv_source_globs<I, S>(source_extensions: I) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut seen = HashSet::new();
+    let mut lines = Vec::new();
+    for source_extension in source_extensions {
+        let Some(extension) = normalize_source_extension(source_extension.as_ref()) else {
+            continue;
+        };
+        if seen.insert(extension.clone()) {
+            lines.push(format!("  \"*{extension}\", \"**/*{extension}\","));
+        }
+    }
+    if lines.is_empty() {
+        return render_argv_source_globs(DEFAULT_HOOK_CLIENT_SOURCE_EXTENSIONS);
+    }
+    lines.join("\n")
+}
+
+fn normalize_source_extension(source_extension: &str) -> Option<String> {
+    let extension = source_extension.trim();
+    if extension.is_empty() {
+        return None;
+    }
+    let extension = extension
+        .strip_prefix("**/*")
+        .or_else(|| extension.strip_prefix('*'))
+        .unwrap_or(extension);
+    if extension.starts_with('.') {
+        Some(extension.to_string())
+    } else {
+        Some(format!(".{extension}"))
+    }
 }
 
 /// Load, parse, and validate project-local hook config.

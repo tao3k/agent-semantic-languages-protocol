@@ -276,7 +276,7 @@ fn configurable_hook_default_rule_classification_stays_fast() {
         best_elapsed.as_millis()
     );
 
-    assert_eq!(best_denied, iterations / 2);
+    assert_eq!(best_denied, iterations * 3 / 4);
     assert!(
         best_elapsed < Duration::from_millis(5_000),
         "configurable hook classification regressed: {best_elapsed:?} for {iterations} iterations"

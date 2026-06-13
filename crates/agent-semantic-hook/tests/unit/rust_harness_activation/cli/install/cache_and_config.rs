@@ -97,6 +97,66 @@ decision = "deny"
 }
 
 #[test]
+fn cli_install_refreshes_generated_client_hook_config_from_activation_extensions() {
+    let root = git_project_root("install-refreshes-generated-client-config");
+    let codex_home = root.join(".codex-home");
+    let provider_path = write_fake_provider_binary(&root, "gerbil-scheme-harness");
+    let protocol_bin_dir = root.join(".agent-bin");
+    let path = env::join_paths([&protocol_bin_dir, &provider_path]).expect("join PATH");
+    let client_config_path = root.join(".codex/agent-semantic-protocol/hooks/config.toml");
+    std::fs::create_dir_all(client_config_path.parent().expect("config parent"))
+        .expect("create client config dir");
+    std::fs::write(
+        &client_config_path,
+        r#"# Semantic agent client hook config.
+schemaId = "agent.semantic-protocols.hook.client-config"
+schemaVersion = "1"
+protocolId = "agent.semantic-protocols.hook"
+protocolVersion = "1"
+
+[[rules]]
+id = "deny-shell-source-argv"
+decision = "deny"
+
+[rules.match]
+tool = "Bash"
+commandAny = ["sed", "perl", "rg", "wl"]
+argvSourceGlobAny = [
+  "*.ss", "**/*.ss",
+  "*.scm", "**/*.scm",
+]
+"#,
+    )
+    .expect("write stale generated config");
+
+    let output = protocol_command()
+        .env("PATH", &path)
+        .env("SEMANTIC_AGENT_BIN_DIR", &protocol_bin_dir)
+        .env("CODEX_HOME", &codex_home)
+        .args([
+            "hook",
+            "install",
+            "--client",
+            "codex",
+            root.to_str().expect("utf8 temp root"),
+        ])
+        .output()
+        .expect("run agent-semantic-protocol install");
+    assert!(
+        output.status.success(),
+        "install stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let client_config = std::fs::read_to_string(&client_config_path).expect("read client config");
+    assert!(client_config.contains("\"*.ss\", \"**/*.ss\""));
+    assert!(client_config.contains("\"*.ssi\", \"**/*.ssi\""));
+    assert!(client_config.contains("\"*.scm\", \"**/*.scm\""));
+    assert!(client_config.contains("\"*.sld\", \"**/*.sld\""));
+    std::fs::remove_dir_all(root).expect("cleanup temp project root");
+}
+
+#[test]
 fn cli_install_migrates_legacy_top_level_unified_exec_to_features() {
     let root = git_project_root("install-unified-exec-feature");
     let codex_home = root.join(".codex-home");

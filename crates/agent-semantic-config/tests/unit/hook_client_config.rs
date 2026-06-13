@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 
 use super::{
     CLIENT_HOOK_CONFIG_SCHEMA_ID, default_hook_client_config_path,
-    default_hook_client_config_template, load_hook_client_config_file,
+    default_hook_client_config_template, default_hook_client_config_template_for_source_extensions,
+    load_hook_client_config_file,
 };
 
 #[test]
@@ -36,9 +37,38 @@ fn default_template_round_trips_through_config_parser() {
             .iter()
             .any(|glob| glob == "**/*.rs")
     );
+    assert!(
+        rule.match_config
+            .argv_source_glob_any
+            .iter()
+            .any(|glob| glob == "**/*.ssi")
+    );
     assert_eq!(
         rule.match_config.argv_source_exclude_flag_any,
         ["--output", "--output-file", "--out", "-o"]
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn template_source_globs_are_derived_from_source_extensions() {
+    let root = temp_root("hook-client-template-extensions");
+    let config_path = default_hook_client_config_path(&root);
+    fs::create_dir_all(config_path.parent().expect("config parent")).expect("config dir");
+    fs::write(
+        &config_path,
+        default_hook_client_config_template_for_source_extensions([
+            ".ss", "ss", "*.scm", "**/*.sld", "", "  ",
+        ]),
+    )
+    .expect("write config");
+
+    let config = load_hook_client_config_file(&config_path).expect("load config");
+    let rule = config.rules.first().expect("default rule");
+
+    assert_eq!(
+        rule.match_config.argv_source_glob_any,
+        ["*.ss", "**/*.ss", "*.scm", "**/*.scm", "*.sld", "**/*.sld"]
     );
     let _ = fs::remove_dir_all(root);
 }

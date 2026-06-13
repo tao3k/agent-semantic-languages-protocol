@@ -433,6 +433,17 @@ with file hashes, owners, symbols, dependency usages, generation id, and
 stores the generation artifact, and owns unchanged / changed / deleted refresh
 planning.
 
+Gerbil structural feeds should also expose native syntax facts when the parser
+can prove them without macro expansion side effects.  The first required fact
+families are =module-import= facts for import modifiers and phase, =macro= facts
+for =defsyntax=, =defrules=, =defrule=, and related hygienic macro surfaces,
+=binding= facts for formal and local bindings, =poo= facts for =defclass=,
+=defgeneric=, and =defmethod= forms, and =call= facts with expression-level
+source ranges where the native reader exposes them.  These facts are projected
+through the shared =semantic-native-syntax-fact-index= shape under
+=syntaxFacts=.  Search renderers may rank or summarize them, but they must not
+invent parser facts by matching rendered strings.
+
 * Evidence grades
 
 All namespace output should classify evidence so the agent can reason about

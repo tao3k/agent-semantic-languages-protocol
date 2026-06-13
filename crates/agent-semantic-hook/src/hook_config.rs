@@ -4,7 +4,8 @@ use agent_semantic_config::{
     HookClientConfigDecision, HookClientConfigFile, HookClientConfigReasonKind,
     HookClientConfigRouteKind, HookClientConfigStdinMode, HookClientRuleConfig,
     HookClientRuleMatchConfig, HookClientRuleRouteConfig, default_hook_client_config_path,
-    default_hook_client_config_template, load_hook_client_config_file,
+    default_hook_client_config_template, default_hook_client_config_template_for_source_extensions,
+    load_hook_client_config_file,
 };
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
@@ -89,6 +90,15 @@ pub fn default_client_config_path(project_root: &str) -> PathBuf {
 /// Render the seed project-local hook config file.
 pub fn default_client_config_template() -> String {
     default_hook_client_config_template()
+}
+
+/// Render the seed project-local hook config file for active provider source extensions.
+pub fn default_client_config_template_for_source_extensions<I, S>(source_extensions: I) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    default_hook_client_config_template_for_source_extensions(source_extensions)
 }
 
 /// Load and compile project-local hook config rules.
