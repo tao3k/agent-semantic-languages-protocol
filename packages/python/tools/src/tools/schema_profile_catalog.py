@@ -123,7 +123,9 @@ LANGUAGE_SCHEMA_PROFILES: tuple[LanguageSchemaProfile, ...] = (
             "semantic-tree-sitter-provenance.v1.schema.json",
             "semantic-type-surface.v1.schema.json",
         ),
-        provider_schema_files=(),
+        provider_schema_files=(
+            "semantic-gerbil-scheme-harness-info.v1.schema.json",
+        ),
     ),
 )
 
