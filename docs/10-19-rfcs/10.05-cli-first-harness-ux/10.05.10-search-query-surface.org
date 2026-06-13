@@ -63,6 +63,25 @@ registry descriptors, cache receipts, and hook recovery routes continue to use
 the language facade as the canonical shape whenever the active language is
 known.
 
+Language-facade =guide= is the prompt-facing teaching surface.  The non-code
+guide output may carry exemplar metadata such as =topic=, =intent=, =rule=,
+=selector=, comment/code selectors, and copyable next commands.  =guide --code=
+is the opposite surface: it writes only source text selected by the provider,
+normally an adjacent source comment plus one complete function, macro, or use
+block.  It must not render line-protocol rows, selector metadata,
+=primaryExemplar= fields, =|code begin= markers, or compressed pseudo-code.
+Provider-owned flags such as =--topic=, =--intent=, =--role=, =--rule=,
+=--finding=, =--more=, =--level=, and =--limit= are selection controls for the
+same guide surface, not new subcommands.
+
+Policy and finding driven repair should route through =guide --code= only after
+the non-code guide has exposed the source-backed exemplar selector.  A
+=--rule= or =--finding= value may map a known policy id to a focused topic, for
+example functional data transforms, POO policy repair, or macro runtime-source
+witnesses.  Default code guidance should return one exemplar; =--more= and
+larger =--level= values provide progressive extra examples when the agent needs
+more transfer evidence.
+
 When a root or language facade consumes =--workspace <workspace-root>= to choose
 the provider project root and process cwd, that routing flag must be removed
 before invoking the client backend/provider command.  The provider receives the
@@ -293,6 +312,18 @@ from one that uses timeout, cancellation, child-process lifecycle, or stream
 drain APIs.  These facts should point agents toward local =search deps
 <crate>::<capability>= queries and engineering follow-up, rather than treating a
 used dependency as already operationalized.
+
+Language-specific structural facts may participate in =search fzf= ranking when
+they are parser-owned and projected through the shared packet.  For Gerbil this
+means a query may match fact families such as macro definitions, binding
+surfaces, POO forms (=defclass=, =defgeneric=, =defmethod=, =defprotocol=),
+higher-order forms, control-flow forms, and dependency usage facts.  The match
+is still a search projection: compact output should cite the fact kind,
+language kind, owner, and source range, keep =rawSourceStored=false=, and avoid
+using call literal arguments or rendered source text as a hidden haystack.  For
+example, a query for a protocol should rank a =defprotocol= owner because the
+parser emitted =kind=interface=, =languageKind=defprotocol=, and =role=protocol=
+facts, not because a provider string-searched the source body.
 
 ** =query= — first-class parser-native extraction and reroutes
 
@@ -1401,14 +1432,36 @@ catalog templates, and the rules for multi-match =--code=.  Hook recovery
 messages should refer to these guides when the agent used raw language-source
 tools: for example, a Rust =PreToolUse= denial for =Read=, =cat=, =sed=, or
 =rg= over =.rs= source should explain that raw Rust source access is replaced by
-=asp rust guide .= as the main progressive tool map, with =asp rust search guide
-.=, =asp rust query guide .=, and =asp rust query guide treesitter .= listed
-only as specialized reference guides when that decision is needed.
+=asp rust guide= as the main progressive tool map, with =asp rust search guide=,
+=asp rust query guide=, and =asp rust query guide treesitter= listed only as
+specialized reference guides when that decision is needed.  Guide commands do
+not require a positional =.= workspace argument.  Providers may accept
+=--workspace <workspace-root>= when project-local capabilities or examples need
+context, but the base guide surface is a provider capability interface rather
+than a repository scan command.
 The concrete recovery route is the normal selector/code surface:
 =asp rust query --selector <path-or-range> --workspace <workspace-root> --code=.
 =--from-hook direct-source-read= is reserved for low-priority exact-window
 fallbacks after parser-owned frontier evidence has already selected a bounded
 small range.
+
+=guide --code= extends =guide.v1= instead of introducing another search or query
+subcommand.  Its job is to teach the agent one high-quality, source-backed code
+pattern with the smallest useful prompt surface: a short source comment when one
+is present and the complete function/macro/use block that demonstrates the
+pattern.  The compact =guide= output owns the exemplar metadata: topic,
+selector, comment selector, code selector, =nextCommand=, and =moreCommand=.
+When =--code= is present, stdout must contain only the extracted source comment
+and source code.  It must not print =primaryExemplar= rows, =|code begin=
+markers, protocol headers, compressed pseudo-code, or other renderer metadata.
+Default =guide --code= prints one provider-selected source excerpt.  Additional
+examples are progressive and explicit through commands exposed by the non-code
+guide packet, such as =asp gerbil-scheme guide --code --topic
+higher-order-control --more=.  Renderers must not silently expand to several
+examples, print broad source windows, inline stale code copies, or replace
+selector-backed source with free-form prose.  =guide --code --selector
+<exact-selector>= is pure source extraction after the provider has already
+exposed a guidance selector.
 
 The agent-prefixed guide spelling is retired for prompt-facing flows.
 Providers may keep compatibility aliases for old tests or manual debugging,

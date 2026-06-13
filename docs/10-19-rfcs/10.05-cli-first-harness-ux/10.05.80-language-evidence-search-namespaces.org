@@ -46,6 +46,19 @@ comment-derived claims.
 Comments are not ground truth.  They are author-intent evidence that must be
 checked against parser facts and executable witnesses when the claim matters.
 
+Parser-owned structural syntax facts also belong to =search code=.  Providers
+should expose language-neutral =syntaxFacts= through
+=schemas/semantic-native-syntax-fact-index.v1.schema.json= and keep
+language-specific meaning in =languageKind= plus provider-owned =fields=.
+Higher-order constructs are represented this way: closure forms such as
+=lambda= and =case-lambda= use =kind=function= with roles such as
+=anonymous-function= or =multi-arity-function=; higher-order invocations such
+as =map=, =filter=, =fold=, =cut=, and =for/fold= use =kind=call= with roles
+such as =sequence-map=, =sequence-filter=, =sequence-fold=,
+=partial-application=, or =loop-fold=.  Compact search renderers may surface
+=operandCount=, =arities=, =formals=, and =caller= when available, but must not
+invent a provider-private fact kind outside the shared enum.
+
 Example shapes:
 
 #+begin_src shell
@@ -438,20 +451,28 @@ can prove them without macro expansion side effects.  The first required fact
 families are =module-import= facts for import modifiers and phase, =macro= facts
 for =defsyntax=, =defrules=, =defrule=, and related hygienic macro surfaces,
 =binding= facts for formal and local bindings, =poo= facts for =defclass=,
-=defgeneric=, and =defmethod= forms, and =call= facts with expression-level
-source ranges where the native reader exposes them.  These facts are projected
-through the shared =semantic-native-syntax-fact-index= shape under
-=syntaxFacts=.  Search renderers may rank or summarize them, but they must not
-invent parser facts by matching rendered strings.
+=defgeneric=, =defmethod=, and =defprotocol= forms, =higher-order= facts for
+=lambda=, =case-lambda=, =map=, =filter=, =fold=, =cut=, and =for/fold= style
+data transforms, =control-flow= facts for named loops, continuation boundaries,
+exception/resource scopes, and branch forms, =dependency-usage= facts for
+manifest-backed imports and extension capabilities, and =call= facts with
+expression-level source ranges where the native reader exposes them.  These
+facts are projected through the shared =semantic-native-syntax-fact-index=
+shape under =syntaxFacts=.  Search renderers and fuzzy candidate rankers may
+rank or summarize them, but they must not invent parser facts by matching
+rendered strings or source literal payloads.
 
 Compact text renderers should expose a bounded set of =|syntaxFact= rows for
 agent-facing seed views.  These rows are summaries of native parser facts, not
 new evidence: each row should include the shared kind, language kind, owner,
 source range, and provider-owned fields that prevent dialect guessing.  For
 Gerbil POO this means a =defclass= row carries supers, slots, and options, and a
-=defmethod= row carries the generic name, receiver, and receiver type.  The JSON
-packet remains the complete machine interface; compact rows exist so an agent
-can proceed without inventing syntax from memory.
+=defmethod= row carries the generic name, receiver, receiver type,
+specializers, and dispatch arity.  A =defprotocol= row should surface as an
+=interface= fact with =languageKind=defprotocol= and =role=protocol= so agents
+can choose protocol/generic dispatch instead of hand-rolled alists or hash
+objects.  The JSON packet remains the complete machine interface; compact rows
+exist so an agent can proceed without inventing syntax from memory.
 
 * Evidence grades
 
