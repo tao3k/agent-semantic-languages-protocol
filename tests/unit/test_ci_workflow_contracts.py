@@ -5,6 +5,85 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 JUSTFILE = REPO_ROOT / "Justfile"
 
+LANGUAGE_RELEASE_WORKFLOWS = {
+    "languages/rust-lang-project-harness": {
+        "binary": "rs-harness",
+        "targets": {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+        },
+    },
+    "languages/typescript-lang-project-harness": {
+        "binary": "ts-harness",
+        "targets": {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+        },
+    },
+    "languages/python-lang-project-harness": {
+        "binary": "py-harness",
+        "targets": {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+        },
+    },
+    "languages/JuliaLangProjectHarness.jl": {
+        "binary": "asp-julia-harness",
+        "targets": {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+        },
+    },
+    "languages/gerbil-scheme-language-project-harness": {
+        "binary": "gerbil-scheme-harness",
+        "targets": {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+        },
+    },
+    "languages/orgize": {
+        "binary": "orgize",
+        "targets": {
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+        },
+    },
+}
+
+
+def test_language_release_workflows_are_project_owned_and_publish_assets() -> None:
+    for language_path, contract in LANGUAGE_RELEASE_WORKFLOWS.items():
+        workflow_path = REPO_ROOT / language_path / ".github" / "workflows" / "release.yml"
+        assert workflow_path.exists(), language_path
+
+        workflow = workflow_path.read_text(encoding="utf-8")
+
+        assert "name: Release provider binary" in workflow
+        assert "workflow_dispatch:" in workflow
+        assert "release:" in workflow
+        assert "types:" in workflow
+        assert "- published" in workflow
+        assert "push:" in workflow
+        assert "tags:" in workflow
+        assert '- "v*"' in workflow
+        assert "permissions:\n  contents: write" in workflow
+        assert f"BINARY: {contract['binary']}" in workflow
+        assert "github.event.release.tag_name || inputs.tag || github.ref_name" in workflow
+        assert "- name: Ensure release tag" in workflow
+        assert "if: github.event_name == 'workflow_dispatch'" in workflow
+        assert "release tag must start with v" in workflow
+        assert 'git push origin "refs/tags/${RELEASE_TAG}"' in workflow
+        assert "gh release create" in workflow
+        assert "gh release upload" in workflow
+        assert "--clobber" in workflow
+        assert ".sha256" in workflow
+        assert "x86_64-apple-darwin" not in workflow
+
+        for target in contract["targets"]:
+            assert target in workflow, f"{language_path} missing {target}"
+
 
 def test_asp_rust_ci_checks_out_provider_catalog_submodules() -> None:
     workflow = CI_WORKFLOW.read_text(encoding="utf-8")
