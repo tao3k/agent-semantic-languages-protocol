@@ -42,5 +42,7 @@ strip = true
 panic = "abort"
 
 [profile.dev]
-debug = 1
+debug = "line-tables-only"
 split-debuginfo = "unpacked"
+strip = "debuginfo"
+incremental = true

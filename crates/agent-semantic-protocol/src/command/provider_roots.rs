@@ -149,6 +149,7 @@ fn explicit_positional_project_root(
     activation_root: &Path,
 ) -> Result<Option<(PathBuf, Vec<String>)>, String> {
     let mut selected = None;
+    let check_command = args.first().is_some_and(|command| command == "check");
     for (index, value) in args.iter().enumerate().rev() {
         if value.starts_with('-') || arg_is_option_value(args, index) {
             continue;
@@ -159,7 +160,8 @@ fn explicit_positional_project_root(
         } else {
             invocation_root.join(path)
         };
-        let Some(selected_root) = positional_project_root(language_id, &absolute) else {
+        let Some(selected_root) = positional_project_root(language_id, &absolute, check_command)
+        else {
             continue;
         };
         if selected.is_some() {
@@ -178,7 +180,7 @@ fn explicit_positional_project_root(
     Ok(Some((selected_root, normalized_args)))
 }
 
-fn positional_project_root(language_id: &str, path: &Path) -> Option<PathBuf> {
+fn positional_project_root(language_id: &str, path: &Path, check_command: bool) -> Option<PathBuf> {
     if path
         .join(".cache/agent-semantic-protocol/hooks/activation.json")
         .is_file()
@@ -186,6 +188,9 @@ fn positional_project_root(language_id: &str, path: &Path) -> Option<PathBuf> {
             .join(".cache/agent-semantic-protocol/client/cache-manifest.json")
             .is_file()
     {
+        return Some(canonical_or_existing(path.to_path_buf()));
+    }
+    if check_command && path.is_dir() {
         return Some(canonical_or_existing(path.to_path_buf()));
     }
     language_project_marker_root(language_id, path)

@@ -90,7 +90,7 @@ fn run_guide(
 
 fn provider_language_required(command: &str) -> String {
     format!(
-        "asp {command} requires a language facade; use asp <rust|typescript|python|julia> {command} ..."
+        "asp {command} requires a language facade; use asp <language> {command} ...; run asp providers for active facades"
     )
 }
 
@@ -167,21 +167,28 @@ fn print_guide() {
     println!("|cmd providers=asp providers");
     println!("|cmd tools-doctor=asp tools doctor");
     println!("|cmd graph-turbo=asp wrap asp-graph-turbo -- help");
-    println!(
-        "|cmd graph-turbo-search=asp <rust|typescript|python> search fzf <term> owner tests ."
-    );
+    println!("|cmd graph-turbo-search=asp <language> search fzf <term> owner tests .");
     println!("|cmd search-history=asp search history audit .");
-    println!("|cmd guide=asp <rust|typescript|python> guide .");
-    println!("|cmd search-guide=asp <rust|typescript|python> search guide .");
-    println!("|ref query-guide=asp <rust|typescript|python> query guide .");
-    println!("|ref treesitter-query-guide=asp <rust|typescript|python> query guide treesitter .");
-    println!("|cmd search=asp <rust|typescript|python> search <provider-search-args>");
-    println!("|cmd query=asp <rust|typescript|python> query <provider-query-args>");
-    println!("|cmd check=asp <rust|typescript|python> check <provider-check-args>");
+    println!("|cmd guide=asp <language> guide .");
+    println!("|cmd search-guide=asp <language> search guide .");
+    println!("|ref query-guide=asp <language> query guide .");
+    println!("|ref treesitter-query-guide=asp <language> query guide treesitter .");
+    println!("|cmd search=asp <language> search <provider-search-args>");
+    println!("|cmd query=asp <language> query <provider-query-args>");
+    println!("|cmd check=asp <language> check <provider-check-args>");
     println!("|cmd cache=asp cache status");
     println!("|cmd cache-import=asp cache import");
     println!("|cmd cache-invalidate=asp cache invalidate");
     println!("|cmd cloud=asp cloud status");
+    println!(
+        "|facades active=run asp providers known=rust|typescript|python|julia|gerbil-scheme|org|md"
+    );
+    println!(
+        "|rule provider-guide-contract=run asp <language> guide . before provider-specific search axes"
+    );
+    println!(
+        "|rule provider-knowledge-axes=asp <language> search env|runtime-source|lang|std|capability|extension|pattern|compare ..."
+    );
     println!(
         "|rule route=local-native cache=probe-first cloud=optional nativeProviderFacts=required"
     );

@@ -48,6 +48,41 @@ fn language_facade_guide_routes_to_activation_prefix() {
 }
 
 #[test]
+fn language_facade_guide_code_preserves_pure_provider_stdout() {
+    let root = temp_project_root("provider-guide-code-facade");
+    let profile_bin_dir = root.join(".profile-bin");
+    std::fs::create_dir_all(&profile_bin_dir).expect("create profile bin dir");
+    let provider_bin = profile_bin_dir.join("rs-harness");
+    std::fs::write(
+        &provider_bin,
+        "#!/bin/sh\nprintf ';;; source comment\\n(def (example) #t)\\n'\n",
+    )
+    .expect("write code provider");
+    make_executable(&provider_bin);
+
+    write_activation(
+        &root,
+        &[provider("rust", vec![provider_bin.display().to_string()])],
+    );
+
+    let output = asp_command(&root)
+        .env("PRJ_CACHE_HOME", root.join(".cache"))
+        .args(["rust", "guide", "--code"])
+        .output()
+        .expect("run asp rust guide --code");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout");
+    assert_eq!(stdout, ";;; source comment\n(def (example) #t)\n");
+    assert!(!stdout.contains("agent-doctor"), "{stdout}");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn typescript_language_facade_guide_routes_to_legacy_agent_guide() {
     let root = temp_project_root("provider-typescript-guide-facade");
     let profile_bin_dir = root.join(".profile-bin");

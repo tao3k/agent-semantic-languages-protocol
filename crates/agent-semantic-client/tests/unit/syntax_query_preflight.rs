@@ -99,6 +99,29 @@ fn accepts_query_code_with_workspace_before_cache_replay() {
 }
 
 #[test]
+fn rejects_missing_query_owner_path_under_workspace_before_provider_execution() {
+    let request = query_request(vec![
+        "src/types/facade.ss".to_string(),
+        "--names-only".to_string(),
+    ]);
+
+    let error =
+        validate_syntax_query_request(&request).expect_err("missing owner path should fail");
+
+    assert!(
+        error.contains("query owner path does not exist under --workspace: src/types/facade.ss"),
+        "{error}"
+    );
+}
+
+#[test]
+fn accepts_existing_query_owner_path_under_workspace() {
+    let request = query_request(vec!["src/lib.rs".to_string(), "--names-only".to_string()]);
+
+    validate_syntax_query_request(&request).expect("existing owner path");
+}
+
+#[test]
 fn rejects_invalid_inline_tree_sitter_query_before_provider_execution() {
     let request = query_request(vec![
         "--treesitter-query".to_string(),

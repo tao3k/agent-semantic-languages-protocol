@@ -236,6 +236,9 @@ check-language-evidence-smoke-core: check-language-evidence-smoke-setup
 check-language-evidence-smoke: check-language-evidence-smoke-core
     @true
 
+check-provider-knowledge-axes:
+    node tools/provider-knowledge-axes-close-loop.mjs
+
 check-language-evidence-smoke-all-setup: check-language-evidence-smoke-setup
     just agent-tools-install-julia .bin
     PATH="$PWD/.bin:$PATH" .bin/asp hook install --client codex .

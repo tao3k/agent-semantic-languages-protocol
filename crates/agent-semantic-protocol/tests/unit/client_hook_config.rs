@@ -65,6 +65,49 @@ stdinMode = "pipe-candidates"
 }
 
 #[test]
+fn client_config_rule_denies_shell_alias_scheme_source_argv() {
+    let root = temp_project_root("client-config-shell-scheme-source-argv");
+    let activation_path = root.join("activation.json");
+    std::fs::write(&activation_path, root_owned_rust_activation_json()).expect("write activation");
+    write_config(
+        &root,
+        r#"
+[[rules]]
+id = "deny-shell-source-argv"
+event = "pre-tool"
+decision = "deny"
+reasonKind = "bulk-source-dump"
+message = "Use the language harness instead of shell argv source reads."
+
+[rules.match]
+toolAny = ["Bash", "shell", "functions.exec_command", "exec_command", "command_execution"]
+commandAny = ["sed", "perl", "rg", "wl"]
+argvSourceGlobAny = ["*.ss", "**/*.ss", "*.scm", "**/*.scm"]
+argvSourceExcludeFlagAny = ["--output", "--output-file", "--out", "-o"]
+"#,
+    );
+
+    let decision = run_hook_decision(
+        &root,
+        &activation_path,
+        json!({
+            "tool_name": "shell",
+            "tool_input": {
+                "command": "rg -n -xx self-apply-findings.ss | sed -n '1,10p'"
+            }
+        }),
+    );
+
+    assert_eq!(decision["decision"], "deny");
+    assert_eq!(decision["reasonKind"], "bulk-source-dump");
+    assert_eq!(
+        decision["subject"]["paths"],
+        json!(["self-apply-findings.ss"])
+    );
+    std::fs::remove_dir_all(root).expect("cleanup temp project root");
+}
+
+#[test]
 fn disabled_client_config_rule_does_not_fire() {
     let root = temp_project_root("client-config-disabled");
     let activation_path = root.join("activation.json");

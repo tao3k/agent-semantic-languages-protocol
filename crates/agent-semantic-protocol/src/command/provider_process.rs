@@ -86,7 +86,11 @@ pub(super) fn run_guide_command(
     }
     let stdout = std::str::from_utf8(output.stdout.as_ref())
         .map_err(|error| format!("provider guide emitted invalid UTF-8: {error}"))?;
-    let stdout = render_facade_guide(language_id, provider, stdout);
+    let stdout = if forwarded.iter().any(|arg| arg == "--code") {
+        stdout.to_string()
+    } else {
+        render_facade_guide(language_id, provider, stdout)
+    };
     io::stdout()
         .write_all(stdout.as_bytes())
         .map_err(|error| format!("failed to write provider stdout: {error}"))

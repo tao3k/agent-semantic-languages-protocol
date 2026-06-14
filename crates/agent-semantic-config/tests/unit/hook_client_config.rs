@@ -30,6 +30,16 @@ fn default_template_round_trips_through_config_parser() {
     assert_eq!(config.rules.len(), 1);
     let rule = config.rules.first().expect("default rule");
     assert_eq!(rule.id, "deny-shell-source-argv");
+    assert_eq!(
+        rule.match_config.tool_any,
+        [
+            "Bash",
+            "shell",
+            "functions.exec_command",
+            "exec_command",
+            "command_execution"
+        ]
+    );
     assert_eq!(rule.match_config.command_any, ["sed", "perl", "rg", "wl"]);
     assert!(
         rule.match_config

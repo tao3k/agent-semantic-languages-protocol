@@ -130,6 +130,17 @@ from parser-owned POO source.  A macro witness example should connect back to
 the runtime-source acquisition path so the agent learns to cite version-matched
 runtime facts before editing macro transformers.
 
+The type-commented combinator style is also a guide topic, not a new command.
+=asp gerbil-scheme guide --code --topic typed-combinator-style --intent style=
+should emit one source-backed excerpt by default: adjacent intent/type comments
+and the compact helper or transform block that demonstrates the idiom.  =--more=
+may add another source-backed compact function, but it must not duplicate the
+first excerpt or copy examples from external libraries into renderer text.
+Policy findings should point to this topic with a command field when the agent
+needs style guidance; the actual teaching payload remains extracted source.
+Because this style is the default teaching target, bare =guide --code= should
+route to =typed-combinator-style=.
+
 ** Govern language capabilities instead of banning them
 
 Gerbil Scheme macros and higher-order forms are language capabilities, not
@@ -214,6 +225,11 @@ turning policy into a cheap bypass.
 - Protocol implementations map to =GERBIL-SCHEME-AGENT-R012=: protocol-shaped
   owners require declared protocol evidence.
 
+- Typed combinator style maps to =GERBIL-SCHEME-AGENT-R013=: runtime source
+
+  owners with definitions should carry concise =;;; := signature comments near
+  compact helper or transform definitions.
+
 - Package/module conventions are exposed through =guide= and
   =info.agentSteering=: package-module, import/export, test-root, and override
   policy guidance should be passive agent input.
@@ -232,10 +248,13 @@ or generator state transitions in owner-local functions with tests.
 When an agent needs a concrete model before writing code, it should ask for a
 single focused exemplar first, for example =asp gerbil-scheme guide --code
 --topic higher-order-control= or =asp gerbil-scheme guide --code --topic
-poo-policy=.  Finding-driven repair may use =asp gerbil-scheme guide --code
---rule GERBIL-SCHEME-AGENT-R009 --intent repair=, and macro governance review
-may use =asp gerbil-scheme guide --code --topic macro-runtime-source --intent
-witness=.  The rendered excerpt should be small enough to copy the pattern
+poo-policy=.  Style guidance for concise typed comments plus small composable
+functions may use =asp gerbil-scheme guide --code --topic
+typed-combinator-style --intent style=.  Finding-driven repair may use =asp
+gerbil-scheme guide --code --rule GERBIL-SCHEME-AGENT-R009 --intent repair=,
+and macro governance review may use =asp gerbil-scheme guide --code --topic
+macro-runtime-source --intent witness=.  The rendered excerpt should be small
+enough to copy the pattern
 mentally: adjacent source comment if present and one complete block.  Selector
 metadata and copyable follow-up commands belong to =asp gerbil-scheme guide=
 without =--code=.  The code form should not require a trailing =.= argument
@@ -246,3 +265,9 @@ prove vague definition names from definition facts, and it can prove top-level
 runtime effects from call facts whose caller is absent in =src/=.  Those facts
 are good enough to warn the agent before low-quality Scheme lands in the
 project.
+
+Self-apply uses the default policy set.  All agent policies are enabled unless a
+project-local =gerbil.pkg= policy explicitly uses =agent-policy enabled-rules=
+or =disabled-rules= to select a different rule set.  This keeps the harness
+strict by default while still giving downstream users a high-level configuration
+interface for project-specific policy maturity.

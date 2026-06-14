@@ -82,6 +82,21 @@ witnesses.  Default code guidance should return one exemplar; =--more= and
 larger =--level= values provide progressive extra examples when the agent needs
 more transfer evidence.
 
+=check= output is also an agent guidance surface.  When a policy finding maps
+to a known guide exemplar, the line-protocol finding detail should expose stable
+machine-readable routing fields such as =guideTopic=, =guideIntent=, and
+=nextCommand=.  The next command should be an executable =asp <language>
+guide --code --rule <rule-id> --intent <intent>= form so an agent can move from
+verification failure to source-backed repair guidance without guessing a topic.
+
+Unlike =search= scopes and =query= selectors, =check <existing-directory>= is a
+project-root shorthand.  The language facade may treat that positional
+directory as the effective check root even when it has no language manifest,
+because downstream generated fixtures and partial packages often need policy
+verification before their package marker exists.  This exception is scoped to
+=check=; search path arguments remain search scopes unless the provider or
+=--workspace= explicitly selects a project root.
+
 When a root or language facade consumes =--workspace <workspace-root>= to choose
 the provider project root and process cwd, that routing flag must be removed
 before invoking the client backend/provider command.  The provider receives the
@@ -1799,7 +1814,9 @@ namespace       = agent.semantic-protocols.languages.<languageId>.<providerId>
 method          = search/workspace | search/prime | search/dependency | search/deps | ...
 view            = workspace | prime | owner | dependency | deps | symbol |
                   callsite | import | cfg | patterns | pattern | docs |
-                  api | public-external-types | tests | text | ingest
+                  api | public-external-types | policy | tests | fzf |
+                  reasoning | env | runtime-source | lang | std |
+                  capability | extension | compare | text | ingest
 #+end_src
 
 The schema owns the stable packet envelope: =header=, =packages=, =nodes=,

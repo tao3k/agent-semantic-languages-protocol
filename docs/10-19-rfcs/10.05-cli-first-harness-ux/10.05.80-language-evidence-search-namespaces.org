@@ -292,6 +292,38 @@ asp gerbil-scheme search std :std/srfi/1 fold --view seeds .
 asp gerbil-scheme search std :std/sugar defsyntax --view seeds .
 #+end_src
 
+** =search capability=
+
+Project-local capability posture.  This namespace owns the compact bridge from
+parser-owned project facts to agent steering.  It does not replace
+=search structural=, =search extension=, or =search pattern=.  Instead, it
+answers: "which language capabilities are active or available in this project,
+and which next search/check route should the agent use before editing?"
+
+For Gerbil Scheme, =search capability= derives its facts from the project
+index, =gerbil.pkg= / =build.ss= policy, dependency activation, and parser-owned
+syntax facts.  It should expose package/module posture, macro posture, POO
+posture, higher-order posture, control-flow posture, and configurable-interface
+posture.  The compact renderer should include stable =|fact=,
+=|agentScenario=, =|capability=, =|failureCase=, and =|qualitySignal= lines.
+The JSON surface may keep these as provider-owned evidence facts; language
+neutral structural syntax facts remain in the shared structural index schema.
+
+Capability output must stay passive and auditable.  A POO posture fact may say
+that =gerbil-poo= is active and point to =search pattern poo class=, but it must
+not inline a hand-written object-system recipe.  A macro posture fact may point
+to =search runtime-source macro sugar=, but it must not answer from memory.  A
+configurable-interface posture fact may report that built-in defaults apply or
+that =gerbil.pkg= overrides exist; downstream projects should not be forced to
+redeclare built-in defaults just to consume the harness.
+
+Example shapes:
+
+#+begin_src shell
+gerbil-scheme-harness search capability posture --view seeds .
+gerbil-scheme-harness search capability poo --json .
+#+end_src
+
 ** =search pattern=
 
 Executable writing patterns.  This namespace owns recipes that can show a
@@ -549,6 +581,8 @@ Required facts:
 - failure case that demonstrates accidental capture or broken context
 - expand or compile witness from the active =gxi=
 - snapshot output for the search packets
+- project capability posture facts for package/module, macro, POO,
+  higher-order, control-flow, and configurable-interface steering
 
 The implementation must remain native Scheme owned for Gerbil language facts.
 Rust or ASP may own CLI routing, schema validation, and hook delivery, but Gerbil
@@ -744,6 +778,35 @@ Agents should use it to decide whether to optimize provider startup,
 precompute/cache guide output, split a slow provider into the all-providers
 gate, or investigate a regression in graph/analyze.
 
+** Provider knowledge-axis close-loop gate
+
+The provider knowledge-axis gate verifies the agent-facing namespace contract
+through the public =asp <language> search <axis> --json --workspace <root>=
+facade, not through provider-private unit helpers.  It covers Gerbil Scheme,
+TypeScript, Python, and Julia across =env=, =runtime-source=, =lang=, =std=,
+=capability=, =extension=, =pattern=, and =compare=.
+
+The gate checks three things:
+
+- each provider guide advertises the axis commands it is about to execute;
+- each query returns parseable JSON with an expected =fact= or explicit
+  =unknown= frontier gap instead of model-memory guidance;
+- each command and the full matrix stay within a visible local latency budget.
+
+Where a provider already owns the shared =semantic-search-packet= envelope, the
+gate requires that envelope and validates =languageId= plus =projectRoot=.  A
+provider-local schema may still expose richer axis payloads, but it must
+normalize to the same evidence fields: namespace/view, evidence grade, fact
+count, hit/frontier count, and next-step guidance.  Provider-local shapes are a
+transitional compatibility path; new cross-language axes should prefer the
+shared semantic search packet.
+
+Local validation:
+
+#+begin_src shell
+just check-provider-knowledge-axes
+#+end_src
+
 * Acceptance criteria
 
 - =orgize lint= passes for this RFC.
@@ -752,6 +815,10 @@ gate, or investigate a regression in graph/analyze.
   and =acquisition= fields without local checkout paths.
 
 - Gerbil slice has snapshots for =env=, =lang=, =std=, =pattern=, and =compare=.
+
+- Gerbil =search capability posture= exposes parser-owned posture facts for
+  package/module, macro, POO, higher-order, control-flow, and configurable
+  interface steering.
 
 - Gerbil =search std sugar= and =search pattern hygienic-macro defrule= expose
   runtime-source selectors without leaking local checkout paths.
@@ -793,3 +860,6 @@ gate, or investigate a regression in graph/analyze.
   binaries and wrapper regressions cannot pass a full provider validation.
 - Search pipe facade conformance checks quality fields and raw-read avoidance,
   not just non-empty output.
+- =just check-provider-knowledge-axes= runs the public facade matrix for
+  Gerbil Scheme, TypeScript, Python, and Julia, then reports the slowest axis
+  commands so startup or fallback regressions are visible.

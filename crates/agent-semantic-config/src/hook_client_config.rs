@@ -225,7 +225,7 @@ reasonKind = "bulk-source-dump"
 message = "Use the language harness instead of shell argv source reads."
 
 [rules.match]
-tool = "Bash"
+toolAny = ["Bash", "shell", "functions.exec_command", "exec_command", "command_execution"]
 commandAny = ["sed", "perl", "rg", "wl"]
 argvSourceGlobAny = [
 {argv_source_globs}

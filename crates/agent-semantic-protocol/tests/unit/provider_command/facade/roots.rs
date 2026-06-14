@@ -1,5 +1,6 @@
 use crate::provider_command::support::{
     asp_command, prepend_path, provider, temp_project_root, write_activation, write_echo_provider,
+    write_pwd_provider,
 };
 
 #[test]
@@ -125,6 +126,39 @@ fn rust_search_facade_strips_explicit_workspace_before_provider_backend() {
     assert_eq!(
         String::from_utf8(output.stdout).expect("stdout"),
         "rs args=[search][prime][--view][seeds]\n"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn check_facade_uses_positional_existing_directory_as_project_root() {
+    let root = temp_project_root("check-facade-positional-directory-root");
+    let bin_dir = root.join(".bin");
+    let provider_root = root.join("fixture");
+    std::fs::create_dir_all(provider_root.join("src")).expect("create provider root");
+    write_pwd_provider(&bin_dir, "gerbil-scheme-harness");
+    write_activation(&root, &[provider("gerbil-scheme", Vec::new())]);
+
+    let output = asp_command(&root)
+        .env("PATH", prepend_path(&bin_dir))
+        .env("PRJ_CACHE_HOME", root.join(".cache"))
+        .args(["gerbil-scheme", "check", "fixture"])
+        .output()
+        .expect("run asp gerbil-scheme check");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("stdout"),
+        format!(
+            "{}\n",
+            std::fs::canonicalize(&provider_root)
+                .expect("canonical provider root")
+                .display()
+        )
     );
     let _ = std::fs::remove_dir_all(root);
 }

@@ -551,6 +551,9 @@ fn assert_client_config(root: &std::path::Path) {
     assert!(client_config.contains("enabled = false"));
     assert!(client_config.contains("[[rules]]"));
     assert!(client_config.contains("id = \"deny-shell-source-argv\""));
+    assert!(client_config.contains(
+        "toolAny = [\"Bash\", \"shell\", \"functions.exec_command\", \"exec_command\", \"command_execution\"]"
+    ));
     assert!(client_config.contains("commandAny = [\"sed\", \"perl\", \"rg\", \"wl\"]"));
     assert!(client_config.contains("argvSourceGlobAny = ["));
     assert!(client_config.contains("\"**/*.rs\""));
