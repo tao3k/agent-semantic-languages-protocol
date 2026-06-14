@@ -70,46 +70,40 @@ pub(super) fn install_codex_plugin_hooks(
         fs::create_dir_all(codex_home)
             .map_err(|error| format!("failed to create {}: {error}", codex_home.display()))?;
     }
-    if matches!(scope, CodexPluginScope::Project) {
-        normalize_codex_project_marketplace_source(
-            &project_config_path,
-            project_root,
-            &marketplace_name,
-            false,
-        )?;
-    }
-    ensure_codex_plugin_marketplace_registered(
-        project_root,
-        codex_home.as_deref(),
-        &marketplace_name,
-    )?;
-    let add_stdout = run_codex_plugin_command(
-        &[
-            "plugin".to_string(),
-            "add".to_string(),
-            format!("{ASP_CODEX_PLUGIN_NAME}@{marketplace_name}"),
-            "--json".to_string(),
-        ],
-        project_root,
-        codex_home.as_deref(),
-    )?;
-    if matches!(scope, CodexPluginScope::Project) {
-        normalize_codex_project_marketplace_source(
-            &project_config_path,
-            project_root,
-            &marketplace_name,
-            true,
-        )?;
-        verify_codex_project_plugin_loadable(
-            project_root,
-            codex_home.as_deref(),
-            &format!("{ASP_CODEX_PLUGIN_NAME}@{marketplace_name}"),
-        )?;
-    }
+    let plugin_id = format!("{ASP_CODEX_PLUGIN_NAME}@{marketplace_name}");
+    let installed_path = match scope {
+        CodexPluginScope::Project => {
+            normalize_codex_project_marketplace_source(
+                &project_config_path,
+                project_root,
+                &marketplace_name,
+                true,
+            )?;
+            ensure_codex_project_plugin_enabled(&project_config_path, &plugin_id)?;
+            String::new()
+        }
+        CodexPluginScope::Global => {
+            ensure_codex_plugin_marketplace_registered(
+                project_root,
+                codex_home.as_deref(),
+                &marketplace_name,
+            )?;
+            let add_stdout = run_codex_plugin_command(
+                &[
+                    "plugin".to_string(),
+                    "add".to_string(),
+                    plugin_id,
+                    "--json".to_string(),
+                ],
+                project_root,
+                codex_home.as_deref(),
+            )?;
+            codex_plugin_installed_path(&add_stdout)
+                .map(|path| format!(" pluginInstalledPath={path}"))
+                .unwrap_or_default()
+        }
+    };
     ensure_codex_asp_explorer_role_config(&project_config_path)?;
-    let installed_path = codex_plugin_installed_path(&add_stdout)
-        .map(|path| format!(" pluginInstalledPath={path}"))
-        .unwrap_or_default();
     let config_path = match scope {
         CodexPluginScope::Project => project_root.join(".codex").join("config.toml"),
         CodexPluginScope::Global => global_codex_config_path()?,
@@ -195,6 +189,62 @@ fn ensure_codex_asp_explorer_role_config(config_path: &Path) -> Result<(), Strin
     Ok(())
 }
 
+fn ensure_codex_project_plugin_enabled(config_path: &Path, plugin_id: &str) -> Result<(), String> {
+    let existing = fs::read_to_string(config_path).unwrap_or_default();
+    validate_codex_config_toml(&existing)
+        .map_err(|error| format!("refusing to update invalid Codex plugin config TOML: {error}"))?;
+    let parsed = toml::from_str::<toml::Value>(&existing)
+        .map_err(|error| format!("invalid Codex plugin config TOML: {error}"))?;
+    let enabled = parsed
+        .get("plugins")
+        .and_then(toml::Value::as_table)
+        .and_then(|plugins| plugins.get(plugin_id))
+        .and_then(toml::Value::as_table)
+        .and_then(|plugin| plugin.get("enabled"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false);
+    if enabled {
+        return Ok(());
+    }
+    let content = remove_codex_project_plugin_section(&existing, plugin_id);
+    let plugin_section = format!("[plugins.{}]\nenabled = true", toml_basic_string(plugin_id));
+    let content = content.trim_end();
+    let merged = if content.is_empty() {
+        format!("{plugin_section}\n")
+    } else {
+        format!("{content}\n\n{plugin_section}\n")
+    };
+    validate_codex_config_toml(&merged)
+        .map_err(|error| format!("refusing to write invalid Codex plugin config TOML: {error}"))?;
+    fs::write(config_path, merged.as_bytes())
+        .map_err(|error| format!("failed to write {}: {error}", config_path.display()))?;
+    Ok(())
+}
+
+fn remove_codex_project_plugin_section(existing: &str, plugin_id: &str) -> String {
+    let section_plain = format!("[plugins.{plugin_id}]");
+    let section_quoted = format!("[plugins.{}]", toml_basic_string(plugin_id));
+    remove_toml_sections(existing, &[section_plain.as_str(), section_quoted.as_str()])
+}
+
+fn remove_toml_sections(existing: &str, sections: &[&str]) -> String {
+    let mut lines = Vec::new();
+    let mut skipping = false;
+    for line in existing.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            skipping = sections.iter().any(|section| trimmed == *section);
+            if skipping {
+                continue;
+            }
+        }
+        if !skipping {
+            lines.push(line.to_string());
+        }
+    }
+    format!("{}\n", lines.join("\n").trim_end())
+}
+
 fn normalize_codex_project_marketplace_source(
     config_path: &Path,
     project_root: &Path,
@@ -260,41 +310,6 @@ fn normalize_codex_project_marketplace_source(
         })?;
         fs::write(config_path, normalized.as_bytes())
             .map_err(|error| format!("failed to write {}: {error}", config_path.display()))?;
-    }
-    Ok(())
-}
-
-fn verify_codex_project_plugin_loadable(
-    project_root: &Path,
-    codex_home: Option<&Path>,
-    plugin_id: &str,
-) -> Result<(), String> {
-    let stdout = run_codex_plugin_command(
-        &[
-            "plugin".to_string(),
-            "list".to_string(),
-            "--json".to_string(),
-        ],
-        project_root,
-        codex_home,
-    )?;
-    let value = serde_json::from_str::<serde_json::Value>(&stdout)
-        .map_err(|error| format!("invalid codex plugin list JSON: {error}"))?;
-    let installed = value
-        .get("installed")
-        .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| "codex plugin list JSON missing installed plugins".to_string())?;
-    let loaded = installed.iter().any(|plugin| {
-        plugin.get("pluginId").and_then(serde_json::Value::as_str) == Some(plugin_id)
-            && plugin
-                .get("enabled")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false)
-    });
-    if !loaded {
-        return Err(format!(
-            "Codex plugin {plugin_id} was installed but is not loadable from project config"
-        ));
     }
     Ok(())
 }
