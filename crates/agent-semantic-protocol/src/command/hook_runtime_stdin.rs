@@ -3,12 +3,18 @@
 use std::io;
 #[cfg(not(unix))]
 use std::io::Read;
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
 const HOOK_STDIN_FIRST_BYTE_TIMEOUT: Duration = Duration::from_millis(50);
+#[cfg(unix)]
 const HOOK_STDIN_IDLE_TIMEOUT: Duration = Duration::from_millis(10);
+#[cfg(unix)]
 const HOOK_STDIN_POLL_INTERVAL: Duration = Duration::from_millis(1);
+#[cfg(unix)]
 const HOOK_STDIN_CHUNK_BYTES: usize = 16 * 1024;
+#[cfg(unix)]
 const HOOK_STDIN_MAX_BYTES: usize = 1024 * 1024;
 
 #[cfg(unix)]
