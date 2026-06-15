@@ -75,7 +75,6 @@ pub(super) fn install_codex_plugin_hooks(
         CodexPluginScope::Project => {
             normalize_codex_project_marketplace_source(
                 &project_config_path,
-                project_root,
                 &marketplace_name,
                 true,
             )?;
@@ -247,47 +246,34 @@ fn remove_toml_sections(existing: &str, sections: &[&str]) -> String {
 
 fn normalize_codex_project_marketplace_source(
     config_path: &Path,
-    project_root: &Path,
     marketplace_name: &str,
     create_if_missing: bool,
 ) -> Result<(), String> {
     let existing = fs::read_to_string(config_path).unwrap_or_default();
     validate_codex_config_toml(&existing)
         .map_err(|error| format!("refusing to normalize invalid Codex config TOML: {error}"))?;
-    let project_root = fs::canonicalize(project_root)
-        .map_err(|error| format!("failed to resolve {}: {error}", project_root.display()))?;
-    let source_line = format!(
-        "source = {}",
-        toml_basic_string(&project_root.display().to_string())
-    );
     let section_plain = format!("[marketplaces.{marketplace_name}]");
     let section_quoted = format!("[marketplaces.{}]", toml_basic_string(marketplace_name));
     let mut lines = Vec::new();
     let mut in_section = false;
     let mut saw_section = false;
-    let mut replaced_source = false;
     for line in existing.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') {
-            if in_section && !replaced_source {
-                lines.push(source_line.clone());
-                replaced_source = true;
-            }
-            in_section = trimmed == section_plain || trimmed == section_quoted;
-            if in_section {
+            if trimmed == section_plain || trimmed == section_quoted {
                 saw_section = true;
-                replaced_source = false;
+                in_section = true;
+                lines.push(section_plain.clone());
+                lines.push("source_type = \"local\"".to_string());
+                lines.push("source = \".\"".to_string());
+                continue;
             }
+            in_section = false;
         }
-        if in_section && trimmed.starts_with("source =") {
-            lines.push(source_line.clone());
-            replaced_source = true;
+        if in_section {
             continue;
         }
         lines.push(line.to_string());
-    }
-    if in_section && !replaced_source {
-        lines.push(source_line);
     }
     if !saw_section && !create_if_missing {
         return Ok(());
@@ -298,10 +284,7 @@ fn normalize_codex_project_marketplace_source(
         }
         lines.push(section_plain);
         lines.push("source_type = \"local\"".to_string());
-        lines.push(format!(
-            "source = {}",
-            toml_basic_string(&project_root.display().to_string())
-        ));
+        lines.push("source = \".\"".to_string());
     }
     let normalized = format!("{}\n", lines.join("\n").trim_end());
     if normalized != existing {

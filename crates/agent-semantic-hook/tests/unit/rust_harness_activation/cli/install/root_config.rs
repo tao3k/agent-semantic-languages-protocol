@@ -89,7 +89,9 @@ fn cli_install_accepts_existing_project_marketplace_source_when_root_matches() {
     let config =
         std::fs::read_to_string(root.join(".codex/config.toml")).expect("installed config");
     let canonical_root = std::fs::canonicalize(&root).expect("canonical project root");
-    assert!(config.contains(&format!("source = \"{}\"", canonical_root.display())));
+    assert!(config.contains("source = \".\""));
+    assert!(!config.contains(&format!("source = \"{}\"", canonical_root.display())));
+    assert!(!config.contains("last_updated ="));
     assert_codex_asp_explorer_role_config(&config);
     assert!(config.contains("[plugins.\"asp-codex-plugin@asp-project\"]"));
     assert_codex_asp_explorer(&root, "gpt-5.3-codex-spark");
@@ -423,7 +425,9 @@ fn assert_codex_config(config: &str, root: &std::path::Path) {
     assert!(config.contains("[marketplaces.asp-project]"));
     assert!(config.contains("source_type = \"local\""));
     let canonical_root = std::fs::canonicalize(root).expect("canonical project root");
-    assert!(config.contains(&format!("source = \"{}\"", canonical_root.display())));
+    assert!(config.contains("source = \".\""));
+    assert!(!config.contains(&format!("source = \"{}\"", canonical_root.display())));
+    assert!(!config.contains("last_updated ="));
     assert_codex_asp_explorer_role_config(config);
     assert!(config.contains("[plugins.\"asp-codex-plugin@asp-project\"]"));
     assert!(config.contains("enabled = true"));
@@ -449,6 +453,10 @@ fn assert_plugin_entries(config: &toml::Value) {
     assert_eq!(
         config["marketplaces"]["asp-project"]["source_type"].as_str(),
         Some("local")
+    );
+    assert_eq!(
+        config["marketplaces"]["asp-project"]["source"].as_str(),
+        Some(".")
     );
     assert_eq!(
         config["plugins"]["asp-codex-plugin@asp-project"]["enabled"].as_bool(),
