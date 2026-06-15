@@ -82,6 +82,9 @@ def test_language_release_workflows_are_project_owned_and_publish_assets() -> No
         assert "x86_64-apple-darwin" not in workflow
 
         if "x86_64-pc-windows-msvc" in contract["targets"]:
+            assert "- name: Enable Windows long paths" in workflow
+            assert "git config --global core.longpaths true" in workflow
+            assert 'CARGO_NET_GIT_FETCH_WITH_CLI=true' in workflow
             build_step = workflow.split("- name: Build release binary", 1)[1]
             build_step = build_step.split("- name: Package provider binary", 1)[0]
             assert "shell: bash" in build_step
